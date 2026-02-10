@@ -9,11 +9,14 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
 
-// DashboardPage は4つのオーガニズムを組み合わせたレイアウト。
+// DashboardPage は3パネル + ステータスバーで構成されるレイアウト。
+// Top: ForwardPanel (全ホストのアクティブフォワード)
+// Middle: SetupPanel (ホスト選択 + ウィザード)
+// Bottom: LogPanel (ログ出力) + StatusBar
 type DashboardPage struct {
-	hostList  organisms.HostListPanel
 	forward   organisms.ForwardPanel
-	command   organisms.CommandPanel
+	setup     organisms.SetupPanel
+	log       organisms.LogPanel
 	statusBar organisms.StatusBar
 
 	focusedPane tui.FocusPane
@@ -24,19 +27,19 @@ type DashboardPage struct {
 // NewDashboardPage は新しい DashboardPage を生成する。
 func NewDashboardPage() DashboardPage {
 	d := DashboardPage{
-		hostList:    organisms.NewHostListPanel(),
 		forward:     organisms.NewForwardPanel(),
-		command:     organisms.NewCommandPanel(),
+		setup:       organisms.NewSetupPanel(),
+		log:         organisms.NewLogPanel(),
 		statusBar:   organisms.NewStatusBar(),
-		focusedPane: tui.PaneHostList,
+		focusedPane: tui.PaneSetup,
 	}
-	d.hostList.SetFocused(true)
+	d.setup.SetFocused(true)
 	return d
 }
 
 // Init は初期化コマンドを返す。
 func (d DashboardPage) Init() tea.Cmd {
-	return d.command.FocusInput()
+	return nil
 }
 
 // Update はメッセージを処理する。
@@ -51,64 +54,41 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 		return d, nil
 
 	case tea.KeyMsg:
-		// グローバルキー処理
-		switch msg.String() {
-		case "tab":
+		// Tab でフォーカス切替
+		if msg.String() == "tab" {
 			d.cycleFocus()
 			return d, nil
-		case "/":
-			if d.focusedPane != tui.PaneCommand {
-				d.setFocus(tui.PaneCommand)
-			}
-			return d, nil
-		case "esc":
-			if d.focusedPane == tui.PaneCommand && !d.command.IsInFlow() {
-				d.setFocus(tui.PaneHostList)
-				return d, nil
-			}
 		}
 
 		// フォーカス中のパネルにキーを送る
 		switch d.focusedPane {
-		case tui.PaneHostList:
-			var cmd tea.Cmd
-			d.hostList, cmd = d.hostList.Update(msg)
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		case tui.PaneForward:
+		case tui.PaneForwards:
 			var cmd tea.Cmd
 			d.forward, cmd = d.forward.Update(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
-		case tui.PaneCommand:
+		case tui.PaneSetup:
 			var cmd tea.Cmd
-			d.command, cmd = d.command.Update(msg)
+			d.setup, cmd = d.setup.Update(msg)
 			if cmd != nil {
 				cmds = append(cmds, cmd)
 			}
 		}
 		return d, tea.Batch(cmds...)
 
-	// ブロードキャストメッセージ: 全パネルに送る
+	// ブロードキャストメッセージ
 	case tui.SSHEventMsg:
 		d.handleSSHEvent(msg.Event)
-	case tui.ForwardUpdatedMsg:
-		// ForwardPanel は親（app.go）が更新する
-	case tui.HostsLoadedMsg, tui.HostsReloadedMsg:
-		// ホスト一覧は親が SetHosts で更新する
-	case tui.CommandOutputMsg:
-		d.command.AppendOutput(msg.Text)
+	case tui.LogOutputMsg:
+		d.log.AppendOutput(msg.Text)
 	}
 
-	// PromptSubmitMsg を CommandPanel に渡す
-	if _, ok := msg.(tui.CommandOutputMsg); !ok {
-		var cmd tea.Cmd
-		d.command, cmd = d.command.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
+	// SetupPanel にメッセージを転送（テキスト入力の blink 等）
+	var setupCmd tea.Cmd
+	d.setup, setupCmd = d.setup.Update(msg)
+	if setupCmd != nil {
+		cmds = append(cmds, setupCmd)
 	}
 
 	return d, tea.Batch(cmds...)
@@ -135,20 +115,20 @@ func (d DashboardPage) View() string {
 	}
 
 	header := d.renderHeader()
-	hostView := d.hostList.View()
-	divider1 := atoms.RenderDivider(d.width)
 	forwardView := d.forward.View()
+	divider1 := atoms.RenderDivider(d.width)
+	setupView := d.setup.View()
 	divider2 := atoms.RenderDivider(d.width)
-	commandView := d.command.View()
+	logView := d.log.View()
 	statusView := d.statusBar.View()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		hostView,
-		divider1,
 		forwardView,
+		divider1,
+		setupView,
 		divider2,
-		commandView,
+		logView,
 		statusView,
 	)
 }
@@ -157,42 +137,25 @@ func (d DashboardPage) View() string {
 
 // SetHosts はホスト一覧を設定する。
 func (d *DashboardPage) SetHosts(hosts []core.SSHHost) {
-	d.hostList.SetHosts(hosts)
-	d.command.SetHostNames(d.hostList.HostNames())
+	d.setup.SetHosts(hosts)
 	d.updateStats()
 }
 
 // SetForwardSessions はフォワードセッション一覧を設定する。
 func (d *DashboardPage) SetForwardSessions(sessions []core.ForwardSession) {
 	d.forward.SetSessions(sessions)
-	d.command.SetSessions(sessions)
 	d.updateStats()
-}
-
-// SetForwardRules はフォワードルール一覧を設定する。
-func (d *DashboardPage) SetForwardRules(rules []core.ForwardRule) {
-	d.command.SetRules(rules)
-}
-
-// SetSelectedHostName は選択中のホスト名を Forward パネルに設定する。
-func (d *DashboardPage) SetSelectedHostName(name string) {
-	d.forward.SetHostName(name)
-}
-
-// SelectedHost は HostListPanel で選択中のホストを返す。
-func (d DashboardPage) SelectedHost() *core.SSHHost {
-	return d.hostList.SelectedHost()
 }
 
 // UpdateHostState はホストの接続状態を更新する。
 func (d *DashboardPage) UpdateHostState(hostName string, state core.ConnectionState) {
-	d.hostList.UpdateHostState(hostName, state)
+	d.setup.UpdateHostState(hostName, state)
 	d.updateStats()
 }
 
-// AppendCommandOutput はコマンド出力を追加する。
-func (d *DashboardPage) AppendCommandOutput(text string) {
-	d.command.AppendOutput(text)
+// AppendLog はログ出力を追加する。
+func (d *DashboardPage) AppendLog(text string) {
+	d.log.AppendOutput(text)
 }
 
 // FocusedPane は現在のフォーカスペインを返す。
@@ -200,9 +163,9 @@ func (d DashboardPage) FocusedPane() tui.FocusPane {
 	return d.focusedPane
 }
 
-// HostList は HostListPanel を返す。
-func (d DashboardPage) HostList() organisms.HostListPanel {
-	return d.hostList
+// IsInputActive はテキスト入力中かどうかを返す。
+func (d DashboardPage) IsInputActive() bool {
+	return d.focusedPane == tui.PaneSetup && d.setup.IsInputActive()
 }
 
 // SetSize はサイズを設定する。
@@ -216,20 +179,17 @@ func (d *DashboardPage) SetSize(width, height int) {
 
 func (d *DashboardPage) cycleFocus() {
 	switch d.focusedPane {
-	case tui.PaneHostList:
-		d.setFocus(tui.PaneForward)
-	case tui.PaneForward:
-		d.setFocus(tui.PaneCommand)
-	case tui.PaneCommand:
-		d.setFocus(tui.PaneHostList)
+	case tui.PaneForwards:
+		d.setFocus(tui.PaneSetup)
+	case tui.PaneSetup:
+		d.setFocus(tui.PaneForwards)
 	}
 }
 
 func (d *DashboardPage) setFocus(pane tui.FocusPane) {
 	d.focusedPane = pane
-	d.hostList.SetFocused(pane == tui.PaneHostList)
-	d.forward.SetFocused(pane == tui.PaneForward)
-	d.command.SetFocused(pane == tui.PaneCommand)
+	d.forward.SetFocused(pane == tui.PaneForwards)
+	d.setup.SetFocused(pane == tui.PaneSetup)
 	d.statusBar.SetFocusedPane(pane)
 }
 
@@ -240,56 +200,52 @@ func (d *DashboardPage) updateSizes() {
 
 	// レイアウト:
 	//   Header:    1 line
-	//   HostList:  ~30% of remaining
-	//   Divider:   1 line
 	//   Forward:   ~40% of remaining
 	//   Divider:   1 line
-	//   Command:   ~30% of remaining (min 4 lines)
+	//   Setup:     ~45% of remaining (残り全部)
+	//   Divider:   1 line
+	//   Log:       3 lines (固定)
 	//   StatusBar: 1 line
 
-	fixedLines := 1 + 1 + 1 + 1 // header + divider1 + divider2 + statusbar
+	const logHeight = 3
+	fixedLines := 1 + 1 + 1 + logHeight + 1 // header + divider1 + divider2 + log + statusbar
 	remaining := d.height - fixedLines
-	if remaining < 6 {
-		remaining = 6
+	if remaining < 8 {
+		remaining = 8
 	}
 
-	hostHeight := remaining * 30 / 100
-	if hostHeight < 2 {
-		hostHeight = 2
+	forwardHeight := remaining * 40 / 100
+	if forwardHeight < 3 {
+		forwardHeight = 3
 	}
 
-	commandHeight := remaining * 30 / 100
-	if commandHeight < 4 {
-		commandHeight = 4
+	setupHeight := remaining - forwardHeight
+	if setupHeight < 5 {
+		setupHeight = 5
 	}
 
-	forwardHeight := remaining - hostHeight - commandHeight
-	if forwardHeight < 2 {
-		forwardHeight = 2
-	}
-
-	d.hostList.SetSize(d.width, hostHeight)
 	d.forward.SetSize(d.width, forwardHeight)
-	d.command.SetSize(d.width, commandHeight)
+	d.setup.SetSize(d.width, setupHeight)
+	d.log.SetSize(d.width, logHeight)
 	d.statusBar.SetWidth(d.width)
 }
 
 func (d *DashboardPage) handleSSHEvent(event core.SSHEvent) {
 	switch event.Type {
 	case core.SSHEventConnected:
-		d.hostList.UpdateHostState(event.HostName, core.Connected)
+		d.setup.UpdateHostState(event.HostName, core.Connected)
 	case core.SSHEventDisconnected:
-		d.hostList.UpdateHostState(event.HostName, core.Disconnected)
+		d.setup.UpdateHostState(event.HostName, core.Disconnected)
 	case core.SSHEventReconnecting:
-		d.hostList.UpdateHostState(event.HostName, core.Reconnecting)
+		d.setup.UpdateHostState(event.HostName, core.Reconnecting)
 	case core.SSHEventError:
-		d.hostList.UpdateHostState(event.HostName, core.ConnectionError)
+		d.setup.UpdateHostState(event.HostName, core.ConnectionError)
 	}
 	d.updateStats()
 }
 
 func (d *DashboardPage) updateStats() {
-	hosts := d.hostList.Hosts()
+	hosts := d.setup.Hosts()
 	sessions := d.forward.Sessions()
 
 	var connected, activeForwards int

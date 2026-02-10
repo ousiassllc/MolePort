@@ -55,12 +55,35 @@ func (s StatusBar) View() string {
 		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
 	)
 
-	hints := fmt.Sprintf(
+	// ペインに応じたキーヒント
+	var contextHints string
+	switch s.focusedPane {
+	case tui.PaneForwards:
+		contextHints = fmt.Sprintf(
+			"%s %s  %s %s  %s %s",
+			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Toggle"),
+			tui.KeyStyle.Render("[d]"), tui.DescStyle.Render("Disconnect"),
+			tui.KeyStyle.Render("[x]"), tui.DescStyle.Render("Delete"),
+		)
+	case tui.PaneSetup:
+		contextHints = fmt.Sprintf(
+			"%s %s  %s %s",
+			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Select"),
+			tui.KeyStyle.Render("[Esc]"), tui.DescStyle.Render("Cancel"),
+		)
+	}
+
+	globalHints := fmt.Sprintf(
 		"%s %s  %s %s  %s %s",
 		tui.KeyStyle.Render("[Tab]"), tui.DescStyle.Render("Switch"),
 		tui.KeyStyle.Render("[?]"), tui.DescStyle.Render("Help"),
 		tui.KeyStyle.Render("[q]"), tui.DescStyle.Render("Quit"),
 	)
+
+	hints := globalHints
+	if contextHints != "" {
+		hints = contextHints + sep + globalHints
+	}
 
 	left := tui.MutedStyle.Render(" ") + stats
 	right := hints

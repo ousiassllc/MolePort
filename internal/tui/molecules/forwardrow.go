@@ -13,6 +13,7 @@ import (
 // ForwardRow はポートフォワーディングセッション1行分の表示を担う。
 type ForwardRow struct {
 	Session  core.ForwardSession
+	HostName string
 	Selected bool
 	Width    int
 }
@@ -32,9 +33,14 @@ func forwardTypeLabel(t core.ForwardType) string {
 }
 
 // View は ForwardRow を描画する。
-// 形式: "● L :8080 ──▸ remote:80     2h15m  ↑1.2MB ↓340KB"
+// 形式: "● [host] L :8080 ──▸ remote:80     2h15m  ↑1.2MB ↓340KB"
 func (r ForwardRow) View() string {
 	badge := atoms.RenderSessionBadge(r.Session.Status)
+
+	hostLabel := ""
+	if r.HostName != "" {
+		hostLabel = tui.MutedStyle.Render("["+r.HostName+"]") + " "
+	}
 
 	typeLabel := tui.ActiveStyle.Render(forwardTypeLabel(r.Session.Rule.Type))
 
@@ -59,7 +65,7 @@ func (r ForwardRow) View() string {
 	traffic := atoms.RenderTraffic(r.Session.BytesSent, r.Session.BytesReceived)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top,
-		badge, " ", typeLabel, " ", localPort, " ", arrow, " ", route,
+		badge, " ", hostLabel, typeLabel, " ", localPort, " ", arrow, " ", route,
 	)
 	if uptime != "" {
 		row = lipgloss.JoinHorizontal(lipgloss.Top, row, "  ", uptime)

@@ -6,9 +6,8 @@ import "github.com/ousiassllc/moleport/internal/core"
 type FocusPane int
 
 const (
-	PaneHostList FocusPane = iota
-	PaneForward
-	PaneCommand
+	PaneForwards FocusPane = iota
+	PaneSetup
 )
 
 // HostSelectedMsg はホスト一覧でカーソルが移動したときに発行される。
@@ -56,14 +55,19 @@ type SSHEventMsg struct {
 // MetricsTickMsg はメトリクス更新のティック。
 type MetricsTickMsg struct{}
 
-// CommandExecuteMsg はコマンド実行を要求する。
-type CommandExecuteMsg struct {
-	Command string
-	Values  map[string]string
+// ForwardAddRequestMsg はセットアップウィザード完了時に発行される。
+type ForwardAddRequestMsg struct {
+	Host        string
+	Type        core.ForwardType
+	LocalPort   int
+	RemoteHost  string
+	RemotePort  int
+	Name        string
+	AutoConnect bool
 }
 
-// CommandOutputMsg はコマンド実行結果のテキスト出力。
-type CommandOutputMsg struct {
+// LogOutputMsg はログ出力テキスト。
+type LogOutputMsg struct {
 	Text string
 }
 

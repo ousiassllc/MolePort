@@ -1,6 +1,7 @@
 package organisms
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -12,9 +13,9 @@ import (
 )
 
 // ForwardPanel はポートフォワーディングセッション一覧を表示するパネル。
+// 全ホストのフォワードを一括表示する。
 type ForwardPanel struct {
 	sessions []core.ForwardSession
-	hostName string
 	cursor   int
 	focused  bool
 	width    int
@@ -41,11 +42,6 @@ func (p *ForwardPanel) SetSessions(sessions []core.ForwardSession) {
 			p.cursor = 0
 		}
 	}
-}
-
-// SetHostName は表示中のホスト名を設定する。
-func (p *ForwardPanel) SetHostName(name string) {
-	p.hostName = name
 }
 
 // SetSize はパネルのサイズを設定する。
@@ -116,23 +112,20 @@ func (p ForwardPanel) selectedSession() *core.ForwardSession {
 	return &s
 }
 
-// View はパネルを描画する（ボーダーなし）。
+// View はパネルを描画する。
 func (p ForwardPanel) View() string {
 	contentWidth := p.width
 	if contentWidth < 10 {
 		contentWidth = 10
 	}
 
-	// セクションタイトル
-	titleText := "Forwards"
-	if p.hostName != "" {
-		titleText = "Forwards " + tui.MutedStyle.Render("["+p.hostName+"]")
-	}
+	// セクションタイトル: "Active Forwards (N)"
+	countLabel := tui.MutedStyle.Render(fmt.Sprintf("(%d)", len(p.sessions)))
 	var title string
 	if p.focused {
-		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render(titleText)
+		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render("Active Forwards") + " " + countLabel
 	} else {
-		title = "  " + tui.MutedStyle.Bold(true).Render(titleText)
+		title = "  " + tui.MutedStyle.Bold(true).Render("Active Forwards") + " " + countLabel
 	}
 
 	var rows []string
@@ -159,6 +152,7 @@ func (p ForwardPanel) View() string {
 		for i := offset; i < end; i++ {
 			row := molecules.ForwardRow{
 				Session:  p.sessions[i],
+				HostName: p.sessions[i].Rule.Host,
 				Selected: i == p.cursor,
 				Width:    contentWidth,
 			}
