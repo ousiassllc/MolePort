@@ -5,9 +5,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
-	"github.com/ousiassllc/moleport/internal/tui/atoms"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
 
@@ -116,29 +116,32 @@ func (p ForwardPanel) selectedSession() *core.ForwardSession {
 	return &s
 }
 
-// View はパネルを描画する。
+// View はパネルを描画する（ボーダーなし）。
 func (p ForwardPanel) View() string {
+	contentWidth := p.width
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	// セクションタイトル
 	titleText := "Forwards"
 	if p.hostName != "" {
-		titleText = "Forwards [" + p.hostName + "]"
+		titleText = "Forwards " + tui.MutedStyle.Render("["+p.hostName+"]")
 	}
-	title := tui.TitleStyle.Render(titleText)
-
-	innerWidth := p.width - 4
-	if innerWidth < 10 {
-		innerWidth = 10
+	var title string
+	if p.focused {
+		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render(titleText)
+	} else {
+		title = "  " + tui.MutedStyle.Bold(true).Render(titleText)
 	}
-
-	divider := atoms.RenderDivider(innerWidth)
 
 	var rows []string
 	rows = append(rows, title)
-	rows = append(rows, divider)
 
 	if len(p.sessions) == 0 {
-		rows = append(rows, tui.MutedStyle.Render("フォワーディングルールがありません"))
+		rows = append(rows, "  "+tui.MutedStyle.Render("フォワーディングルールがありません"))
 	} else {
-		maxRows := p.height - 4
+		maxRows := p.height - 1
 		if maxRows < 1 {
 			maxRows = 1
 		}
@@ -157,19 +160,14 @@ func (p ForwardPanel) View() string {
 			row := molecules.ForwardRow{
 				Session:  p.sessions[i],
 				Selected: i == p.cursor,
+				Width:    contentWidth,
 			}
-			rows = append(rows, row.View())
+			rows = append(rows, "  "+row.View())
 		}
 	}
 
 	content := strings.Join(rows, "\n")
-
-	style := tui.PanelBorder
-	if p.focused {
-		style = tui.PanelBorderFocused
-	}
-
-	return style.Width(innerWidth).Height(p.height - 2).Render(content)
+	return lipgloss.NewStyle().Width(contentWidth).Height(p.height).Render(content)
 }
 
 // Sessions は現在のセッション一覧を返す。

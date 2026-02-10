@@ -1,13 +1,14 @@
 package organisms
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
-	"github.com/ousiassllc/moleport/internal/tui/atoms"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
 
@@ -94,27 +95,30 @@ func (p HostListPanel) Update(msg tea.Msg) (HostListPanel, tea.Cmd) {
 	return p, nil
 }
 
-// View はパネルを描画する。
+// View はパネルを描画する（ボーダーなし）。
 func (p HostListPanel) View() string {
-	title := tui.TitleStyle.Render("SSH Hosts")
-
-	// パネル内部幅（ボーダーとパディングを除く）
-	innerWidth := p.width - 4 // ボーダー2 + パディング2
-	if innerWidth < 10 {
-		innerWidth = 10
+	contentWidth := p.width
+	if contentWidth < 10 {
+		contentWidth = 10
 	}
 
-	divider := atoms.RenderDivider(innerWidth)
+	// セクションタイトル（フォーカス時はアクセントバー付き）
+	countLabel := tui.MutedStyle.Render(fmt.Sprintf("(%d)", len(p.hosts)))
+	var title string
+	if p.focused {
+		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render("SSH Hosts") + " " + countLabel
+	} else {
+		title = "  " + tui.MutedStyle.Bold(true).Render("SSH Hosts") + " " + countLabel
+	}
 
 	var rows []string
 	rows = append(rows, title)
-	rows = append(rows, divider)
 
 	if len(p.hosts) == 0 {
-		rows = append(rows, tui.MutedStyle.Render("ホストが見つかりません"))
+		rows = append(rows, "  "+tui.MutedStyle.Render("ホストが見つかりません"))
 	} else {
-		// 表示可能な行数を計算（タイトル + 区切り線 = 2行分を除く）
-		maxRows := p.height - 4 // ボーダー2 + タイトル1 + 区切り線1
+		// 表示可能な行数（タイトル1行を除く）
+		maxRows := p.height - 1
 		if maxRows < 1 {
 			maxRows = 1
 		}
@@ -134,19 +138,14 @@ func (p HostListPanel) View() string {
 			row := molecules.HostRow{
 				Host:     p.hosts[i],
 				Selected: i == p.cursor,
+				Width:    contentWidth,
 			}
-			rows = append(rows, row.View())
+			rows = append(rows, "  "+row.View())
 		}
 	}
 
 	content := strings.Join(rows, "\n")
-
-	style := tui.PanelBorder
-	if p.focused {
-		style = tui.PanelBorderFocused
-	}
-
-	return style.Width(innerWidth).Height(p.height - 2).Render(content)
+	return lipgloss.NewStyle().Width(contentWidth).Height(p.height).Render(content)
 }
 
 // Cursor は現在のカーソル位置を返す。
@@ -184,4 +183,3 @@ func (p HostListPanel) HostNames() []string {
 	}
 	return names
 }
-

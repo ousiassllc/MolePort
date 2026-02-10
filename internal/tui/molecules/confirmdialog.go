@@ -57,7 +57,7 @@ func (m ConfirmDialog) Update(msg tea.Msg) (ConfirmDialog, tea.Cmd) {
 
 // View は Bubble Tea の View メソッド。
 func (m ConfirmDialog) View() string {
-	msg := tui.TitleStyle.Render(m.message)
+	msg := tui.TextStyle.Render(m.message)
 
 	yesStyle := tui.MutedStyle
 	noStyle := tui.MutedStyle
@@ -81,9 +81,8 @@ func (m ConfirmDialog) View() string {
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		msg,
 		buttons,
-		"",
 		hints,
 	)
 
-	return tui.PanelBorder.Render(content)
+	return tui.DialogStyle.Render(content)
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/atoms"
 )
 
@@ -20,7 +21,7 @@ type PromptInput struct {
 // NewPromptInput は新しい PromptInput を生成する。
 func NewPromptInput() PromptInput {
 	ti := textinput.New()
-	ti.Prompt = "> "
+	ti.Prompt = tui.ActiveStyle.Render("> ") + " "
 	ti.Placeholder = "コマンドを入力..."
 	ti.CharLimit = 256
 	return PromptInput{textInput: ti}
@@ -52,7 +53,7 @@ func (m PromptInput) View() string {
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "実行")),
 		key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "キャンセル")),
 	)
-	return m.textInput.View() + "\n" + hints
+	return m.textInput.View() + "  " + hints
 }
 
 // Focus はテキスト入力にフォーカスを設定する。

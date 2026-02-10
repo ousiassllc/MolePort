@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
-	"github.com/ousiassllc/moleport/internal/tui/atoms"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
 
@@ -366,18 +366,23 @@ func (p *CommandPanel) FocusInput() tea.Cmd {
 	return p.prompt.Focus()
 }
 
-// View はパネルを描画する。
+// View はパネルを描画する（コンパクト: 出力行 + 入力行）。
 func (p CommandPanel) View() string {
-	innerWidth := p.width - 4
-	if innerWidth < 10 {
-		innerWidth = 10
+	contentWidth := p.width
+	if contentWidth < 10 {
+		contentWidth = 10
 	}
 
-	title := tui.TitleStyle.Render("Command")
-	divider := atoms.RenderDivider(innerWidth)
+	// セクションタイトル
+	var title string
+	if p.focused {
+		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render("Command")
+	} else {
+		title = "  " + tui.MutedStyle.Bold(true).Render("Command")
+	}
 
-	// 出力エリアの行数（パネル高さ - ボーダー2 - タイトル1 - 区切り線1 - 入力行1）
-	outputLines := p.height - 5
+	// 出力エリアの行数（タイトル1行 + 入力行1行を除く）
+	outputLines := p.height - 2
 	if outputLines < 1 {
 		outputLines = 1
 	}
@@ -397,20 +402,31 @@ func (p CommandPanel) View() string {
 
 	var rows []string
 	rows = append(rows, title)
-	rows = append(rows, divider)
 	for _, line := range displayOutput {
-		rows = append(rows, tui.MutedStyle.Render(line))
+		// 出力行のプレフィックス装飾
+		styled := p.styleOutputLine(line)
+		rows = append(rows, "  "+styled)
 	}
-	rows = append(rows, p.prompt.View())
+	rows = append(rows, "  "+p.prompt.View())
 
 	content := strings.Join(rows, "\n")
+	return lipgloss.NewStyle().Width(contentWidth).Height(p.height).Render(content)
+}
 
-	style := tui.PanelBorder
-	if p.focused {
-		style = tui.PanelBorderFocused
+// styleOutputLine は出力行にスタイルを適用する。
+func (p CommandPanel) styleOutputLine(line string) string {
+	if line == "" {
+		return ""
 	}
-
-	return style.Width(innerWidth).Height(p.height - 2).Render(content)
+	// エラー行
+	if strings.Contains(line, "エラー") || strings.Contains(line, "Error") {
+		return tui.ErrorStyle.Render("✗") + " " + tui.MutedStyle.Render(line)
+	}
+	// 成功行（「しました」「完了」等）
+	if strings.Contains(line, "しました") || strings.Contains(line, "完了") || strings.Contains(line, "復元") {
+		return tui.ActiveStyle.Render("✓") + " " + tui.MutedStyle.Render(line)
+	}
+	return tui.MutedStyle.Render(line)
 }
 
 // IsInFlow はフロー実行中かを返す。

@@ -14,8 +14,8 @@ var connectionBadges = map[core.ConnectionState]struct {
 	core.Connected:       {"●", tui.ActiveStyle},
 	core.Disconnected:    {"○", tui.StoppedStyle},
 	core.ConnectionError: {"✗", tui.ErrorStyle},
-	core.Reconnecting:    {"↻", tui.ReconnectingStyle},
-	core.Connecting:      {"◐", tui.ReconnectingStyle},
+	core.Reconnecting:    {"◌", tui.ReconnectingStyle},
+	core.Connecting:      {"◌", tui.ReconnectingStyle},
 }
 
 // セッション状態に対応するシンボルとスタイルの定義
@@ -26,22 +26,22 @@ var sessionBadges = map[core.SessionStatus]struct {
 	core.Active:              {"●", tui.ActiveStyle},
 	core.Stopped:             {"○", tui.StoppedStyle},
 	core.SessionError:        {"✗", tui.ErrorStyle},
-	core.SessionReconnecting: {"↻", tui.ReconnectingStyle},
-	core.Starting:            {"◐", tui.ReconnectingStyle},
+	core.SessionReconnecting: {"◌", tui.ReconnectingStyle},
+	core.Starting:            {"◌", tui.ReconnectingStyle},
 }
 
-// RenderConnectionBadge は SSH 接続状態をカラーシンボル付きテキストとして描画する。
+// RenderConnectionBadge は SSH 接続状態をカラーシンボルとして描画する（シンボルのみ）。
 func RenderConnectionBadge(state core.ConnectionState) string {
 	if badge, ok := connectionBadges[state]; ok {
-		return badge.style.Render(badge.symbol + " " + state.String())
+		return badge.style.Render(badge.symbol)
 	}
-	return tui.MutedStyle.Render("? " + state.String())
+	return tui.MutedStyle.Render("?")
 }
 
-// RenderSessionBadge はセッション状態をカラーシンボル付きテキストとして描画する。
+// RenderSessionBadge はセッション状態をカラーシンボルとして描画する（シンボルのみ）。
 func RenderSessionBadge(status core.SessionStatus) string {
 	if badge, ok := sessionBadges[status]; ok {
-		return badge.style.Render(badge.symbol + " " + status.String())
+		return badge.style.Render(badge.symbol)
 	}
-	return tui.MutedStyle.Render("? " + status.String())
+	return tui.MutedStyle.Render("?")
 }

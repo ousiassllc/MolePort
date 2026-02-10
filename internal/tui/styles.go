@@ -2,60 +2,69 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// カラーパレット
+// カラーパレット（単一アクセントカラー: バイオレット + グレースケール）
 var (
-	ColorActive       = lipgloss.Color("#00FF00") // 緑: 接続中/アクティブ
-	ColorStopped      = lipgloss.Color("#666666") // 暗灰: 停止/切断
-	ColorError        = lipgloss.Color("#FF0000") // 赤: エラー
-	ColorReconnecting = lipgloss.Color("#FFFF00") // 黄: 再接続中/接続中
-	ColorSelected     = lipgloss.Color("#7D56F4") // 紫: 選択中
-	ColorMuted        = lipgloss.Color("#888888") // 灰: 補助テキスト
-	ColorText         = lipgloss.Color("#FAFAFA") // 白: 通常テキスト
-	ColorBorder       = lipgloss.Color("#555555") // 灰: ボーダー
-	ColorFocusBorder  = lipgloss.Color("#7D56F4") // 紫: フォーカス中のボーダー
-)
-
-// パネルスタイル
-var (
-	PanelBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorBorder).
-			Padding(0, 1)
-
-	PanelBorderFocused = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(ColorFocusBorder).
-				Padding(0, 1)
+	Accent      = lipgloss.Color("#7C3AED") // バイオレット: フォーカス、選択、アクティブ
+	AccentDim   = lipgloss.Color("#6D28D9") // やや暗いアクセント: セカンダリ
+	Text        = lipgloss.Color("#E4E4E7") // 通常テキスト（薄灰）
+	Muted       = lipgloss.Color("#71717A") // 補助テキスト、ラベル
+	Dim         = lipgloss.Color("#3F3F46") // ボーダー、区切り線
+	Error       = lipgloss.Color("#EF4444") // エラー（唯一の例外色）
+	Warning     = lipgloss.Color("#F59E0B") // 再接続中
+	BgHighlight = lipgloss.Color("#27272A") // 選択行の背景
 )
 
 // テキストスタイル
 var (
 	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(ColorText)
+			Foreground(Accent)
 
 	MutedStyle = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+			Foreground(Muted)
 
 	SelectedStyle = lipgloss.NewStyle().
-			Background(ColorSelected).
-			Foreground(ColorText).
+			Background(BgHighlight).
+			Foreground(Accent).
 			Bold(true)
+
+	TextStyle = lipgloss.NewStyle().
+			Foreground(Text)
 )
 
 // ステータスカラースタイル
 var (
-	ActiveStyle       = lipgloss.NewStyle().Foreground(ColorActive)
-	StoppedStyle      = lipgloss.NewStyle().Foreground(ColorStopped)
-	ErrorStyle        = lipgloss.NewStyle().Foreground(ColorError)
-	ReconnectingStyle = lipgloss.NewStyle().Foreground(ColorReconnecting)
+	ActiveStyle       = lipgloss.NewStyle().Foreground(Accent)
+	StoppedStyle      = lipgloss.NewStyle().Foreground(Muted)
+	ErrorStyle        = lipgloss.NewStyle().Foreground(Error)
+	ReconnectingStyle = lipgloss.NewStyle().Foreground(Warning)
 )
 
 // キーヒントスタイル
 var (
-	KeyStyle  = lipgloss.NewStyle().Foreground(ColorMuted).Bold(true)
-	DescStyle = lipgloss.NewStyle().Foreground(ColorMuted)
+	KeyStyle  = lipgloss.NewStyle().Foreground(Accent).Bold(true)
+	DescStyle = lipgloss.NewStyle().Foreground(Muted)
 )
 
 // 区切り線スタイル
-var DividerStyle = lipgloss.NewStyle().Foreground(ColorBorder)
+var DividerStyle = lipgloss.NewStyle().Foreground(Dim)
+
+// ヘッダースタイル
+var HeaderStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(Accent)
+
+// セクションタイトルスタイル
+var SectionTitleStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(Accent)
+
+// フォーカスインジケーター
+var FocusIndicator = lipgloss.NewStyle().
+	Foreground(Accent).
+	Bold(true).
+	Render("▌")
+
+// ダイアログスタイル（ボーダーなし、パディングのみ）
+var DialogStyle = lipgloss.NewStyle().
+	Padding(0, 1)

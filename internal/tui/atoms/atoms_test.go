@@ -14,13 +14,12 @@ func TestRenderConnectionBadge(t *testing.T) {
 		name       string
 		state      core.ConnectionState
 		wantSymbol string
-		wantLabel  string
 	}{
-		{"Connected", core.Connected, "●", "Connected"},
-		{"Disconnected", core.Disconnected, "○", "Disconnected"},
-		{"Error", core.ConnectionError, "✗", "Error"},
-		{"Reconnecting", core.Reconnecting, "↻", "Reconnecting"},
-		{"Connecting", core.Connecting, "◐", "Connecting"},
+		{"Connected", core.Connected, "●"},
+		{"Disconnected", core.Disconnected, "○"},
+		{"Error", core.ConnectionError, "✗"},
+		{"Reconnecting", core.Reconnecting, "◌"},
+		{"Connecting", core.Connecting, "◌"},
 	}
 
 	for _, tt := range tests {
@@ -28,9 +27,6 @@ func TestRenderConnectionBadge(t *testing.T) {
 			got := atoms.RenderConnectionBadge(tt.state)
 			if !strings.Contains(got, tt.wantSymbol) {
 				t.Errorf("RenderConnectionBadge(%v) = %q, want symbol %q", tt.state, got, tt.wantSymbol)
-			}
-			if !strings.Contains(got, tt.wantLabel) {
-				t.Errorf("RenderConnectionBadge(%v) = %q, want label %q", tt.state, got, tt.wantLabel)
 			}
 		})
 	}
@@ -41,13 +37,12 @@ func TestRenderSessionBadge(t *testing.T) {
 		name       string
 		status     core.SessionStatus
 		wantSymbol string
-		wantLabel  string
 	}{
-		{"Active", core.Active, "●", "Active"},
-		{"Stopped", core.Stopped, "○", "Stopped"},
-		{"Error", core.SessionError, "✗", "Error"},
-		{"Reconnecting", core.SessionReconnecting, "↻", "Reconnecting"},
-		{"Starting", core.Starting, "◐", "Starting"},
+		{"Active", core.Active, "●"},
+		{"Stopped", core.Stopped, "○"},
+		{"Error", core.SessionError, "✗"},
+		{"Reconnecting", core.SessionReconnecting, "◌"},
+		{"Starting", core.Starting, "◌"},
 	}
 
 	for _, tt := range tests {
@@ -55,9 +50,6 @@ func TestRenderSessionBadge(t *testing.T) {
 			got := atoms.RenderSessionBadge(tt.status)
 			if !strings.Contains(got, tt.wantSymbol) {
 				t.Errorf("RenderSessionBadge(%v) = %q, want symbol %q", tt.status, got, tt.wantSymbol)
-			}
-			if !strings.Contains(got, tt.wantLabel) {
-				t.Errorf("RenderSessionBadge(%v) = %q, want label %q", tt.status, got, tt.wantLabel)
 			}
 		})
 	}
@@ -107,6 +99,16 @@ func TestRenderDataSize(t *testing.T) {
 				t.Errorf("RenderDataSize(%d) = %q, want to contain %q", tt.bytes, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRenderTraffic(t *testing.T) {
+	got := atoms.RenderTraffic(1024, 2048)
+	if !strings.Contains(got, "1.0KB") {
+		t.Errorf("RenderTraffic() = %q, want to contain sent size", got)
+	}
+	if !strings.Contains(got, "2.0KB") {
+		t.Errorf("RenderTraffic() = %q, want to contain received size", got)
 	}
 }
 

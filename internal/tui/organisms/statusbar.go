@@ -44,22 +44,30 @@ func (s *StatusBar) SetWidth(width int) {
 
 // View はステータスバーを描画する。
 func (s StatusBar) View() string {
+	sep := tui.DividerStyle.Render(" │ ")
+
 	stats := fmt.Sprintf(
-		"%d hosts  %d connected │ %d forwards  %d active",
-		s.stats.TotalHosts,
-		s.stats.ConnectedHosts,
-		s.stats.TotalForwards,
-		s.stats.ActiveForwards,
+		"%s hosts  %s connected%s%s forwards  %s active",
+		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
+		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
+		sep,
+		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
+		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
 	)
 
-	hints := "[Tab] Switch  [/] Command  [?] Help  [q] Quit"
+	hints := fmt.Sprintf(
+		"%s %s  %s %s  %s %s",
+		tui.KeyStyle.Render("[Tab]"), tui.DescStyle.Render("Switch"),
+		tui.KeyStyle.Render("[?]"), tui.DescStyle.Render("Help"),
+		tui.KeyStyle.Render("[q]"), tui.DescStyle.Render("Quit"),
+	)
 
-	left := tui.MutedStyle.Render(stats)
-	right := tui.MutedStyle.Render(hints)
+	left := tui.MutedStyle.Render(" ") + stats
+	right := hints
 
 	// 幅が足りない場合は統計のみ表示
 	if s.width <= 0 {
-		return left + " │ " + right
+		return left + sep + right
 	}
 
 	gap := s.width - lipgloss.Width(left) - lipgloss.Width(right)

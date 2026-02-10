@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
+	"github.com/ousiassllc/moleport/internal/tui/atoms"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
 
@@ -113,20 +114,40 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 	return d, tea.Batch(cmds...)
 }
 
+// renderHeader は1行ヘッダーを描画する。
+func (d DashboardPage) renderHeader() string {
+	appName := tui.HeaderStyle.Render("  MolePort")
+	version := tui.MutedStyle.Render("v0.1.0")
+
+	gap := d.width - lipgloss.Width(appName) - lipgloss.Width(version) - 1
+	if gap < 1 {
+		return appName
+	}
+
+	padding := lipgloss.NewStyle().Width(gap).Render("")
+	return appName + padding + version
+}
+
 // View はダッシュボードを描画する。
 func (d DashboardPage) View() string {
 	if d.width == 0 || d.height == 0 {
 		return "Loading..."
 	}
 
+	header := d.renderHeader()
 	hostView := d.hostList.View()
+	divider1 := atoms.RenderDivider(d.width)
 	forwardView := d.forward.View()
+	divider2 := atoms.RenderDivider(d.width)
 	commandView := d.command.View()
 	statusView := d.statusBar.View()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
+		header,
 		hostView,
+		divider1,
 		forwardView,
+		divider2,
 		commandView,
 		statusView,
 	)
@@ -217,21 +238,34 @@ func (d *DashboardPage) updateSizes() {
 		return
 	}
 
-	statusHeight := 1
-	commandHeight := 9
-	remainingHeight := d.height - statusHeight - commandHeight
+	// レイアウト:
+	//   Header:    1 line
+	//   HostList:  ~30% of remaining
+	//   Divider:   1 line
+	//   Forward:   ~40% of remaining
+	//   Divider:   1 line
+	//   Command:   ~30% of remaining (min 4 lines)
+	//   StatusBar: 1 line
 
-	if remainingHeight < 4 {
-		remainingHeight = 4
+	fixedLines := 1 + 1 + 1 + 1 // header + divider1 + divider2 + statusbar
+	remaining := d.height - fixedLines
+	if remaining < 6 {
+		remaining = 6
 	}
 
-	hostHeight := remainingHeight * 40 / 100
-	if hostHeight < 3 {
-		hostHeight = 3
+	hostHeight := remaining * 30 / 100
+	if hostHeight < 2 {
+		hostHeight = 2
 	}
-	forwardHeight := remainingHeight - hostHeight
-	if forwardHeight < 3 {
-		forwardHeight = 3
+
+	commandHeight := remaining * 30 / 100
+	if commandHeight < 4 {
+		commandHeight = 4
+	}
+
+	forwardHeight := remaining - hostHeight - commandHeight
+	if forwardHeight < 2 {
+		forwardHeight = 2
 	}
 
 	d.hostList.SetSize(d.width, hostHeight)

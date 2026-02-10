@@ -14,6 +14,7 @@ import (
 type ForwardRow struct {
 	Session  core.ForwardSession
 	Selected bool
+	Width    int
 }
 
 // forwardTypeLabel は転送種別の短縮表記を返す。
@@ -31,35 +32,34 @@ func forwardTypeLabel(t core.ForwardType) string {
 }
 
 // View は ForwardRow を描画する。
-// 形式: "L  :8080 → remote:80  ● Active  2h 15m  ↑1.2MB ↓340KB"
+// 形式: "● L :8080 ──▸ remote:80     2h15m  ↑1.2MB ↓340KB"
 func (r ForwardRow) View() string {
-	typeLabel := tui.TitleStyle.Render(forwardTypeLabel(r.Session.Rule.Type))
+	badge := atoms.RenderSessionBadge(r.Session.Status)
+
+	typeLabel := tui.ActiveStyle.Render(forwardTypeLabel(r.Session.Rule.Type))
 
 	localPort := atoms.RenderPortLabel(r.Session.Rule.LocalPort)
+
+	arrow := tui.DividerStyle.Render("──▸")
 
 	var route string
 	if r.Session.Rule.Type == core.Dynamic {
 		route = tui.MutedStyle.Render("(SOCKS)")
 	} else {
 		route = tui.MutedStyle.Render(
-			fmt.Sprintf("→ %s:%d", r.Session.Rule.RemoteHost, r.Session.Rule.RemotePort),
+			fmt.Sprintf("%s:%d", r.Session.Rule.RemoteHost, r.Session.Rule.RemotePort),
 		)
 	}
-
-	badge := atoms.RenderSessionBadge(r.Session.Status)
 
 	var uptime string
 	if r.Session.Status == core.Active && !r.Session.ConnectedAt.IsZero() {
 		uptime = atoms.RenderDuration(time.Since(r.Session.ConnectedAt))
 	}
 
-	traffic := fmt.Sprintf("↑%s ↓%s",
-		atoms.RenderDataSize(r.Session.BytesSent),
-		atoms.RenderDataSize(r.Session.BytesReceived),
-	)
+	traffic := atoms.RenderTraffic(r.Session.BytesSent, r.Session.BytesReceived)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top,
-		typeLabel, "  ", localPort, " ", route, "  ", badge,
+		badge, " ", typeLabel, " ", localPort, " ", arrow, " ", route,
 	)
 	if uptime != "" {
 		row = lipgloss.JoinHorizontal(lipgloss.Top, row, "  ", uptime)
@@ -67,7 +67,14 @@ func (r ForwardRow) View() string {
 	row = lipgloss.JoinHorizontal(lipgloss.Top, row, "  ", traffic)
 
 	if r.Selected {
-		return tui.SelectedStyle.Render(row)
+		rowWidth := r.Width
+		if rowWidth <= 0 {
+			rowWidth = lipgloss.Width(row)
+		}
+		return lipgloss.NewStyle().
+			Background(tui.BgHighlight).
+			Width(rowWidth).
+			Render(row)
 	}
 	return row
 }
