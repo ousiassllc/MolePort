@@ -14,9 +14,9 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// expandTilde は ~ をホームディレクトリに展開する。
+// ExpandTilde は ~ をホームディレクトリに展開する。
 // "~/" または "~" のみ展開し、"~otheruser" パターンはそのまま返す。
-func expandTilde(path string) (string, error) {
+func ExpandTilde(path string) (string, error) {
 	if len(path) == 0 {
 		return path, nil
 	}

@@ -106,7 +106,7 @@ func expandIdentityFile(path string) string {
 	if path == "" {
 		return ""
 	}
-	expanded, err := expandTilde(path)
+	expanded, err := ExpandTilde(path)
 	if err != nil {
 		return path
 	}

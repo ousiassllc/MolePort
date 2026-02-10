@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestExpandTilde(t *testing.T) {
+func TestExpandTilde_Exported(t *testing.T) {
 	u, err := user.Current()
 	if err != nil {
 		t.Fatalf("failed to get current user: %v", err)
@@ -29,13 +29,13 @@ func TestExpandTilde(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got, err := expandTilde(tt.input)
+		got, err := ExpandTilde(tt.input)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("expandTilde(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			t.Errorf("ExpandTilde(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 			continue
 		}
 		if got != tt.want {
-			t.Errorf("expandTilde(%q) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("ExpandTilde(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }
