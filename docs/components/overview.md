@@ -9,12 +9,34 @@
 ```mermaid
 graph TD
     subgraph "cmd"
-        Main["main.go"]
+        Main["main.go<br/>CLI Router"]
+    end
+
+    subgraph "Daemon Layer"
+        DaemonProc["Daemon<br/>ライフサイクル管理"]
+        PIDFile["PIDFile<br/>PID ファイル管理"]
+        Fork["Fork<br/>自己フォーク"]
+    end
+
+    subgraph "IPC Layer"
+        IPCSrv["IPCServer<br/>JSON-RPC サーバー"]
+        IPCCli["IPCClient<br/>JSON-RPC クライアント"]
+        Handler["Handler<br/>RPC メソッドハンドラ"]
+        Broker["EventBroker<br/>イベント配信"]
+    end
+
+    subgraph "CLI Layer"
+        DaemonCmd["daemon_cmd"]
+        ConnectCmd["connect_cmd"]
+        AddCmd["add_cmd"]
+        ListCmd["list_cmd"]
+        TUICmd["tui_cmd"]
+        OtherCmd["...other cmds"]
     end
 
     subgraph "TUI Layer"
         App["app.go<br/>MainModel"]
-        Dashboard["pages/dashboard.go<br/>DashboardPage"]
+        Dashboard["pages/dashboard.go"]
         HLP["organisms/hostlistpanel.go"]
         FP["organisms/forwardpanel.go"]
         CP["organisms/commandpanel.go"]
@@ -34,16 +56,39 @@ graph TD
         Store["YAMLStore"]
     end
 
-    Main --> App
-    App --> Dashboard
-    App --> SSH
-    App --> Fwd
-    App --> Cfg
+    Main --> DaemonCmd
+    Main --> ConnectCmd
+    Main --> AddCmd
+    Main --> ListCmd
+    Main --> TUICmd
+    Main --> OtherCmd
 
+    DaemonCmd --> DaemonProc
+    DaemonProc --> Fork
+    DaemonProc --> PIDFile
+    DaemonProc --> IPCSrv
+    DaemonProc --> SSH
+    DaemonProc --> Fwd
+    DaemonProc --> Cfg
+
+    ConnectCmd --> IPCCli
+    AddCmd --> IPCCli
+    ListCmd --> IPCCli
+    OtherCmd --> IPCCli
+
+    TUICmd --> App
+    App --> IPCCli
+    App --> Dashboard
     Dashboard --> HLP
     Dashboard --> FP
     Dashboard --> CP
     Dashboard --> SB
+
+    IPCSrv --> Handler
+    IPCSrv --> Broker
+    Handler --> SSH
+    Handler --> Fwd
+    Handler --> Cfg
 
     SSH --> Conn
     SSH --> Parser
@@ -54,7 +99,343 @@ graph TD
     Cfg --> Types
 ```
 
+## Daemon Layer コンポーネント
+
+### Daemon
+
+デーモンプロセスのライフサイクルを管理する。
+
+#### 責務
+
+- デーモンの起動・初期化・停止
+- 各マネージャ（SSH/Forward/Config）の初期化と依存注入
+- IPC Server の起動
+- セッション復元の実行
+- シグナルハンドリング（SIGTERM/SIGINT）
+- グレースフルシャットダウンの制御
+
+#### インターフェース
+
+```go
+type Daemon struct {
+    config     *Config
+    sshMgr     SSHManager
+    fwdMgr     ForwardManager
+    cfgMgr     ConfigManager
+    ipcServer  *IPCServer
+    pidFile    *PIDFile
+    ctx        context.Context
+    cancel     context.CancelFunc
+}
+
+func NewDaemon(cfgPath string) (*Daemon, error)
+func (d *Daemon) Start() error     // 初期化 + IPC Server 起動 + セッション復元
+func (d *Daemon) Stop() error      // グレースフルシャットダウン
+func (d *Daemon) Wait() error      // 終了シグナルを待機
+```
+
+#### 起動シーケンス
+
+```mermaid
+flowchart TD
+    New["NewDaemon()"] --> LoadCfg["config.yaml 読み込み"]
+    LoadCfg --> InitMgr["マネージャ初期化<br/>(SSH/Forward/Config)"]
+    InitMgr --> PID["PID ファイル作成"]
+    PID --> IPC["IPC Server 起動<br/>(Unix ソケット Listen)"]
+    IPC --> Restore["セッション復元<br/>(state.yaml)"]
+    Restore --> Auto["auto_connect ルール接続"]
+    Auto --> Wait["シグナル待機"]
+    Wait --> Shutdown["グレースフルシャットダウン"]
+```
+
+### PIDFile
+
+PID ファイルの作成・検証・削除を管理する。
+
+#### インターフェース
+
+```go
+type PIDFile struct {
+    path string
+    file *os.File
+}
+
+func NewPIDFile(path string) *PIDFile
+func (p *PIDFile) Acquire() error     // PID ファイル作成 + flock
+func (p *PIDFile) Release() error     // PID ファイル削除 + flock 解放
+func (p *PIDFile) IsRunning() (bool, int)  // 既存デーモンの稼働確認（PID + プロセス生存チェック）
+```
+
+### Fork
+
+デーモンの自己フォーク処理を提供する。
+
+#### インターフェース
+
+```go
+// StartDaemonProcess は現在のバイナリを --daemon-mode フラグ付きで再起動し、
+// バックグラウンドプロセスとして動作させる
+func StartDaemonProcess() (pid int, err error)
+
+// IsDaemonMode は --daemon-mode フラグが指定されているかを返す
+func IsDaemonMode() bool
+```
+
+## IPC Layer コンポーネント
+
+### IPCServer
+
+Unix ドメインソケット上で JSON-RPC 2.0 リクエストを受け付け、ハンドラにディスパッチする。
+
+#### 責務
+
+- Unix ソケットの Listen / Accept
+- クライアント接続の goroutine 管理
+- JSON-RPC メッセージのデコード/エンコード
+- メソッド名に基づくハンドラへのディスパッチ
+- イベント通知の送信
+
+#### インターフェース
+
+```go
+type IPCServer struct {
+    socketPath string
+    listener   net.Listener
+    handler    *Handler
+    broker     *EventBroker
+    clients    map[string]*clientConn
+    mu         sync.RWMutex
+}
+
+func NewIPCServer(socketPath string, handler *Handler, broker *EventBroker) *IPCServer
+func (s *IPCServer) Start(ctx context.Context) error
+func (s *IPCServer) Stop() error
+func (s *IPCServer) ConnectedClients() int
+```
+
+#### クライアント接続処理フロー
+
+```mermaid
+flowchart TD
+    Accept["Accept()"] --> Goroutine["goroutine 起動"]
+    Goroutine --> ReadLoop["メッセージ読み取りループ"]
+    ReadLoop --> Decode["JSON デコード"]
+    Decode --> Dispatch["Handler にディスパッチ"]
+    Dispatch --> Encode["JSON エンコード"]
+    Encode --> Send["レスポンス送信"]
+    Send --> ReadLoop
+
+    ReadLoop --> |EOF / エラー| Cleanup["クリーンアップ"]
+    Cleanup --> UnSub["サブスクリプション解除"]
+    UnSub --> Close["接続 Close"]
+```
+
+### IPCClient
+
+CLI/TUI が使用する JSON-RPC 2.0 クライアント。
+
+#### 責務
+
+- Unix ソケットへの接続
+- JSON-RPC リクエストの送信とレスポンスの受信
+- イベント通知の受信（サブスクリプション時）
+- 接続状態の管理
+
+#### インターフェース
+
+```go
+type IPCClient struct {
+    socketPath string
+    conn       net.Conn
+    nextID     int64
+    pending    map[int]chan *Response
+    eventCh    chan *Notification
+    mu         sync.Mutex
+}
+
+func NewIPCClient(socketPath string) *IPCClient
+func (c *IPCClient) Connect() error
+func (c *IPCClient) Close() error
+
+// 同期リクエスト（CLI 向け）
+func (c *IPCClient) Call(method string, params interface{}, result interface{}) error
+
+// イベントサブスクリプション（TUI 向け）
+func (c *IPCClient) Subscribe(types []string) (string, error)
+func (c *IPCClient) Unsubscribe(subscriptionID string) error
+func (c *IPCClient) Events() <-chan *Notification
+
+// ヘルパーメソッド
+func (c *IPCClient) IsConnected() bool
+```
+
+### Handler
+
+JSON-RPC メソッドを Core Layer のマネージャに委譲する。
+
+#### 責務
+
+- メソッド名のルーティング
+- パラメータのバリデーションと型変換
+- Core Layer の呼び出しとレスポンスの構築
+
+#### インターフェース
+
+```go
+type Handler struct {
+    sshMgr SSHManager
+    fwdMgr ForwardManager
+    cfgMgr ConfigManager
+    daemon *Daemon
+}
+
+func NewHandler(sshMgr SSHManager, fwdMgr ForwardManager, cfgMgr ConfigManager, daemon *Daemon) *Handler
+func (h *Handler) Handle(method string, params json.RawMessage) (interface{}, *RPCError)
+```
+
+#### メソッドルーティング
+
+```go
+// Handle 内部のルーティング（概要）
+switch method {
+case "host.list":     return h.handleHostList(params)
+case "host.reload":   return h.handleHostReload(params)
+case "ssh.connect":   return h.handleSSHConnect(params)
+case "ssh.disconnect": return h.handleSSHDisconnect(params)
+case "forward.list":  return h.handleForwardList(params)
+case "forward.add":   return h.handleForwardAdd(params)
+case "forward.delete": return h.handleForwardDelete(params)
+case "forward.start": return h.handleForwardStart(params)
+case "forward.stop":  return h.handleForwardStop(params)
+case "session.list":  return h.handleSessionList(params)
+case "session.get":   return h.handleSessionGet(params)
+case "config.get":    return h.handleConfigGet(params)
+case "config.update": return h.handleConfigUpdate(params)
+case "daemon.status": return h.handleDaemonStatus(params)
+case "daemon.shutdown": return h.handleDaemonShutdown(params)
+default:              return nil, &RPCError{Code: -32601, Message: "method not found"}
+}
+```
+
+### EventBroker
+
+Core Layer からのイベントを集約し、サブスクライブ中のクライアントに配信する。
+
+#### 責務
+
+- サブスクリプションの管理（追加・削除）
+- Core Layer イベント（SSHEvent / ForwardEvent）の受信
+- メトリクス更新の定期送信
+- クライアントへの通知配信
+
+#### インターフェース
+
+```go
+type EventBroker struct {
+    subscriptions map[string]*Subscription
+    mu            sync.RWMutex
+}
+
+type Subscription struct {
+    ID     string
+    Types  []string          // "ssh" | "forward" | "metrics"
+    SendFn func(notification *Notification) error
+}
+
+func NewEventBroker() *EventBroker
+func (b *EventBroker) Subscribe(types []string, sendFn func(*Notification) error) string
+func (b *EventBroker) Unsubscribe(id string)
+func (b *EventBroker) Start(ctx context.Context, sshEvents <-chan SSHEvent, fwdEvents <-chan ForwardEvent)
+```
+
+#### イベント配信フロー
+
+```mermaid
+flowchart TD
+    SSHMgr["SSHManager<br/>SSHEvent channel"] --> Broker["EventBroker"]
+    FwdMgr["ForwardManager<br/>ForwardEvent channel"] --> Broker
+    Ticker["time.Ticker (1s)<br/>メトリクス収集"] --> Broker
+
+    Broker --> Filter["イベントタイプでフィルタ"]
+    Filter --> Sub1["Subscription #1 (TUI)<br/>ssh, forward, metrics"]
+    Filter --> Sub2["Subscription #2 (TUI)<br/>ssh, forward"]
+```
+
+## CLI Layer コンポーネント
+
+### CLIRouter（main.go）
+
+コマンドラインのサブコマンドを解析し、対応するハンドラにディスパッチする。
+
+#### 責務
+
+- サブコマンドの解析（Go 標準 `flag` パッケージ）
+- ヘルプ・バージョン表示
+- `--daemon-mode` フラグの検出（デーモンプロセス内で使用）
+
+#### インターフェース
+
+```go
+func main() {
+    if daemon.IsDaemonMode() {
+        // デーモンプロセスとして起動
+        runDaemon()
+        return
+    }
+
+    // サブコマンドの解析とディスパッチ
+    switch subcommand {
+    case "daemon":  runDaemonCmd(args)
+    case "connect": runConnectCmd(args)
+    case "disconnect": runDisconnectCmd(args)
+    case "add":     runAddCmd(args)
+    case "delete":  runDeleteCmd(args)
+    case "start":   runStartCmd(args)
+    case "stop":    runStopCmd(args)
+    case "list":    runListCmd(args)
+    case "status":  runStatusCmd(args)
+    case "config":  runConfigCmd(args)
+    case "reload":  runReloadCmd(args)
+    case "tui":     runTUICmd(args)
+    case "help":    runHelpCmd(args)
+    case "version": runVersionCmd()
+    default:        printUsage()
+    }
+}
+```
+
+### 各サブコマンドハンドラ
+
+CLI サブコマンドは共通パターンに従う:
+1. IPCClient を作成し、デーモンに接続
+2. JSON-RPC メソッドを呼び出し
+3. レスポンスをフォーマットして表示
+4. 接続を切断
+
+```go
+// 共通パターンの例: connect コマンド
+func runConnectCmd(args []string) {
+    host := args[0]
+    client := ipc.NewIPCClient(socketPath())
+    if err := client.Connect(); err != nil {
+        // デーモン未稼働時のエラーメッセージ
+        fmt.Fprintln(os.Stderr, "デーモンが稼働していません。moleport daemon start で起動してください。")
+        os.Exit(1)
+    }
+    defer client.Close()
+
+    var result SSHConnectResult
+    if err := client.Call("ssh.connect", SSHConnectParams{Host: host}, &result); err != nil {
+        fmt.Fprintln(os.Stderr, err)
+        os.Exit(1)
+    }
+    fmt.Printf("%s に接続しました\n", result.Host)
+}
+```
+
 ## Core Layer コンポーネント
+
+Core Layer は v1 から変更なし。デーモン内で直接使用される。
 
 ### SSHManager
 
@@ -71,198 +452,69 @@ SSH 接続のライフサイクルを管理する。
 
 ```go
 type SSHManager interface {
-    // ホスト管理
     LoadHosts() ([]SSHHost, error)
     ReloadHosts() ([]SSHHost, error)
     GetHost(name string) (*SSHHost, error)
-
-    // 接続管理
     Connect(hostName string) error
     Disconnect(hostName string) error
     IsConnected(hostName string) bool
-
-    // 接続取得（ForwardManager が使用）
     GetConnection(hostName string) (*ssh.Client, error)
-
-    // 状態監視
     Subscribe() <-chan SSHEvent
 }
-
-type SSHEvent struct {
-    Type     SSHEventType  // Connected, Disconnected, Reconnecting, Error
-    HostName string
-    Error    error
-}
-```
-
-#### 再接続ロジック
-
-```mermaid
-flowchart TD
-    Detect["接続断を検知"] --> Check{再接続が有効?}
-    Check -->|無効| Notify["Error イベント通知"]
-    Check -->|有効| Init["リトライカウンタ = 0<br/>待機時間 = InitialDelay"]
-
-    Init --> Wait["待機 (backoff)"]
-    Wait --> Retry["Reconnect 試行"]
-    Retry --> Result{成功?}
-
-    Result -->|成功| Restore["転送ルールを復元"]
-    Restore --> Done["Connected イベント通知"]
-
-    Result -->|失敗| CountCheck{リトライ上限?}
-    CountCheck -->|未達| Backoff["カウンタ++<br/>待機時間 = min(待機時間*2, MaxDelay)"]
-    Backoff --> Wait
-    CountCheck -->|超過| Notify
 ```
 
 ### ForwardManager
 
 ポートフォワーディングルールの管理と実行を担う。
 
-#### 責務
-
-- 転送ルールの CRUD
-- ポートフォワーディングの開始・停止
-- メトリクス（転送データ量、接続時間）の収集
-- ポート競合の検出
-
 #### インターフェース
 
 ```go
 type ForwardManager interface {
-    // ルール管理
     AddRule(rule ForwardRule) error
     DeleteRule(name string) error
     GetRules() []ForwardRule
     GetRulesByHost(hostName string) []ForwardRule
-
-    // 転送制御
     StartForward(ruleName string) error
     StopForward(ruleName string) error
     StopAllForwards() error
-
-    // セッション情報
     GetSession(ruleName string) (*ForwardSession, error)
     GetAllSessions() []ForwardSession
-
-    // 状態監視
     Subscribe() <-chan ForwardEvent
 }
-
-type ForwardEvent struct {
-    Type     ForwardEventType  // Started, Stopped, Error, MetricsUpdated
-    RuleName string
-    Session  *ForwardSession
-    Error    error
-}
-```
-
-#### ポートフォワーディングの内部処理
-
-```mermaid
-flowchart TD
-    Start["StartForward(rule)"] --> CheckPort{ローカルポート<br/>空いている?}
-    CheckPort -->|No| ErrPort["Error: ポート競合"]
-    CheckPort -->|Yes| CheckConn{SSH 接続済み?}
-    CheckConn -->|No| Connect["SSHManager.Connect()"]
-    CheckConn -->|Yes| Listen
-
-    Connect --> ConnResult{成功?}
-    ConnResult -->|No| ErrConn["Error: 接続失敗"]
-    ConnResult -->|Yes| Listen
-
-    Listen["ローカルポートで Listen 開始"]
-    Listen --> Goroutine["goroutine: 接続を待ち受け"]
-
-    Goroutine --> Accept["Accept()"]
-    Accept --> Forward["goroutine: データ転送<br/>ローカル ⟷ リモート"]
-    Forward --> Metrics["メトリクス更新<br/>(BytesSent/Received)"]
-    Metrics --> Accept
 ```
 
 ### ConfigManager
 
 設定ファイルと状態ファイルの永続化を管理する。
 
-#### 責務
-
-- `config.yaml` の読み込み・保存
-- `state.yaml` の読み込み・保存
-- デフォルト値の適用
-- 設定変更の検証
-
 #### インターフェース
 
 ```go
 type ConfigManager interface {
-    // 設定
     LoadConfig() (*Config, error)
     SaveConfig(config *Config) error
     GetConfig() *Config
     UpdateConfig(fn func(*Config)) error
-
-    // 状態
     LoadState() (*State, error)
     SaveState(state *State) error
-
-    // パス
-    ConfigDir() string  // ~/.config/moleport/
+    ConfigDir() string
 }
-```
-
-#### ファイル操作フロー
-
-```mermaid
-sequenceDiagram
-    participant App as MainModel
-    participant CM as ConfigManager
-    participant Store as YAMLStore
-    participant FS as File System
-
-    Note over App,FS: 起動時
-    App->>CM: LoadConfig()
-    CM->>Store: Read("config.yaml")
-    Store->>FS: os.ReadFile()
-    FS-->>Store: []byte
-    Store-->>CM: Config
-    CM->>CM: デフォルト値マージ
-    CM-->>App: *Config
-
-    App->>CM: LoadState()
-    CM->>Store: Read("state.yaml")
-    Store-->>CM: State
-    CM-->>App: *State
-
-    Note over App,FS: 終了時
-    App->>CM: SaveState(state)
-    CM->>Store: Write("state.yaml", state)
-    Store->>FS: os.WriteFile() (0600)
-    FS-->>Store: ok
-    Store-->>CM: ok
-    CM-->>App: ok
 ```
 
 ## Infra Layer コンポーネント
 
+Infra Layer は v1 から変更なし。
+
 ### SSHConnection
-
-`golang.org/x/crypto/ssh` のラッパー。SSH 接続の確立とポートフォワーディングの低レベル操作を提供する。
-
-#### インターフェース
 
 ```go
 type SSHConnection interface {
-    // 接続
     Dial(host SSHHost) (*ssh.Client, error)
     Close() error
-
-    // ポートフォワーディング
     LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
     RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
     DynamicForward(ctx context.Context, localPort int) (net.Listener, error)
-
-    // 状態
     IsAlive() bool
     KeepAlive(ctx context.Context, interval time.Duration)
 }
@@ -270,156 +522,88 @@ type SSHConnection interface {
 
 ### SSHConfigParser
 
-SSH config ファイルを解析し、ホスト定義を抽出する。
-
-#### インターフェース
-
 ```go
 type SSHConfigParser interface {
-    // 解析
     Parse(configPath string) ([]SSHHost, error)
-
-    // Include ディレクティブの解決込み
-    // ワイルドカードホスト (*) は除外する
-    // Host と Match ブロックを解析する
 }
 ```
 
-#### 解析対象フィールド
-
-| SSH config フィールド | SSHHost フィールド | 備考 |
-|---------------------|-------------------|------|
-| Host | Name | ワイルドカード `*` は除外 |
-| HostName | HostName | |
-| Port | Port | デフォルト: 22 |
-| User | User | デフォルト: 現在のユーザー |
-| IdentityFile | IdentityFile | `~` を展開する |
-| ProxyJump | ProxyJump | 多段 SSH 対応 |
-
 ### YAMLStore
-
-YAML ファイルの読み書きを担う汎用ストア。
-
-#### インターフェース
 
 ```go
 type YAMLStore interface {
-    // 読み込み（ファイルが存在しない場合は空の値を返す）
     Read(path string, dest interface{}) error
-
-    // 書き込み（ディレクトリが存在しない場合は作成、パーミッション 0600）
     Write(path string, data interface{}) error
-
-    // 存在チェック
     Exists(path string) bool
 }
 ```
 
-## TUI コンポーネント（Organisms 詳細）
+## TUI コンポーネント
 
-### HostListPanel
+### MainModel（変更あり）
+
+v1 では Core Layer を直接呼び出していたが、v2 では IPCClient 経由でデーモンに接続する。
+
+#### 変更点
+
+```go
+// v1: Core Layer 直接
+type MainModel struct {
+    sshMgr  SSHManager
+    fwdMgr  ForwardManager
+    cfgMgr  ConfigManager
+    // ...
+}
+
+// v2: IPCClient 経由
+type MainModel struct {
+    client  *IPCClient
+    // ...
+}
+```
 
 #### 責務
 
-- SSH ホスト一覧の表示
-- ホスト選択（カーソル操作）
-- 選択ホスト変更時のイベント発行
+- IPC Client を使ったデーモンとの通信
+- イベントサブスクリプションの管理
+- 受信イベントの Bubble Tea Msg への変換
+- ダッシュボードの状態管理と描画
 
-#### TEA インターフェース
+#### TUI ⟷ デーモン通信フロー
 
-```go
-type HostListPanel struct {
-    hosts    []SSHHost
-    cursor   int
-    focused  bool
-}
+```mermaid
+sequenceDiagram
+    participant TUI as MainModel
+    participant IPC as IPCClient
+    participant Daemon as デーモン
 
-// Msg
-type HostSelectedMsg struct {
-    Host SSHHost
-}
+    TUI->>IPC: Connect()
+    IPC->>Daemon: Unix Socket 接続
+    TUI->>IPC: Subscribe(["ssh","forward","metrics"])
+    IPC->>Daemon: events.subscribe
+    Daemon-->>IPC: subscription_id
 
-func (m HostListPanel) Update(msg tea.Msg) (HostListPanel, tea.Cmd)
-func (m HostListPanel) View() string
+    loop イベント受信ループ
+        Daemon-->>IPC: event.ssh / event.forward / event.metrics
+        IPC-->>TUI: Events() channel
+        TUI->>TUI: Msg に変換 → Update() → View()
+    end
+
+    Note over TUI: ユーザーがコマンド入力
+    TUI->>IPC: Call("forward.start", {name: "prod-web"})
+    IPC->>Daemon: forward.start
+    Daemon-->>IPC: result
+    IPC-->>TUI: 結果を表示
+
+    Note over TUI: TUI 終了
+    TUI->>IPC: Unsubscribe()
+    TUI->>IPC: Close()
 ```
 
-### ForwardPanel
+### Organisms（変更なし）
 
-#### 責務
-
-- 選択中ホストのポート転送ルール一覧表示
-- メトリクスのリアルタイム更新
-- トグル・切断・削除操作
-
-#### TEA インターフェース
-
-```go
-type ForwardPanel struct {
-    sessions []ForwardSession
-    cursor   int
-    focused  bool
-}
-
-// Msg
-type ForwardToggleMsg struct{ RuleName string }
-type ForwardDeleteMsg struct{ RuleName string }
-type MetricsTickMsg struct{}
-
-func (m ForwardPanel) Update(msg tea.Msg) (ForwardPanel, tea.Cmd)
-func (m ForwardPanel) View() string
-```
-
-### CommandPanel
-
-#### 責務
-
-- コマンド入力の受け付け
-- 対話プロンプトの表示と入力処理
-- コマンド履歴の管理
-- 実行結果の表示
-
-#### TEA インターフェース
-
-```go
-type CommandPanel struct {
-    input      textinput.Model
-    output     []string
-    prompt     *PromptState  // 対話プロンプト実行中の状態
-    history    []string
-    historyIdx int
-    focused    bool
-}
-
-type PromptState struct {
-    Steps   []PromptStep
-    Current int
-    Values  map[string]interface{}
-}
-
-func (m CommandPanel) Update(msg tea.Msg) (CommandPanel, tea.Cmd)
-func (m CommandPanel) View() string
-```
-
-### StatusBar
-
-#### 責務
-
-- 全体の接続サマリー表示（接続中ホスト数、アクティブ転送数）
-- グローバルキーバインドのヒント表示
-
-#### TEA インターフェース
-
-```go
-type StatusBar struct {
-    totalHosts      int
-    connectedHosts  int
-    totalForwards   int
-    activeForwards  int
-}
-
-func (m StatusBar) Update(msg tea.Msg) (StatusBar, tea.Cmd)
-func (m StatusBar) View() string
-```
+HostListPanel / ForwardPanel / CommandPanel / StatusBar の構造は維持。
+データの取得元が Core Layer 直接から IPCClient 経由に変わるのみ。
 
 ## キーバインド管理方針
 
@@ -435,3 +619,4 @@ func (m StatusBar) View() string
 |---|------|---------|---------|
 | 1.0 | 2026-02-10 | 初版作成 | — |
 | 1.1 | 2026-02-10 | StatusBar TEA インターフェース追加、ForwardManager 依存パス修正、キーバインド管理方針追加 | 整合性チェック |
+| 2.0 | 2026-02-11 | デーモン化対応: Daemon/IPC/CLI Layer コンポーネント追加、TUI の IPCClient 経由化 | デーモン化対応 |
