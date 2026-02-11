@@ -53,7 +53,7 @@ func NewSSHConnection() SSHConnection {
 }
 
 func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
-	authMethods, agentCloser := buildAuthMethods(host)
+	authMethods, agentCloser := buildAuthMethods(host, nil)
 	if len(authMethods) == 0 {
 		if agentCloser != nil {
 			agentCloser.Close()
