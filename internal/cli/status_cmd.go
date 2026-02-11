@@ -117,9 +117,13 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	}
 
 	connectedHosts := 0
+	pendingAuthHosts := 0
 	for _, h := range hosts.Hosts {
-		if h.State == "connected" {
+		switch h.State {
+		case "connected":
 			connectedHosts++
+		case "pending_auth":
+			pendingAuthHosts++
 		}
 	}
 
@@ -138,7 +142,11 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 
 	fmt.Println("MolePort Status:")
 	fmt.Printf("  Daemon:    Running (PID: %d, uptime: %s)\n", daemonStatus.PID, daemonStatus.Uptime)
-	fmt.Printf("  Hosts:     %d total, %d connected\n", len(hosts.Hosts), connectedHosts)
+	if pendingAuthHosts > 0 {
+		fmt.Printf("  Hosts:     %d total, %d connected, %d pending auth\n", len(hosts.Hosts), connectedHosts, pendingAuthHosts)
+	} else {
+		fmt.Printf("  Hosts:     %d total, %d connected\n", len(hosts.Hosts), connectedHosts)
+	}
 	fmt.Printf("  Forwards:  %d total, %d active, %d stopped\n", len(sessions.Sessions), activeSessions, stoppedSessions)
 	fmt.Printf("  Traffic:   sent %s, recv %s\n", formatBytes(totalSent), formatBytes(totalRecv))
 }
