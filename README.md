@@ -1,56 +1,95 @@
 # MolePort
 
-SSH ポートフォワーディングを視覚的に管理する TUI アプリケーション。
+daemon+client アーキテクチャの SSH ポートフォワーディングマネージャ。
 
-`~/.ssh/config` からホスト情報を読み込み、ポート転送の設定・接続・切断をダッシュボード上で直感的に操作できます。
+`~/.ssh/config` からホスト情報を読み込み、CLI または TUI からポート転送の設定・接続・切断を操作できます。
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  SSH Hosts                                          │
-│  ● prod-server  192.168.1.10  user@22    2 active   │
-│  ○ staging      10.0.0.5      deploy@22  0 active   │
-├─────────────────────────────────────────────────────┤
-│  Port Forwards: prod-server                         │
-│  L :8080 → localhost:80    ● Active  2h 15m  ↑1.2MB │
-│  L :5432 → localhost:5432  ● Active  45m     ↑52KB  │
-├─────────────────────────────────────────────────────┤
-│  > _                                                │
-└─────────────────────────────────────────────────────┘
+┌──────────────┐     Unix Socket (JSON-RPC 2.0)     ┌──────────────┐
+│  CLI / TUI   │ ◄──────────────────────────────────► │   Daemon     │
+│  (Client)    │                                      │              │
+└──────────────┘                                      │  SSHManager  │
+                                                      │  FwdManager  │
+                                                      │  ConfigMgr   │
+                                                      └──────────────┘
 ```
 
 ## 機能
 
-- **SSH config 連携** — `~/.ssh/config`（Include 対応）からホストを自動読み込み
-- **3種類の転送** — Local (-L) / Remote (-R) / Dynamic SOCKS5 (-D)
-- **リアルタイム監視** — 接続状態、稼働時間、転送データ量を表示
-- **自動再接続** — 指数バックオフで自動リトライ
-- **セッション復元** — 前回のアクティブ転送を起動時に自動復元
-- **対話型コマンド** — ステップバイステップで転送ルールを追加
+- **SSH config 連携** --- `~/.ssh/config`（Include 対応）からホストを自動読み込み
+- **3種類の転送** --- Local (-L) / Remote (-R) / Dynamic SOCKS5 (-D)
+- **リアルタイム監視** --- 接続状態、稼働時間、転送データ量を表示
+- **自動再接続** --- 指数バックオフで自動リトライ
+- **セッション復元** --- 前回のアクティブ転送を起動時に自動復元
+- **daemon+client** --- バックグラウンドデーモンが SSH 接続を管理、CLI/TUI はクライアントとして操作
 
 ## 必要環境
 
 - Go 1.23+
 - Linux / macOS
-- ターミナル（256色以上推奨）
 
 ## インストール
 
 ```bash
-# ソースからビルド
 git clone https://github.com/ousiassllc/MolePort.git
 cd MolePort
-make build
-
-# 実行
-make run
-
-# または直接
-./bin/moleport
+make install
 ```
 
-## 使い方
+`make install` は `go install` でバイナリを `$(go env GOPATH)/bin` にインストールします。
+PATH に含まれていない場合はシェル設定に追加してください:
 
-### キーバインド
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+ビルドのみ（`./bin/moleport` に出力）の場合:
+
+```bash
+make build
+```
+
+## クイックスタート
+
+```bash
+# 1. デーモンを起動
+moleport daemon start
+
+# 2. SSH ホストに接続
+moleport connect prod-server
+
+# 3. 転送ルールを追加
+moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80
+
+# 4. フォワーディングを開始
+moleport start web
+
+# 5. TUI ダッシュボードで監視
+moleport tui
+```
+
+## CLI コマンド
+
+| コマンド | 説明 |
+|---------|------|
+| `moleport daemon start` | デーモンをバックグラウンドで起動 |
+| `moleport daemon stop [--purge]` | デーモンを停止（`--purge`: 状態クリア） |
+| `moleport daemon status` | デーモンの稼働状態を表示 |
+| `moleport connect <host>` | SSH ホストに接続 |
+| `moleport disconnect <host>` | SSH ホストを切断 |
+| `moleport add [flags]` | 転送ルールを追加 |
+| `moleport delete <name>` | 転送ルールを削除 |
+| `moleport start <name>` | フォワーディングを開始 |
+| `moleport stop <name> / --all` | フォワーディングを停止（`--all`: 全停止） |
+| `moleport list [--json]` | ホスト・転送ルールの一覧 |
+| `moleport status [name]` | 接続状態のサマリー |
+| `moleport config [--json]` | 設定を表示 |
+| `moleport reload` | SSH config を再読み込み |
+| `moleport tui` | TUI ダッシュボードを起動 |
+| `moleport version` | バージョン情報を表示 |
+| `moleport help` | ヘルプを表示 |
+
+## TUI キーバインド
 
 | キー | 動作 |
 |------|------|
@@ -64,20 +103,18 @@ make run
 | `Esc` | キャンセル |
 | `q` / `Ctrl+C` | 終了 |
 
-### コマンド
+## アーキテクチャ
 
-| コマンド | 短縮 | 説明 |
-|---------|------|------|
-| `add` | `a` | 転送ルールを追加 |
-| `delete` | `rm` | 転送ルールを削除 |
-| `connect` | `c` | 停止中の転送を接続 |
-| `disconnect` | `dc` | アクティブな転送を切断 |
-| `list` | `ls` | 全ホスト・全ルールを表示 |
-| `status` | `st` | 接続状態のサマリー |
-| `config` | `cfg` | 設定を変更 |
-| `reload` | — | SSH config を再読み込み |
-| `help` | `?` | ヘルプ表示 |
-| `quit` | `q` | 終了 |
+```
+CLI / TUI (Client)
+  ↕  Unix Socket (JSON-RPC 2.0)
+Daemon
+  ├── IPC Server (EventBroker + Handler)
+  ├── Core Layer
+  │     SSHManager / ForwardManager / ConfigManager
+  └── Infrastructure Layer
+        SSHConnection / SSHConfigParser / YAMLStore
+```
 
 ## 設定
 
@@ -99,23 +136,6 @@ log:
   level: "info"
   file: "~/.config/moleport/moleport.log"
 ```
-
-## アーキテクチャ
-
-3層構成 + Atomic Design:
-
-```
-TUI Layer (Bubble Tea + Lip Gloss)
-  Pages → Organisms → Molecules → Atoms
-
-Core Layer
-  SSHManager / ForwardManager / ConfigManager
-
-Infrastructure Layer
-  SSHConnection / SSHConfigParser / YAMLStore
-```
-
-詳細は [docs/](docs/) を参照。
 
 ## 開発
 

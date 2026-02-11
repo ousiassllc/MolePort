@@ -4,13 +4,13 @@ APP_NAME := moleport
 BUILD_DIR := bin
 VERSION := 0.1.0
 GOFLAGS := -trimpath
-LDFLAGS := -s -w -X main.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 
 .PHONY: help build run clean test test-race vet fmt lint install
 
 help: ## ヘルプを表示
 	@echo ""
-	@echo "  MolePort - SSH Port Forwarding Manager TUI"
+	@echo "  MolePort - SSH Port Forwarding Manager"
 	@echo ""
 	@echo "  Usage: make <target>"
 	@echo ""
@@ -39,6 +39,15 @@ fmt: ## go fmt を実行
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)
 
-install: build ## $GOPATH/bin にインストール
-	cp $(BUILD_DIR)/$(APP_NAME) $(GOPATH)/bin/$(APP_NAME) 2>/dev/null || \
-		cp $(BUILD_DIR)/$(APP_NAME) $(HOME)/go/bin/$(APP_NAME)
+install: ## $GOPATH/bin にインストール
+	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" ./cmd/moleport
+	@GOBIN=$$(go env GOPATH)/bin; \
+	case ":$$PATH:" in \
+		*":$$GOBIN:"*) ;; \
+		*) echo ""; \
+		   echo "  \033[33m警告: $$GOBIN が PATH に含まれていません\033[0m"; \
+		   echo "  以下をシェル設定に追加してください:"; \
+		   echo ""; \
+		   echo "    export PATH=\"\$$PATH:$$GOBIN\""; \
+		   echo "" ;; \
+	esac

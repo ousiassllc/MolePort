@@ -256,6 +256,43 @@ func TestConfigManager_SaveAndLoadState(t *testing.T) {
 	}
 }
 
+func TestConfigManager_DeleteState(t *testing.T) {
+	dir := t.TempDir()
+	store := newTestStore()
+	cm := NewConfigManager(store, dir)
+
+	// state.yaml を作成
+	state := &State{
+		LastUpdated: time.Now(),
+		ActiveForwards: []ForwardRule{
+			{Name: "web", Host: "server", Type: Local, LocalPort: 8080},
+		},
+	}
+	if err := cm.SaveState(state); err != nil {
+		t.Fatalf("SaveState() error = %v", err)
+	}
+
+	// state.yaml が存在することを確認
+	if !store.Exists(filepath.Join(dir, "state.yaml")) {
+		t.Fatal("state.yaml should exist after SaveState")
+	}
+
+	// 削除
+	if err := cm.DeleteState(); err != nil {
+		t.Fatalf("DeleteState() error = %v", err)
+	}
+
+	// state.yaml が消えたことを確認
+	if store.Exists(filepath.Join(dir, "state.yaml")) {
+		t.Error("state.yaml should not exist after DeleteState")
+	}
+
+	// 存在しないファイルの削除はエラーにならない
+	if err := cm.DeleteState(); err != nil {
+		t.Errorf("DeleteState() on non-existent file should not error, got %v", err)
+	}
+}
+
 func TestConfigManager_ConfigDir(t *testing.T) {
 	dir := t.TempDir()
 	store := newTestStore()

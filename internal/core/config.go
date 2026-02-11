@@ -1,6 +1,7 @@
 package core
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 )
@@ -21,6 +22,7 @@ type ConfigManager interface {
 	UpdateConfig(fn func(*Config)) error
 	LoadState() (*State, error)
 	SaveState(state *State) error
+	DeleteState() error
 	ConfigDir() string
 }
 
@@ -121,6 +123,16 @@ func (m *configManager) LoadState() (*State, error) {
 // SaveState は状態を state.yaml に書き込む。
 func (m *configManager) SaveState(state *State) error {
 	return m.store.Write(m.statePath(), state)
+}
+
+// DeleteState は state.yaml を削除する。
+// ファイルが存在しない場合はエラーを返さない。
+func (m *configManager) DeleteState() error {
+	err := os.Remove(m.statePath())
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // ConfigDir は設定ディレクトリのパスを返す。

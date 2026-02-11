@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/ousiassllc/moleport/internal/core"
+import (
+	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc"
+)
 
 // FocusPane はフォーカス中のペインを示す。
 type FocusPane int
@@ -74,7 +77,10 @@ type LogOutputMsg struct {
 // QuitRequestMsg はアプリケーション終了を要求する。
 type QuitRequestMsg struct{}
 
-// SessionRestoredMsg はセッション復元の完了通知。
-type SessionRestoredMsg struct {
-	Err error
+// IPCNotificationMsg は IPC から受信した通知メッセージ。
+type IPCNotificationMsg struct {
+	Notification *ipc.Notification
 }
+
+// IPCDisconnectedMsg は IPC 接続断を通知する。
+type IPCDisconnectedMsg struct{}
