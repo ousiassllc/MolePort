@@ -33,7 +33,7 @@ const (
 
 // ForwardManager はポートフォワーディングルールとセッションを管理する。
 type ForwardManager interface {
-	AddRule(rule ForwardRule) error
+	AddRule(rule ForwardRule) (string, error)
 	DeleteRule(name string) error
 	GetRules() []ForwardRule
 	GetRulesByHost(hostName string) []ForwardRule
@@ -77,7 +77,8 @@ func NewForwardManager(sshManager SSHManager) ForwardManager {
 }
 
 // AddRule はフォワーディングルールを追加する。
-func (m *forwardManager) AddRule(rule ForwardRule) error {
+// 成功時はルール名（自動生成名を含む）を返す。
+func (m *forwardManager) AddRule(rule ForwardRule) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -89,21 +90,21 @@ func (m *forwardManager) AddRule(rule ForwardRule) error {
 
 	// 名前の一意性チェック
 	if _, exists := m.rules[rule.Name]; exists {
-		return fmt.Errorf("rule %q already exists", rule.Name)
+		return "", fmt.Errorf("rule %q already exists", rule.Name)
 	}
 
 	// バリデーション
 	if rule.Host == "" {
-		return fmt.Errorf("host is required")
+		return "", fmt.Errorf("host is required")
 	}
 
 	if rule.LocalPort < 1 || rule.LocalPort > 65535 {
-		return fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
+		return "", fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
 	}
 
 	if rule.Type == Local || rule.Type == Remote {
 		if rule.RemotePort < 1 || rule.RemotePort > 65535 {
-			return fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
+			return "", fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
 		}
 		if rule.RemoteHost == "" {
 			rule.RemoteHost = "localhost"
@@ -112,7 +113,7 @@ func (m *forwardManager) AddRule(rule ForwardRule) error {
 
 	m.rules[rule.Name] = rule
 	m.ruleOrder = append(m.ruleOrder, rule.Name)
-	return nil
+	return rule.Name, nil
 }
 
 // DeleteRule はフォワーディングルールを削除する。アクティブな場合は停止する。

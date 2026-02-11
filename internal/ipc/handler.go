@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -153,9 +154,11 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *RPCError) {
 
 func (h *Handler) forwardList(params json.RawMessage) (any, *RPCError) {
 	var p ForwardListParams
-	// params が nil や空の場合もあるため、エラーを無視する
+	// params が nil や空の場合はデフォルト値を使用する
 	if len(params) > 0 {
-		json.Unmarshal(params, &p)
+		if err := json.Unmarshal(params, &p); err != nil {
+			slog.Debug("forwardList: invalid params, using defaults", "error", err)
+		}
 	}
 
 	var rules []core.ForwardRule
@@ -195,19 +198,9 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *RPCError) {
 		AutoConnect: p.AutoConnect,
 	}
 
-	if err := h.fwdMgr.AddRule(rule); err != nil {
+	name, err := h.fwdMgr.AddRule(rule)
+	if err != nil {
 		return nil, toRPCError(err, InternalError)
-	}
-
-	// AddRule が名前を自動生成する場合があるため、rule.Name が空の場合は
-	// GetRules から取得する必要があるが、ここでは入力名を返す
-	name := p.Name
-	if name == "" {
-		// 自動生成された名前を取得するため、最新のルール一覧から取得
-		rules := h.fwdMgr.GetRules()
-		if len(rules) > 0 {
-			name = rules[len(rules)-1].Name
-		}
 	}
 
 	h.saveForwardRulesToConfig()
@@ -390,7 +383,9 @@ func (h *Handler) daemonShutdown(params json.RawMessage) (any, *RPCError) {
 
 	var p DaemonShutdownParams
 	if len(params) > 0 {
-		json.Unmarshal(params, &p)
+		if err := json.Unmarshal(params, &p); err != nil {
+			slog.Debug("daemonShutdown: invalid params, using defaults", "error", err)
+		}
 	}
 
 	if err := h.daemon.Shutdown(p.Purge); err != nil {
@@ -442,9 +437,11 @@ func (h *Handler) eventsUnsubscribe(params json.RawMessage) (any, *RPCError) {
 // saveForwardRulesToConfig はフォワードルールを設定ファイルに保存する。
 func (h *Handler) saveForwardRulesToConfig() {
 	rules := h.fwdMgr.GetRules()
-	_ = h.cfgMgr.UpdateConfig(func(c *core.Config) {
+	if err := h.cfgMgr.UpdateConfig(func(c *core.Config) {
 		c.Forwards = rules
-	})
+	}); err != nil {
+		slog.Warn("failed to save forward rules to config", "error", err)
+	}
 }
 
 // parseParams は JSON-RPC パラメータをアンマーシャルする。

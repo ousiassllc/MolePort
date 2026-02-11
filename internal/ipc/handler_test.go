@@ -81,12 +81,15 @@ type mockForwardManager struct {
 	sessionErr    error
 }
 
-func (m *mockForwardManager) AddRule(rule core.ForwardRule) error {
+func (m *mockForwardManager) AddRule(rule core.ForwardRule) (string, error) {
 	if m.addErr != nil {
-		return m.addErr
+		return "", m.addErr
+	}
+	if rule.Name == "" {
+		rule.Name = "auto-generated"
 	}
 	m.rules = append(m.rules, rule)
-	return nil
+	return rule.Name, nil
 }
 
 func (m *mockForwardManager) DeleteRule(name string) error {

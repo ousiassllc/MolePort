@@ -79,7 +79,7 @@ func New(configDir string) (*Daemon, error) {
 
 	// 保存済みのフォワードルールを読み込む
 	for _, rule := range cfg.Forwards {
-		if err := fwdMgr.AddRule(rule); err != nil {
+		if _, err := fwdMgr.AddRule(rule); err != nil {
 			slog.Warn("failed to load forward rule", "rule", rule.Name, "error", err)
 		}
 	}

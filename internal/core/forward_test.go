@@ -117,7 +117,7 @@ func TestForwardManager_AddRule(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	err := fm.AddRule(ForwardRule{
+	name, err := fm.AddRule(ForwardRule{
 		Name:       "web",
 		Host:       "server1",
 		Type:       Local,
@@ -127,6 +127,9 @@ func TestForwardManager_AddRule(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
+	}
+	if name != "web" {
+		t.Errorf("AddRule() name = %q, want %q", name, "web")
 	}
 
 	rules := fm.GetRules()
@@ -145,7 +148,7 @@ func TestForwardManager_AddRule_AutoName(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	err := fm.AddRule(ForwardRule{
+	name, err := fm.AddRule(ForwardRule{
 		Host:       "server1",
 		Type:       Local,
 		LocalPort:  8080,
@@ -155,13 +158,16 @@ func TestForwardManager_AddRule_AutoName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
+	if name == "" {
+		t.Error("auto-generated name should not be empty")
+	}
 
 	rules := fm.GetRules()
 	if len(rules) != 1 {
 		t.Fatalf("len(rules) = %d, want 1", len(rules))
 	}
-	if rules[0].Name == "" {
-		t.Error("auto-generated name should not be empty")
+	if rules[0].Name != name {
+		t.Errorf("rule name = %q, want %q", rules[0].Name, name)
 	}
 }
 
@@ -177,11 +183,11 @@ func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
 		RemoteHost: "localhost",
 		RemotePort: 80,
 	}
-	if err := fm.AddRule(rule); err != nil {
+	if _, err := fm.AddRule(rule); err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
 
-	err := fm.AddRule(rule)
+	_, err := fm.AddRule(rule)
 	if err == nil {
 		t.Fatal("AddRule() should return error for duplicate name")
 	}
@@ -191,7 +197,7 @@ func TestForwardManager_AddRule_EmptyHost(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	err := fm.AddRule(ForwardRule{
+	_, err := fm.AddRule(ForwardRule{
 		Name:       "test",
 		Type:       Local,
 		LocalPort:  8080,
@@ -222,7 +228,7 @@ func TestForwardManager_AddRule_InvalidPort(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := fm.AddRule(ForwardRule{
+			_, err := fm.AddRule(ForwardRule{
 				Name:       "test-" + tt.name,
 				Host:       "server1",
 				Type:       Local,
@@ -241,7 +247,7 @@ func TestForwardManager_AddRule_InvalidRemotePort(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	err := fm.AddRule(ForwardRule{
+	_, err := fm.AddRule(ForwardRule{
 		Name:       "test",
 		Host:       "server1",
 		Type:       Local,
@@ -259,7 +265,7 @@ func TestForwardManager_AddRule_DynamicNoRemotePort(t *testing.T) {
 	fm := NewForwardManager(sm)
 
 	// Dynamic では RemotePort は不要
-	err := fm.AddRule(ForwardRule{
+	_, err := fm.AddRule(ForwardRule{
 		Name:      "socks",
 		Host:      "server1",
 		Type:      Dynamic,
@@ -274,7 +280,7 @@ func TestForwardManager_DeleteRule(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	if err := fm.AddRule(ForwardRule{
+	if _, err := fm.AddRule(ForwardRule{
 		Name: "web", Host: "server1", Type: Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	}); err != nil {
 		t.Fatalf("AddRule() error = %v", err)
@@ -306,7 +312,7 @@ func TestForwardManager_GetRules_Order(t *testing.T) {
 
 	names := []string{"alpha", "beta", "gamma"}
 	for _, name := range names {
-		if err := fm.AddRule(ForwardRule{
+		if _, err := fm.AddRule(ForwardRule{
 			Name: name, Host: "server1", Type: Dynamic, LocalPort: 1080,
 		}); err != nil {
 			t.Fatalf("AddRule(%q) error = %v", name, err)
@@ -328,9 +334,9 @@ func TestForwardManager_GetRulesByHost(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{Name: "web1", Host: "server1", Type: Dynamic, LocalPort: 1080})
-	fm.AddRule(ForwardRule{Name: "web2", Host: "server2", Type: Dynamic, LocalPort: 1081})
-	fm.AddRule(ForwardRule{Name: "web3", Host: "server1", Type: Dynamic, LocalPort: 1082})
+	_, _ = fm.AddRule(ForwardRule{Name: "web1", Host: "server1", Type: Dynamic, LocalPort: 1080})
+	_, _ = fm.AddRule(ForwardRule{Name: "web2", Host: "server2", Type: Dynamic, LocalPort: 1081})
+	_, _ = fm.AddRule(ForwardRule{Name: "web3", Host: "server1", Type: Dynamic, LocalPort: 1082})
 
 	rules := fm.GetRulesByHost("server1")
 	if len(rules) != 2 {
@@ -369,7 +375,7 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	sm.connectErr = fmt.Errorf("connection refused")
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "web", Host: "server1", Type: Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 
@@ -391,7 +397,7 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "web", Host: "server1", Type: Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 
@@ -470,7 +476,7 @@ func TestForwardManager_StartForward_Remote(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "remote-web", Host: "server1", Type: Remote, LocalPort: 3000, RemoteHost: "0.0.0.0", RemotePort: 80,
 	})
 
@@ -501,7 +507,7 @@ func TestForwardManager_StartForward_Dynamic(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "socks", Host: "server1", Type: Dynamic, LocalPort: 1080,
 	})
 
@@ -524,7 +530,7 @@ func TestForwardManager_StopForward_NotActive(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080,
 	})
 
@@ -546,8 +552,8 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{Name: "fwd1", Host: "server1", Type: Dynamic, LocalPort: 1080})
-	fm.AddRule(ForwardRule{Name: "fwd2", Host: "server1", Type: Dynamic, LocalPort: 1081})
+	_, _ = fm.AddRule(ForwardRule{Name: "fwd1", Host: "server1", Type: Dynamic, LocalPort: 1080})
+	_, _ = fm.AddRule(ForwardRule{Name: "fwd2", Host: "server1", Type: Dynamic, LocalPort: 1081})
 
 	fm.StartForward("fwd1")
 	fm.StartForward("fwd2")
@@ -578,7 +584,7 @@ func TestForwardManager_GetSession_Inactive(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{
+	_, _ = fm.AddRule(ForwardRule{
 		Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080,
 	})
 
@@ -606,8 +612,8 @@ func TestForwardManager_GetAllSessions(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{Name: "fwd1", Host: "server1", Type: Dynamic, LocalPort: 1080})
-	fm.AddRule(ForwardRule{Name: "fwd2", Host: "server1", Type: Dynamic, LocalPort: 1081})
+	_, _ = fm.AddRule(ForwardRule{Name: "fwd1", Host: "server1", Type: Dynamic, LocalPort: 1080})
+	_, _ = fm.AddRule(ForwardRule{Name: "fwd2", Host: "server1", Type: Dynamic, LocalPort: 1081})
 
 	fm.StartForward("fwd1")
 
@@ -638,7 +644,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(ForwardRule{Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080})
+	_, _ = fm.AddRule(ForwardRule{Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080})
 	fm.StartForward("web")
 
 	if err := fm.DeleteRule("web"); err != nil {
@@ -665,7 +671,7 @@ func TestForwardManager_Close(t *testing.T) {
 
 	events := fm.Subscribe()
 
-	fm.AddRule(ForwardRule{Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080})
+	_, _ = fm.AddRule(ForwardRule{Name: "web", Host: "server1", Type: Dynamic, LocalPort: 1080})
 	fm.StartForward("web")
 
 	// drain started event
@@ -1050,7 +1056,7 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	fm := NewForwardManager(sm)
 
 	// Local タイプで RemoteHost を指定しない場合、"localhost" がデフォルトになる
-	err := fm.AddRule(ForwardRule{
+	_, err := fm.AddRule(ForwardRule{
 		Name:       "web-local",
 		Host:       "server1",
 		Type:       Local,
@@ -1070,7 +1076,7 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	}
 
 	// Remote タイプでも同様
-	err = fm.AddRule(ForwardRule{
+	_, err = fm.AddRule(ForwardRule{
 		Name:       "web-remote",
 		Host:       "server1",
 		Type:       Remote,
@@ -1087,7 +1093,7 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	}
 
 	// Dynamic タイプでは RemoteHost はそのまま空
-	err = fm.AddRule(ForwardRule{
+	_, err = fm.AddRule(ForwardRule{
 		Name:      "socks",
 		Host:      "server1",
 		Type:      Dynamic,
