@@ -169,7 +169,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 			// エラーケースではサーバーが応答を書くため、それを読んでブロックを解除する
 			if tt.wantErr != "" {
 				go func() {
-					io.Copy(io.Discard, clientConn)
+					_, _ = io.Copy(io.Discard, clientConn)
 				}()
 			}
 

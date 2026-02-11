@@ -90,9 +90,6 @@ func NewErrorResponse(id *int, code int, message string) Response {
 	}
 }
 
-// intPtr は int のポインタを返すヘルパー。
-func intPtr(v int) *int { return &v }
-
 // --- ホスト管理 ---
 
 // HostListParams は host.list リクエストのパラメータ。

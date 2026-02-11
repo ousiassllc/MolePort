@@ -368,45 +368,6 @@ func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("  q / Ctrl+C  : 終了")
 }
 
-func (m *MainModel) showList() {
-	if len(m.sessions) == 0 {
-		m.dashboard.AppendLog("フォワーディングルールがありません")
-		return
-	}
-
-	m.dashboard.AppendLog("--- フォワーディングルール一覧 ---")
-	for _, s := range m.sessions {
-		status := s.Status.String()
-		var desc string
-		if s.Rule.Type == core.Dynamic {
-			desc = fmt.Sprintf("  %s: %s :%d (SOCKS) [%s]", s.Rule.Name, s.Rule.Type, s.Rule.LocalPort, status)
-		} else {
-			desc = fmt.Sprintf("  %s: %s :%d -> %s:%d [%s]", s.Rule.Name, s.Rule.Type, s.Rule.LocalPort, s.Rule.RemoteHost, s.Rule.RemotePort, status)
-		}
-		m.dashboard.AppendLog(desc)
-	}
-}
-
-func (m *MainModel) showStatus() {
-	connectedCount := 0
-	for _, h := range m.hosts {
-		if h.State == core.Connected {
-			connectedCount++
-		}
-	}
-
-	activeCount := 0
-	for _, s := range m.sessions {
-		if s.Status == core.Active {
-			activeCount++
-		}
-	}
-
-	m.dashboard.AppendLog("--- ステータス ---")
-	m.dashboard.AppendLog(fmt.Sprintf("  ホスト: %d (接続中: %d)", len(m.hosts), connectedCount))
-	m.dashboard.AppendLog(fmt.Sprintf("  フォワード: %d (アクティブ: %d)", len(m.sessions), activeCount))
-}
-
 func (m *MainModel) refreshForwardPanel() {
 	m.dashboard.SetForwardSessions(m.sessions)
 }
