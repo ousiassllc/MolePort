@@ -882,3 +882,150 @@ func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
 		t.Error("forward.delete should call UpdateConfig to auto-save rules")
 	}
 }
+
+// --- クレデンシャル認証テスト ---
+
+// mockNotificationSender はテスト用の通知送信モック。
+type mockNotificationSender struct {
+	notifications []Notification
+	clientID      string
+}
+
+func (m *mockNotificationSender) SendNotification(clientID string, notification Notification) error {
+	m.clientID = clientID
+	m.notifications = append(m.notifications, notification)
+	return nil
+}
+
+func TestHandler_CredentialResponse_NoPending(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params, _ := json.Marshal(CredentialResponseParams{
+		RequestID: "cr-nonexistent",
+		Value:     "secret",
+	})
+
+	_, rpcErr := h.Handle("client-1", "credential.response", params)
+	if rpcErr == nil {
+		t.Fatal("expected error for non-existent credential request")
+	}
+	if rpcErr.Code != InvalidParams {
+		t.Errorf("expected InvalidParams error code, got %d", rpcErr.Code)
+	}
+}
+
+func TestHandler_CredentialResponse_RoutesToPending(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+
+	reqID := "cr-test-1"
+	ch := make(chan CredentialResponseParams, 1)
+	h.credMu.Lock()
+	h.credPending[reqID] = ch
+	h.credMu.Unlock()
+
+	params, _ := json.Marshal(CredentialResponseParams{
+		RequestID: reqID,
+		Value:     "my-password",
+	})
+
+	result, rpcErr := h.Handle("client-1", "credential.response", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	credResult, ok := result.(CredentialResponseResult)
+	if !ok {
+		t.Fatalf("unexpected result type: %T", result)
+	}
+	if !credResult.OK {
+		t.Error("expected OK=true")
+	}
+
+	// チャネルにレスポンスが送信されたことを確認
+	select {
+	case resp := <-ch:
+		if resp.Value != "my-password" {
+			t.Errorf("expected value 'my-password', got %q", resp.Value)
+		}
+		if resp.RequestID != reqID {
+			t.Errorf("expected request_id %q, got %q", reqID, resp.RequestID)
+		}
+	default:
+		t.Fatal("expected credential response in channel")
+	}
+}
+
+func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	sender := &mockNotificationSender{}
+	h.SetSender(sender)
+
+	cb := h.buildCredentialCallback("client-1", "test-host")
+	if cb == nil {
+		t.Fatal("callback should not be nil when sender is set")
+	}
+
+	// コールバックを goroutine で実行し、レスポンスをシミュレート
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		resp, err := cb(core.CredentialRequest{
+			Type:   core.CredentialPassword,
+			Host:   "test-host",
+			Prompt: "Password:",
+		})
+		if err != nil {
+			t.Errorf("unexpected callback error: %v", err)
+			return
+		}
+		if resp.Value != "secret-pwd" {
+			t.Errorf("expected value 'secret-pwd', got %q", resp.Value)
+		}
+	}()
+
+	// 通知が送信されるまで待機
+	time.Sleep(50 * time.Millisecond)
+
+	if len(sender.notifications) == 0 {
+		t.Fatal("expected credential.request notification to be sent")
+	}
+
+	notif := sender.notifications[0]
+	if notif.Method != "credential.request" {
+		t.Errorf("expected method 'credential.request', got %q", notif.Method)
+	}
+
+	// 通知の内容を解析して request_id を取得
+	var credReq CredentialRequestNotification
+	if err := json.Unmarshal(notif.Params, &credReq); err != nil {
+		t.Fatalf("failed to unmarshal notification params: %v", err)
+	}
+	if credReq.Type != "password" {
+		t.Errorf("expected type 'password', got %q", credReq.Type)
+	}
+	if credReq.Host != "test-host" {
+		t.Errorf("expected host 'test-host', got %q", credReq.Host)
+	}
+
+	// credential.response を送信
+	respParams, _ := json.Marshal(CredentialResponseParams{
+		RequestID: credReq.RequestID,
+		Value:     "secret-pwd",
+	})
+	h.Handle("client-1", "credential.response", respParams)
+
+	// コールバックの完了を待機
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for callback to complete")
+	}
+}
+
+func TestHandler_BuildCredentialCallback_NilSender(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	// sender が nil の場合、コールバックは nil を返す
+	cb := h.buildCredentialCallback("client-1", "test-host")
+	if cb != nil {
+		t.Error("callback should be nil when sender is nil")
+	}
+}

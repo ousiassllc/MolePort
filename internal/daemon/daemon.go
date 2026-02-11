@@ -109,6 +109,9 @@ func New(configDir string) (*Daemon, error) {
 		broker.RemoveClient(clientID)
 	}
 
+	// Handler に通知送信用のサーバー参照を設定
+	handler.SetSender(server)
+
 	d.broker = broker
 	d.handler = handler
 	d.server = server
