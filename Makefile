@@ -4,13 +4,13 @@ APP_NAME := moleport
 BUILD_DIR := bin
 VERSION := 0.1.0
 GOFLAGS := -trimpath
-LDFLAGS := -s -w -X main.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 
 .PHONY: help build run clean test test-race vet fmt lint install
 
 help: ## ヘルプを表示
 	@echo ""
-	@echo "  MolePort - SSH Port Forwarding Manager TUI"
+	@echo "  MolePort - SSH Port Forwarding Manager"
 	@echo ""
 	@echo "  Usage: make <target>"
 	@echo ""
