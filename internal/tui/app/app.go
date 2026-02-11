@@ -44,6 +44,10 @@ type MainModel struct {
 	sessions       []core.ForwardSession
 	quitting       bool
 	subscriptionID string
+
+	// クレデンシャル入力状態
+	credRequest    *ipc.CredentialRequestNotification
+	credResponseCh chan<- *ipc.CredentialResponseParams
 }
 
 // NewMainModel は新しい MainModel を生成する。
@@ -154,6 +158,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.ForwardDeleteConfirmedMsg:
 		cmds = append(cmds, m.deleteForwardRule(msg.RuleName))
+
+	case tui.CredentialRequestMsg:
+		return m.handleCredentialRequest(msg)
+
+	case tui.CredentialSubmitMsg:
+		return m.handleCredentialSubmit(msg)
 
 	case tui.QuitRequestMsg:
 		return m, m.shutdown()
@@ -352,6 +362,73 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 		}
 		return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード '%s' を停止しました", ruleName)}
 	}
+}
+
+// --- クレデンシャル入力 ---
+
+// NewTUICredentialHandler は Bubble Tea プログラムにクレデンシャル要求を送信するハンドラーを返す。
+// tui_cmd.go から tea.Program 生成後に呼び出す。
+func NewTUICredentialHandler(p *tea.Program) ipc.CredentialHandler {
+	return func(req ipc.CredentialRequestNotification) (*ipc.CredentialResponseParams, error) {
+		ch := make(chan *ipc.CredentialResponseParams, 1)
+		p.Send(tui.CredentialRequestMsg{
+			Request:    req,
+			ResponseCh: ch,
+		})
+		resp := <-ch
+		return resp, nil
+	}
+}
+
+func (m MainModel) handleCredentialRequest(msg tui.CredentialRequestMsg) (tea.Model, tea.Cmd) {
+	m.credRequest = &msg.Request
+	m.credResponseCh = msg.ResponseCh
+
+	var prompt string
+	switch msg.Request.Type {
+	case "passphrase":
+		prompt = fmt.Sprintf("%s の鍵パスフレーズを入力:", msg.Request.Host)
+	case "keyboard-interactive":
+		if len(msg.Request.Prompts) > 0 {
+			prompt = msg.Request.Prompts[0].Prompt
+		} else {
+			prompt = fmt.Sprintf("%s の認証コードを入力:", msg.Request.Host)
+		}
+	default:
+		prompt = fmt.Sprintf("%s のパスワードを入力:", msg.Request.Host)
+	}
+
+	cmd := m.dashboard.ShowPasswordInput(prompt)
+	m.dashboard.AppendLog(fmt.Sprintf("認証が必要です: %s (%s)", msg.Request.Host, msg.Request.Type))
+	return m, cmd
+}
+
+func (m MainModel) handleCredentialSubmit(msg tui.CredentialSubmitMsg) (tea.Model, tea.Cmd) {
+	if m.credResponseCh == nil {
+		return m, nil
+	}
+
+	if msg.Cancelled {
+		m.credResponseCh <- nil
+		m.dashboard.AppendLog("認証がキャンセルされました")
+	} else {
+		resp := &ipc.CredentialResponseParams{
+			Value: msg.Value,
+		}
+		if m.credRequest != nil {
+			resp.RequestID = m.credRequest.RequestID
+			// keyboard-interactive の場合は Answers に入れる
+			if m.credRequest.Type == "keyboard-interactive" {
+				resp.Answers = []string{msg.Value}
+				resp.Value = ""
+			}
+		}
+		m.credResponseCh <- resp
+	}
+
+	m.credRequest = nil
+	m.credResponseCh = nil
+	return m, nil
 }
 
 // --- ヘルパー ---
