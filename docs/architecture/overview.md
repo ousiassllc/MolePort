@@ -13,7 +13,7 @@ MolePort は Go で実装される SSH ポートフォワーディング管理�
 | 言語 | Go | 1.23+ | シングルバイナリ配布、goroutine による並行処理、クロスコンパイル |
 | TUI フレームワーク | [Bubble Tea](https://github.com/charmbracelet/bubbletea) | v1.x | Elm Architecture、エコシステム充実、活発なメンテナンス |
 | TUI スタイリング | [Lip Gloss](https://github.com/charmbracelet/lipgloss) | v1.x | Bubble Tea との統合、宣言的スタイリング |
-| TUI コンポーネント | [Bubbles](https://github.com/charmbracelet/bubbles) | v0.x | テキスト入力、リスト、テーブル等のウィジェット |
+| TUI コンポーネント | [Bubbles](https://github.com/charmbracelet/bubbles) | v1.x | テキスト入力、リスト、テーブル等のウィジェット |
 | SSH | [x/crypto/ssh](https://pkg.go.dev/golang.org/x/crypto/ssh) | latest | Go 標準拡張、外部依存なし、接続の完全制御 |
 | SSH config 解析 | [ssh_config](https://github.com/kevinburke/ssh_config) | v1.x | SSH config の完全な解析（Include 対応） |
 | YAML | [gopkg.in/yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3) | v3 | 設定ファイルの読み書き |
@@ -342,29 +342,38 @@ moleport/
 │   └── moleport/
 │       └── main.go                  # エントリポイント（CLI ルーター）
 ├── internal/
-│   ├── daemon/                      # デーモンプロセス【新規】
+│   ├── daemon/                      # デーモンプロセス
 │   │   ├── daemon.go                # Daemon（起動・停止・ライフサイクル管理）
+│   │   ├── ensure.go                # デーモン起動確認・IPC 接続ヘルパー
 │   │   ├── fork.go                  # フォーク処理（self-fork）
 │   │   └── pidfile.go               # PID ファイル管理
-│   ├── ipc/                         # IPC 通信層【新規】
+│   ├── ipc/                         # IPC 通信層
 │   │   ├── server.go                # IPCServer（JSON-RPC サーバー）
 │   │   ├── client.go                # IPCClient（JSON-RPC クライアント）
 │   │   ├── handler.go               # RPC メソッドハンドラ
+│   │   ├── handler_convert.go       # コアエラー・型の RPC 変換
 │   │   ├── broker.go                # EventBroker（イベント配信）
 │   │   └── protocol.go              # JSON-RPC メッセージ型定義
-│   ├── cli/                         # CLI サブコマンド【新規】
+│   ├── cli/                         # CLI サブコマンド
 │   │   ├── root.go                  # CLIRouter（サブコマンド解析）
 │   │   ├── daemon_cmd.go            # moleport daemon start/stop/status
 │   │   ├── connect_cmd.go           # moleport connect <host>
 │   │   ├── disconnect_cmd.go        # moleport disconnect <host>
 │   │   ├── add_cmd.go               # moleport add
 │   │   ├── delete_cmd.go            # moleport delete <name>
+│   │   ├── start_cmd.go             # moleport start
+│   │   ├── stop_cmd.go              # moleport stop
 │   │   ├── list_cmd.go              # moleport list
 │   │   ├── status_cmd.go            # moleport status
+│   │   ├── config_cmd.go            # moleport config
+│   │   ├── reload_cmd.go            # moleport reload
+│   │   ├── help_cmd.go              # moleport help
+│   │   ├── version_cmd.go           # moleport version
 │   │   └── tui_cmd.go               # moleport tui
 │   ├── tui/                         # TUI Layer（Atomic Design）
 │   │   ├── app/
-│   │   │   └── app.go               # MainModel（IPCClient 経由に変更）
+│   │   │   ├── app.go               # MainModel（IPCClient 経由に変更）
+│   │   │   └── convert.go           # IPC/コア型変換
 │   │   ├── styles.go
 │   │   ├── keys.go
 │   │   ├── messages.go
@@ -372,12 +381,13 @@ moleport/
 │   │   ├── molecules/
 │   │   ├── organisms/
 │   │   └── pages/
-│   ├── core/                        # Core Layer（変更なし）
+│   ├── core/                        # Core Layer
 │   │   ├── ssh.go
 │   │   ├── forward.go
 │   │   ├── config.go
+│   │   ├── socks5.go                # SOCKS5 プロキシ
 │   │   └── types.go
-│   └── infra/                       # Infrastructure Layer（変更なし）
+│   └── infra/                       # Infrastructure Layer
 │       ├── sshconn.go
 │       ├── sshconfig.go
 │       ├── auth.go

@@ -424,23 +424,32 @@ JSON-RPC 2.0 の全メソッドについてリクエスト/レスポンスの Go
 ```go
 // JSON-RPC 2.0 基本構造
 type Request struct {
-    JSONRPC string      `json:"jsonrpc"`           // "2.0"
-    ID      *int        `json:"id,omitempty"`      // リクエスト ID（通知の場合は nil）
-    Method  string      `json:"method"`
-    Params  interface{} `json:"params,omitempty"`
+    JSONRPC string          `json:"jsonrpc"`           // "2.0"
+    ID      *int            `json:"id,omitempty"`      // リクエスト ID（通知の場合は nil）
+    Method  string          `json:"method"`
+    Params  json.RawMessage `json:"params,omitempty"`
 }
 
+// Response.ID は *int を使用する。JSON-RPC 2.0 仕様では、パース不能な
+// リクエストへのレスポンスで "id": null を返す必要があるため。
 type Response struct {
-    JSONRPC string      `json:"jsonrpc"`           // "2.0"
-    ID      int         `json:"id"`
-    Result  interface{} `json:"result,omitempty"`
-    Error   *RPCError   `json:"error,omitempty"`
+    JSONRPC string          `json:"jsonrpc"`           // "2.0"
+    ID      *int            `json:"id"`
+    Result  json.RawMessage `json:"result,omitempty"`
+    Error   *RPCError       `json:"error,omitempty"`
+}
+
+// Notification は JSON-RPC 2.0 通知（ID なし）を表す。
+type Notification struct {
+    JSONRPC string          `json:"jsonrpc"`
+    Method  string          `json:"method"`
+    Params  json.RawMessage `json:"params,omitempty"`
 }
 
 type RPCError struct {
-    Code    int         `json:"code"`
-    Message string      `json:"message"`
-    Data    interface{} `json:"data,omitempty"`
+    Code    int    `json:"code"`
+    Message string `json:"message"`
+    Data    any    `json:"data,omitempty"`
 }
 ```
 
@@ -611,13 +620,32 @@ type LogInfo struct {
 
 // config.update（部分更新: 指定したフィールドのみ変更）
 type ConfigUpdateParams struct {
-    SSHConfigPath *string         `json:"ssh_config_path,omitempty"`
-    Reconnect     *ReconnectInfo  `json:"reconnect,omitempty"`
-    Session       *SessionCfgInfo `json:"session,omitempty"`
-    Log           *LogInfo        `json:"log,omitempty"`
+    SSHConfigPath *string               `json:"ssh_config_path,omitempty"`
+    Reconnect     *ReconnectUpdateInfo  `json:"reconnect,omitempty"`
+    Session       *SessionCfgUpdateInfo `json:"session,omitempty"`
+    Log           *LogUpdateInfo        `json:"log,omitempty"`
 }
 type ConfigUpdateResult struct {
     OK bool `json:"ok"`
+}
+
+// 再接続設定の部分更新パラメータ（nil フィールドは変更なし）
+type ReconnectUpdateInfo struct {
+    Enabled      *bool   `json:"enabled,omitempty"`
+    MaxRetries   *int    `json:"max_retries,omitempty"`
+    InitialDelay *string `json:"initial_delay,omitempty"`
+    MaxDelay     *string `json:"max_delay,omitempty"`
+}
+
+// セッション設定の部分更新パラメータ
+type SessionCfgUpdateInfo struct {
+    AutoRestore *bool `json:"auto_restore,omitempty"`
+}
+
+// ログ設定の部分更新パラメータ
+type LogUpdateInfo struct {
+    Level *string `json:"level,omitempty"`
+    File  *string `json:"file,omitempty"`
 }
 ```
 
