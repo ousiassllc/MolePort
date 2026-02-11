@@ -33,6 +33,15 @@ daemon+client アーキテクチャの SSH ポートフォワーディングマ�
 ```bash
 git clone https://github.com/ousiassllc/MolePort.git
 cd MolePort
+make install
+```
+
+`make install` は `$GOPATH/bin`（または `~/go/bin`）にバイナリをコピーします。
+PATH に含まれていれば `moleport` コマンドとして使えます。
+
+ビルドのみ（`./bin/moleport` に出力）の場合:
+
+```bash
 make build
 ```
 
