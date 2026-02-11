@@ -3,11 +3,9 @@
 ## 概要
 
 MolePort はサブコマンド形式の CLI で操作する。
-バイナリ名は `moleport`（正式名）と `mp`（エイリアス）の両方が利用可能。
 
 ```
 moleport <subcommand> [options] [arguments]
-mp <subcommand> [options] [arguments]
 ```
 
 ## サブコマンド一覧
@@ -467,9 +465,6 @@ Commands:
 
 Global Flags:
   --config-dir <path>  設定ディレクトリのパス
-
-Alias:
-  mp                 moleport のエイリアス
 ```
 
 ---
