@@ -22,16 +22,18 @@ type DashboardPage struct {
 	focusedPane tui.FocusPane
 	width       int
 	height      int
+	version     string
 }
 
 // NewDashboardPage は新しい DashboardPage を生成する。
-func NewDashboardPage() DashboardPage {
+func NewDashboardPage(version string) DashboardPage {
 	d := DashboardPage{
 		forward:     organisms.NewForwardPanel(),
 		setup:       organisms.NewSetupPanel(),
 		log:         organisms.NewLogPanel(),
 		statusBar:   organisms.NewStatusBar(),
 		focusedPane: tui.PaneSetup,
+		version:     version,
 	}
 	d.setup.SetFocused(true)
 	return d
@@ -97,7 +99,7 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 // renderHeader は1行ヘッダーを描画する。
 func (d DashboardPage) renderHeader() string {
 	appName := tui.HeaderStyle.Render("  MolePort")
-	version := tui.MutedStyle.Render("v0.1.0")
+	version := tui.MutedStyle.Render(d.version)
 
 	gap := d.width - lipgloss.Width(appName) - lipgloss.Width(version) - 1
 	if gap < 1 {

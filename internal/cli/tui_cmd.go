@@ -29,7 +29,7 @@ func RunTUI(configDir string, args []string) {
 	}
 
 	// Bubble Tea プログラム起動
-	model := app.NewMainModel(client)
+	model := app.NewMainModel(client, Version)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		client.Close()
