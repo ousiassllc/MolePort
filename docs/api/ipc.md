@@ -712,6 +712,165 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ---
 
+## クレデンシャルコールバック
+
+SSH 接続時にパスワード・パスフレーズ・keyboard-interactive 認証が必要な場合、
+デーモンがクライアントにクレデンシャル入力を要求し、クライアントがユーザー入力後に応答する。
+
+`ssh.connect` のレスポンスは、クレデンシャルコールバックがすべて完了してから返される。
+
+---
+
+### credential.request（デーモン → クライアント通知）
+
+`ssh.connect` の処理中に認証情報が必要になった場合にデーモンからクライアントへ送信される通知。
+クライアントはこの通知を受け取ったら、ユーザーにプロンプトを表示し `credential.response` で応答する。
+
+**タイムアウト**: 通知送信後 30 秒以内に `credential.response` が届かない場合、デーモンは認証を中断しエラーコード `1008 CredentialTimeout` で `ssh.connect` のレスポンスを返す。
+
+#### パスワード認証の場合
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "credential.request",
+  "params": {
+    "request_id": "cr-abc123",
+    "type": "password",
+    "host": "prod-server",
+    "prompt": "Password:"
+  }
+}
+```
+
+#### パスフレーズ付き秘密鍵の場合
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "credential.request",
+  "params": {
+    "request_id": "cr-def456",
+    "type": "passphrase",
+    "host": "prod-server",
+    "prompt": "Enter passphrase for key '/home/user/.ssh/id_ed25519':"
+  }
+}
+```
+
+#### keyboard-interactive の場合
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "credential.request",
+  "params": {
+    "request_id": "cr-ghi789",
+    "type": "keyboard-interactive",
+    "host": "2fa-server",
+    "prompts": [
+      {"prompt": "Password:", "echo": false},
+      {"prompt": "Verification code:", "echo": true}
+    ]
+  }
+}
+```
+
+**パラメータ**:
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| request_id | string | Yes | リクエスト一意 ID。`credential.response` との紐付けに使用 |
+| type | string | Yes | `"password"` / `"passphrase"` / `"keyboard-interactive"` |
+| host | string | Yes | 対象ホスト名 |
+| prompt | string | ※ | password/passphrase 用の表示プロンプト |
+| prompts | array | ※ | keyboard-interactive 用のプロンプトリスト |
+
+- `type` が `"password"` または `"passphrase"` の場合: `prompt` が設定される
+- `type` が `"keyboard-interactive"` の場合: `prompts` が設定される
+
+**prompts 配列要素**:
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| prompt | string | プロンプト文字列 |
+| echo | boolean | `true`: 入力をエコー表示、`false`: マスク表示 |
+
+---
+
+### credential.response（クライアント → デーモン）
+
+`credential.request` に対するユーザーのクレデンシャル入力を返す。
+
+**リクエスト（パスワード/パスフレーズの場合）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "credential.response",
+  "params": {
+    "request_id": "cr-abc123",
+    "value": "my-secret-password"
+  }
+}
+```
+
+**リクエスト（keyboard-interactive の場合）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "credential.response",
+  "params": {
+    "request_id": "cr-ghi789",
+    "answers": ["my-password", "123456"]
+  }
+}
+```
+
+**リクエスト（キャンセルの場合）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "credential.response",
+  "params": {
+    "request_id": "cr-abc123",
+    "cancelled": true
+  }
+}
+```
+
+**パラメータ**:
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|------|------|------|
+| request_id | string | Yes | 対応する `credential.request` の `request_id` |
+| value | string | ※ | password/passphrase の値 |
+| answers | array | ※ | keyboard-interactive の回答リスト（prompts と同じ順序） |
+| cancelled | boolean | No | `true` の場合、ユーザーがキャンセルした |
+
+- `cancelled: true` の場合、`value` / `answers` は無視される
+- `type` が `"password"` または `"passphrase"` の場合: `value` を設定
+- `type` が `"keyboard-interactive"` の場合: `answers` を設定
+
+**レスポンス**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "ok": true
+  }
+}
+```
+
+---
+
 ## イベント通知
 
 サブスクリプション中にデーモンからクライアントへ送信される通知。`id` フィールドを持たない。
@@ -734,7 +893,7 @@ SSH 接続状態の変化。
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| type | string | `"connected"` / `"disconnected"` / `"reconnecting"` / `"error"` |
+| type | string | `"connected"` / `"disconnected"` / `"reconnecting"` / `"pending_auth"` / `"error"` |
 | host | string | ホスト名 |
 | error | string | エラーメッセージ（エラー時のみ） |
 
@@ -806,9 +965,12 @@ SSH 接続状態の変化。
 | 1005 | RuleAlreadyExists | ルール名が重複している |
 | 1006 | PortConflict | ポートが他のルールまたはシステムで使用中 |
 | 1007 | AuthenticationFailed | SSH 認証に失敗（鍵不正、パスフレーズ誤り等） |
+| 1008 | CredentialTimeout | クレデンシャル応答タイムアウト（30秒以内に応答なし） |
+| 1009 | CredentialCancelled | ユーザーがクレデンシャル入力をキャンセルした |
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |---|------|---------|---------|
 | 1.0 | 2026-02-11 | 初版作成 | デーモン化対応 |
+| 1.1 | 2026-02-11 | credential.request/response 仕様追加、エラーコード 1008/1009 追加、event.ssh に pending_auth 追加 | #11 クレデンシャル入力機能追加 |

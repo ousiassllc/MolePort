@@ -16,6 +16,7 @@ var connectionBadges = map[core.ConnectionState]struct {
 	core.ConnectionError: {"✗", tui.ErrorStyle},
 	core.Reconnecting:    {"◌", tui.ReconnectingStyle},
 	core.Connecting:      {"◌", tui.ReconnectingStyle},
+	core.PendingAuth:     {"◎", tui.ReconnectingStyle},
 }
 
 // セッション状態に対応するシンボルとスタイルの定義

@@ -1,6 +1,7 @@
 package infra
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -67,14 +68,35 @@ func trySSHAgent() (ssh.AuthMethod, net.Conn, error) {
 	return ssh.PublicKeysCallback(agentClient.Signers), conn, nil
 }
 
-// tryKeyFile は秘密鍵ファイルから認証メソッドを取得する。
-func tryKeyFile(path string) (ssh.AuthMethod, error) {
-	key, err := os.ReadFile(path)
+// tryKeyFileWithPassphrase は秘密鍵ファイルから認証メソッドを取得する。
+// 鍵がパスフレーズで暗号化されている場合、コールバックを使ってパスフレーズを取得する。
+func tryKeyFileWithPassphrase(path string, cb core.CredentialCallback, host core.SSHHost) (ssh.AuthMethod, error) {
+	keyData, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read key file %s: %w", path, err)
 	}
-	signer, err := ssh.ParsePrivateKey(key)
+
+	signer, err := ssh.ParsePrivateKey(keyData)
 	if err != nil {
+		var passErr *ssh.PassphraseMissingError
+		if errors.As(err, &passErr) && cb != nil {
+			resp, cbErr := cb(core.CredentialRequest{
+				Type:   core.CredentialPassphrase,
+				Host:   host.Name,
+				Prompt: "Enter passphrase for key '" + path + "':",
+			})
+			if cbErr != nil {
+				return nil, fmt.Errorf("credential callback failed for %s: %w", path, cbErr)
+			}
+			if resp.Cancelled {
+				return nil, fmt.Errorf("passphrase input cancelled for %s", path)
+			}
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(keyData, []byte(resp.Value))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse key file %s with passphrase: %w", path, err)
+			}
+			return ssh.PublicKeys(signer), nil
+		}
 		return nil, fmt.Errorf("failed to parse key file %s: %w", path, err)
 	}
 	return ssh.PublicKeys(signer), nil
@@ -82,9 +104,10 @@ func tryKeyFile(path string) (ssh.AuthMethod, error) {
 
 // buildAuthMethods はホスト情報をもとに認証メソッドのリストを構築する。
 // SSH エージェントと鍵ファイルを組み合わせる。
+// cb が nil でない場合、パスフレーズ付き鍵・パスワード認証・keyboard-interactive 認証も追加する。
 // 返される io.Closer は SSH エージェント接続を閉じるために使用する。
 // エージェントに接続しなかった場合は nil が返される。
-func buildAuthMethods(host core.SSHHost) ([]ssh.AuthMethod, io.Closer) {
+func buildAuthMethods(host core.SSHHost, cb core.CredentialCallback) ([]ssh.AuthMethod, io.Closer) {
 	var methods []ssh.AuthMethod
 	var agentCloser io.Closer
 
@@ -96,7 +119,7 @@ func buildAuthMethods(host core.SSHHost) ([]ssh.AuthMethod, io.Closer) {
 
 	// ホスト固有の IdentityFile
 	if host.IdentityFile != "" {
-		if keyAuth, err := tryKeyFile(host.IdentityFile); err == nil {
+		if keyAuth, err := tryKeyFileWithPassphrase(host.IdentityFile, cb, host); err == nil {
 			methods = append(methods, keyAuth)
 		} else {
 			slog.Debug("failed to load identity file", "path", host.IdentityFile, "error", err)
@@ -108,9 +131,51 @@ func buildAuthMethods(host core.SSHHost) ([]ssh.AuthMethod, io.Closer) {
 		if host.IdentityFile == keyPath {
 			continue // 重複を避ける
 		}
-		if keyAuth, err := tryKeyFile(keyPath); err == nil {
+		if keyAuth, err := tryKeyFileWithPassphrase(keyPath, cb, host); err == nil {
 			methods = append(methods, keyAuth)
 		}
+	}
+
+	// パスワード認証（コールバックがある場合のみ）
+	if cb != nil {
+		methods = append(methods, ssh.PasswordCallback(func() (string, error) {
+			resp, err := cb(core.CredentialRequest{
+				Type:   core.CredentialPassword,
+				Host:   host.Name,
+				Prompt: "Password:",
+			})
+			if err != nil {
+				return "", err
+			}
+			if resp.Cancelled {
+				return "", fmt.Errorf("password input cancelled")
+			}
+			return resp.Value, nil
+		}))
+	}
+
+	// keyboard-interactive 認証（コールバックがある場合のみ）
+	if cb != nil {
+		methods = append(methods, ssh.KeyboardInteractive(
+			func(name, instruction string, questions []string, echos []bool) ([]string, error) {
+				prompts := make([]core.PromptInfo, len(questions))
+				for i, q := range questions {
+					prompts[i] = core.PromptInfo{Prompt: q, Echo: echos[i]}
+				}
+				resp, err := cb(core.CredentialRequest{
+					Type:    core.CredentialKeyboardInteractive,
+					Host:    host.Name,
+					Prompts: prompts,
+				})
+				if err != nil {
+					return nil, err
+				}
+				if resp.Cancelled {
+					return nil, fmt.Errorf("keyboard-interactive input cancelled")
+				}
+				return resp.Answers, nil
+			},
+		))
 	}
 
 	return methods, agentCloser

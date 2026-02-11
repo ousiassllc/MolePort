@@ -20,7 +20,9 @@ import (
 // SSHConnection は SSH 接続とポートフォワーディングの低レベル操作を提供する。
 type SSHConnection interface {
 	// Dial はホストへ SSH 接続を確立する。
-	Dial(host core.SSHHost) (*ssh.Client, error)
+	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。
+	// cb が非 nil の場合、パスワード・パスフレーズ・keyboard-interactive 認証も試行する。
+	Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error)
 
 	// Close は接続を閉じる。
 	Close() error
@@ -52,8 +54,8 @@ func NewSSHConnection() SSHConnection {
 	return &sshConnection{}
 }
 
-func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
-	authMethods, agentCloser := buildAuthMethods(host)
+func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
+	authMethods, agentCloser := buildAuthMethods(host, cb)
 	if len(authMethods) == 0 {
 		if agentCloser != nil {
 			agentCloser.Close()
@@ -80,17 +82,24 @@ func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
 	}
 
 	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
-	timeout := 10 * time.Second
+	dialTimeout := 10 * time.Second
+
+	// クレデンシャルコールバックがある場合、ハンドシェイク中にユーザー入力を待つため
+	// デッドラインを長くする。
+	handshakeTimeout := dialTimeout
+	if cb != nil {
+		handshakeTimeout = 120 * time.Second
+	}
 
 	// TCP 接続（タイムアウト付き）
-	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
+	tcpConn, err := net.DialTimeout("tcp", addr, dialTimeout)
 	if err != nil {
 		closeAgent()
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
 
 	// TCP + SSH ハンドシェイク全体にデッドラインを設定
-	if err := tcpConn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err := tcpConn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
 		_ = tcpConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to set deadline: %w", err)

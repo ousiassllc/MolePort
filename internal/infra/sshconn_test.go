@@ -96,7 +96,7 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 	defer func() { _ = conn.Close() }()
 
 	start := time.Now()
-	_, dialErr := conn.Dial(host)
+	_, dialErr := conn.Dial(host, nil)
 	elapsed := time.Since(start)
 
 	if dialErr == nil {

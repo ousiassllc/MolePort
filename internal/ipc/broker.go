@@ -161,8 +161,11 @@ func (b *EventBroker) distribute(eventType string, method string, payload any) {
 	}
 }
 
-// sshEventTypeToString は SSHEventType を小文字の文字列に変換する。
+// sshEventTypeToString は SSHEventType をイベント通知用の文字列に変換する。
 func sshEventTypeToString(t core.SSHEventType) string {
+	if t == core.SSHEventPendingAuth {
+		return "pending_auth"
+	}
 	return strings.ToLower(t.String())
 }
 

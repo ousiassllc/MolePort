@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,7 +26,9 @@ type SSHConfigParser interface {
 // infra.SSHConnection と同じインターフェースで、import cycle を回避するために core で定義する。
 type SSHConnection interface {
 	// Dial はホスト情報を使って SSH 接続を確立し、クライアントを返す。
-	Dial(host SSHHost) (*ssh.Client, error)
+	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。
+	// cb が非 nil の場合、パスワード・パスフレーズ・keyboard-interactive 認証も試行する。
+	Dial(host SSHHost, cb CredentialCallback) (*ssh.Client, error)
 
 	// Close は SSH 接続を閉じる。
 	Close() error
@@ -67,6 +70,13 @@ type SSHManager interface {
 
 	// Connect は指定ホストへ SSH 接続を確立する。既に接続中の場合は何もしない。
 	Connect(hostName string) error
+
+	// ConnectWithCallback は指定ホストへ SSH 接続を確立する（クレデンシャルコールバック付き）。
+	// IPC 経由の接続要求で使用され、パスワード・パスフレーズ・keyboard-interactive 認証をサポートする。
+	ConnectWithCallback(hostName string, cb CredentialCallback) error
+
+	// GetPendingAuthHosts は pending_auth 状態のホスト名一覧を返す。
+	GetPendingAuthHosts() []string
 
 	// Disconnect は指定ホストとの SSH 接続を切断する。進行中の再接続も停止する。
 	Disconnect(hostName string) error
@@ -205,8 +215,42 @@ func (m *sshManager) GetHost(name string) (*SSHHost, error) {
 	return &h, nil
 }
 
+// isAuthFailure はエラーが認証失敗を示すかどうかを判定する。
+func isAuthFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "unable to authenticate") ||
+		strings.Contains(msg, "no authentication methods available") ||
+		strings.Contains(msg, "no supported methods remain")
+}
+
 // Connect はホストへ SSH 接続を確立する。
 func (m *sshManager) Connect(hostName string) error {
+	return m.connectInternal(hostName, nil)
+}
+
+// ConnectWithCallback はホストへ SSH 接続を確立する（クレデンシャルコールバック付き）。
+func (m *sshManager) ConnectWithCallback(hostName string, cb CredentialCallback) error {
+	return m.connectInternal(hostName, cb)
+}
+
+// GetPendingAuthHosts は pending_auth 状態のホスト名一覧を返す。
+func (m *sshManager) GetPendingAuthHosts() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var hosts []string
+	for _, h := range m.hosts {
+		if h.State == PendingAuth {
+			hosts = append(hosts, h.Name)
+		}
+	}
+	return hosts
+}
+
+// connectInternal は Connect と ConnectWithCallback の共通実装。
+func (m *sshManager) connectInternal(hostName string, cb CredentialCallback) error {
 	m.mu.Lock()
 	idx, ok := m.hostsMap[hostName]
 	if !ok {
@@ -229,13 +273,24 @@ func (m *sshManager) Connect(hostName string) error {
 	m.mu.Unlock()
 
 	conn := m.connFactory()
-	client, err := conn.Dial(host)
+	client, err := conn.Dial(host, cb)
 	if err != nil {
 		m.mu.Lock()
 		// Connecting プレースホルダーを削除
 		if current, exists := m.conns[hostName]; exists && current == hcConnecting {
 			delete(m.conns, hostName)
 		}
+
+		// 認証失敗の場合は PendingAuth 状態にする（コールバックなしの場合のみ）
+		if cb == nil && isAuthFailure(err) {
+			if i, ok := m.hostsMap[hostName]; ok {
+				m.hosts[i].State = PendingAuth
+			}
+			m.mu.Unlock()
+			m.emit(SSHEvent{Type: SSHEventPendingAuth, HostName: hostName})
+			return fmt.Errorf("authentication required for %s: %w", hostName, err)
+		}
+
 		if i, ok := m.hostsMap[hostName]; ok {
 			m.hosts[i].State = ConnectionError
 		}
@@ -359,7 +414,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		m.mu.RUnlock()
 
 		conn := m.connFactory()
-		client, err := conn.Dial(host)
+		client, err := conn.Dial(host, nil)
 		if err != nil {
 			slog.Warn("reconnect failed", "host", hostName, "attempt", attempt+1, "error", err)
 			// 指数バックオフ

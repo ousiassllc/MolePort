@@ -54,6 +54,8 @@ func parseConnectionState(s string) core.ConnectionState {
 		return core.Connecting
 	case "reconnecting":
 		return core.Reconnecting
+	case "pending_auth":
+		return core.PendingAuth
 	case "error":
 		return core.ConnectionError
 	default:

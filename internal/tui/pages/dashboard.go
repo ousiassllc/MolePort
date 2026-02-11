@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/atoms"
+	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
 
@@ -14,10 +15,11 @@ import (
 // Middle: SetupPanel (ホスト選択 + ウィザード)
 // Bottom: LogPanel (ログ出力) + StatusBar
 type DashboardPage struct {
-	forward   organisms.ForwardPanel
-	setup     organisms.SetupPanel
-	log       organisms.LogPanel
-	statusBar organisms.StatusBar
+	forward       organisms.ForwardPanel
+	setup         organisms.SetupPanel
+	log           organisms.LogPanel
+	statusBar     organisms.StatusBar
+	passwordInput molecules.PasswordInput
 
 	focusedPane tui.FocusPane
 	width       int
@@ -28,12 +30,13 @@ type DashboardPage struct {
 // NewDashboardPage は新しい DashboardPage を生成する。
 func NewDashboardPage(version string) DashboardPage {
 	d := DashboardPage{
-		forward:     organisms.NewForwardPanel(),
-		setup:       organisms.NewSetupPanel(),
-		log:         organisms.NewLogPanel(),
-		statusBar:   organisms.NewStatusBar(),
-		focusedPane: tui.PaneSetup,
-		version:     version,
+		forward:       organisms.NewForwardPanel(),
+		setup:         organisms.NewSetupPanel(),
+		log:           organisms.NewLogPanel(),
+		statusBar:     organisms.NewStatusBar(),
+		passwordInput: molecules.NewPasswordInput(),
+		focusedPane:   tui.PaneSetup,
+		version:       version,
 	}
 	d.setup.SetFocused(true)
 	return d
@@ -47,6 +50,28 @@ func (d DashboardPage) Init() tea.Cmd {
 // Update はメッセージを処理する。
 func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// パスワード入力がアクティブな場合はそちらにキーを送る
+	if d.passwordInput.Active() {
+		if _, isKey := msg.(tea.KeyMsg); isKey {
+			var cmd tea.Cmd
+			d.passwordInput, cmd = d.passwordInput.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			return d, tea.Batch(cmds...)
+		}
+	}
+
+	// PasswordSubmitMsg はパスワード入力完了の通知
+	if submitMsg, ok := msg.(molecules.PasswordSubmitMsg); ok {
+		return d, func() tea.Msg {
+			return tui.CredentialSubmitMsg{
+				Value:     submitMsg.Value,
+				Cancelled: submitMsg.Cancelled,
+			}
+		}
+	}
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -99,6 +124,15 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 		cmds = append(cmds, setupCmd)
 	}
 
+	// パスワード入力にも blink 等を転送
+	if d.passwordInput.Active() {
+		var pwCmd tea.Cmd
+		d.passwordInput, pwCmd = d.passwordInput.Update(msg)
+		if pwCmd != nil {
+			cmds = append(cmds, pwCmd)
+		}
+	}
+
 	return d, tea.Batch(cmds...)
 }
 
@@ -127,7 +161,15 @@ func (d DashboardPage) View() string {
 	divider1 := atoms.RenderDivider(d.width)
 	setupView := d.setup.View()
 	divider2 := atoms.RenderDivider(d.width)
-	logView := d.log.View()
+
+	// パスワード入力がアクティブな場合はログパネルの代わりに表示
+	var logView string
+	if d.passwordInput.Active() {
+		logView = d.passwordInput.View()
+	} else {
+		logView = d.log.View()
+	}
+
 	statusView := d.statusBar.View()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
@@ -173,7 +215,15 @@ func (d DashboardPage) FocusedPane() tui.FocusPane {
 
 // IsInputActive はテキスト入力中かどうかを返す。
 func (d DashboardPage) IsInputActive() bool {
+	if d.passwordInput.Active() {
+		return true
+	}
 	return d.focusedPane == tui.PaneSetup && d.setup.IsInputActive()
+}
+
+// ShowPasswordInput はパスワード入力を表示する。
+func (d *DashboardPage) ShowPasswordInput(prompt string) tea.Cmd {
+	return d.passwordInput.Show(prompt)
 }
 
 // SetSize はサイズを設定する。
@@ -246,6 +296,8 @@ func (d *DashboardPage) handleSSHEvent(event core.SSHEvent) {
 		d.setup.UpdateHostState(event.HostName, core.Disconnected)
 	case core.SSHEventReconnecting:
 		d.setup.UpdateHostState(event.HostName, core.Reconnecting)
+	case core.SSHEventPendingAuth:
+		d.setup.UpdateHostState(event.HostName, core.PendingAuth)
 	case core.SSHEventError:
 		d.setup.UpdateHostState(event.HostName, core.ConnectionError)
 	}

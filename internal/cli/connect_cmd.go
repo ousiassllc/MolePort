@@ -1,10 +1,16 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc"
 )
+
+// connectCallTimeout は ssh.connect 呼び出しのタイムアウト。
+// クレデンシャル入力を待つため、通常の callCtx より長くする。
+const connectCallTimeout = 60 * time.Second
 
 // RunConnect は connect サブコマンドを実行する。
 func RunConnect(configDir string, args []string) {
@@ -16,7 +22,10 @@ func RunConnect(configDir string, args []string) {
 	client := connectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	// クレデンシャルハンドラーを設定
+	client.SetCredentialHandler(newCLICredentialHandler())
+
+	ctx, cancel := context.WithTimeout(context.Background(), connectCallTimeout)
 	defer cancel()
 
 	params := ipc.SSHConnectParams{Host: host}

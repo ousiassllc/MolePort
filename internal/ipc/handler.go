@@ -2,7 +2,10 @@ package ipc
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -14,6 +17,11 @@ type DaemonInfo interface {
 	Shutdown(purge bool) error
 }
 
+// NotificationSender はクライアントに通知を送信するインターフェース。
+type NotificationSender interface {
+	SendNotification(clientID string, notification Notification) error
+}
+
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
 type Handler struct {
 	sshMgr core.SSHManager
@@ -21,6 +29,11 @@ type Handler struct {
 	cfgMgr core.ConfigManager
 	broker *EventBroker
 	daemon DaemonInfo
+	sender NotificationSender
+
+	credMu      sync.Mutex
+	credPending map[string]chan CredentialResponseParams
+	credNextID  atomic.Int64
 }
 
 // NewHandler は新しい Handler を生成する。
@@ -32,12 +45,19 @@ func NewHandler(
 	daemon DaemonInfo,
 ) *Handler {
 	return &Handler{
-		sshMgr: sshMgr,
-		fwdMgr: fwdMgr,
-		cfgMgr: cfgMgr,
-		broker: broker,
-		daemon: daemon,
+		sshMgr:      sshMgr,
+		fwdMgr:      fwdMgr,
+		cfgMgr:      cfgMgr,
+		broker:      broker,
+		daemon:      daemon,
+		credPending: make(map[string]chan CredentialResponseParams),
 	}
+}
+
+// SetSender は通知送信用のサーバー参照を設定する。
+// IPCServer の生成後に呼び出す。
+func (h *Handler) SetSender(sender NotificationSender) {
+	h.sender = sender
 }
 
 // Handle は JSON-RPC メソッドをディスパッチする。HandlerFunc として使用する。
@@ -48,9 +68,11 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 	case "host.reload":
 		return h.hostReload()
 	case "ssh.connect":
-		return h.sshConnect(params)
+		return h.sshConnect(clientID, params)
 	case "ssh.disconnect":
 		return h.sshDisconnect(params)
+	case "credential.response":
+		return h.credentialResponse(params)
 	case "forward.list":
 		return h.forwardList(params)
 	case "forward.add":
@@ -117,13 +139,19 @@ func (h *Handler) hostReload() (any, *RPCError) {
 
 // --- SSH 接続管理 ---
 
-func (h *Handler) sshConnect(params json.RawMessage) (any, *RPCError) {
+// credentialTimeout はクレデンシャル応答のタイムアウト。
+const credentialTimeout = 30 * time.Second
+
+func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPCError) {
 	var p SSHConnectParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
-	if err := h.sshMgr.Connect(p.Host); err != nil {
+	// クレデンシャルコールバックを構築
+	cb := h.buildCredentialCallback(clientID, p.Host)
+
+	if err := h.sshMgr.ConnectWithCallback(p.Host, cb); err != nil {
 		return nil, toRPCError(err, InternalError)
 	}
 
@@ -131,6 +159,94 @@ func (h *Handler) sshConnect(params json.RawMessage) (any, *RPCError) {
 		Host:   p.Host,
 		Status: "connected",
 	}, nil
+}
+
+// buildCredentialCallback はクライアントへの通知とレスポンス待機を行うコールバックを構築する。
+func (h *Handler) buildCredentialCallback(clientID string, _ string) core.CredentialCallback {
+	if h.sender == nil {
+		return nil
+	}
+	return func(req core.CredentialRequest) (core.CredentialResponse, error) {
+		reqID := fmt.Sprintf("cr-%d", h.credNextID.Add(1))
+
+		// レスポンス待機用チャネルを登録
+		ch := make(chan CredentialResponseParams, 1)
+		h.credMu.Lock()
+		h.credPending[reqID] = ch
+		h.credMu.Unlock()
+
+		defer func() {
+			h.credMu.Lock()
+			delete(h.credPending, reqID)
+			h.credMu.Unlock()
+		}()
+
+		// credential.request 通知をクライアントに送信
+		notif := CredentialRequestNotification{
+			RequestID: reqID,
+			Type:      string(req.Type),
+			Host:      req.Host,
+			Prompt:    req.Prompt,
+		}
+		if len(req.Prompts) > 0 {
+			notif.Prompts = make([]PromptData, len(req.Prompts))
+			for i, p := range req.Prompts {
+				notif.Prompts[i] = PromptData{Prompt: p.Prompt, Echo: p.Echo}
+			}
+		}
+
+		data, err := json.Marshal(notif)
+		if err != nil {
+			return core.CredentialResponse{}, fmt.Errorf("marshal credential request: %w", err)
+		}
+
+		if err := h.sender.SendNotification(clientID, Notification{
+			JSONRPC: JSONRPCVersion,
+			Method:  "credential.request",
+			Params:  data,
+		}); err != nil {
+			return core.CredentialResponse{}, fmt.Errorf("send credential request: %w", err)
+		}
+
+		// レスポンスを待機（タイムアウト付き）
+		select {
+		case resp := <-ch:
+			if resp.Cancelled {
+				return core.CredentialResponse{}, fmt.Errorf("credential cancelled")
+			}
+			return core.CredentialResponse{
+				RequestID: resp.RequestID,
+				Value:     resp.Value,
+				Answers:   resp.Answers,
+			}, nil
+		case <-time.After(credentialTimeout):
+			return core.CredentialResponse{}, fmt.Errorf("credential timeout")
+		}
+	}
+}
+
+// credentialResponse はクライアントからのクレデンシャル応答を処理する。
+func (h *Handler) credentialResponse(params json.RawMessage) (any, *RPCError) {
+	var p CredentialResponseParams
+	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+
+	h.credMu.Lock()
+	ch, ok := h.credPending[p.RequestID]
+	h.credMu.Unlock()
+
+	if !ok {
+		return nil, &RPCError{Code: InvalidParams, Message: "no pending credential request for id: " + p.RequestID}
+	}
+
+	// 非ブロッキングで送信（チャネルはバッファ1）
+	select {
+	case ch <- p:
+	default:
+	}
+
+	return CredentialResponseResult{OK: true}, nil
 }
 
 func (h *Handler) sshDisconnect(params json.RawMessage) (any, *RPCError) {

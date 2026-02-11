@@ -16,6 +16,7 @@ func TestConnectionState_String(t *testing.T) {
 		{Connecting, "Connecting"},
 		{Connected, "Connected"},
 		{Reconnecting, "Reconnecting"},
+		{PendingAuth, "PendingAuth"},
 		{ConnectionError, "Error"},
 		{ConnectionState(99), "ConnectionState(99)"},
 	}
@@ -255,6 +256,7 @@ func TestSSHEventType_String(t *testing.T) {
 		{SSHEventConnected, "Connected"},
 		{SSHEventDisconnected, "Disconnected"},
 		{SSHEventReconnecting, "Reconnecting"},
+		{SSHEventPendingAuth, "PendingAuth"},
 		{SSHEventError, "Error"},
 		{SSHEventType(99), "SSHEventType(99)"},
 	}
@@ -279,6 +281,22 @@ func TestForwardEventType_String(t *testing.T) {
 	for _, tt := range tests {
 		if got := tt.et.String(); got != tt.want {
 			t.Errorf("ForwardEventType(%d).String() = %q, want %q", int(tt.et), got, tt.want)
+		}
+	}
+}
+
+func TestCredentialType_Constants(t *testing.T) {
+	tests := []struct {
+		ct   CredentialType
+		want string
+	}{
+		{CredentialPassword, "password"},
+		{CredentialPassphrase, "passphrase"},
+		{CredentialKeyboardInteractive, "keyboard-interactive"},
+	}
+	for _, tt := range tests {
+		if got := string(tt.ct); got != tt.want {
+			t.Errorf("CredentialType = %q, want %q", got, tt.want)
 		}
 	}
 }

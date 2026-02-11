@@ -228,6 +228,8 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
 | `daemon.shutdown` | req/res | デーモンを停止 |
 | `events.subscribe` | req/res | イベントストリームを開始 |
 | `events.unsubscribe` | req/res | イベントストリームを停止 |
+| `credential.request` | notification | クレデンシャル入力要求（デーモン → クライアント） |
+| `credential.response` | req/res | クレデンシャル入力応答（クライアント → デーモン） |
 | `event.ssh` | notification | SSH 状態変化通知 |
 | `event.forward` | notification | 転送状態変化通知 |
 | `event.metrics` | notification | メトリクス更新通知 |
@@ -292,6 +294,7 @@ graph TD
         FR["ForwardRow"]
         PI["PromptInput"]
         CD["ConfirmDialog"]
+        PW["PasswordInput"]
     end
 
     subgraph Atoms
@@ -324,6 +327,7 @@ graph TD
     FR --> DS
     PI --> Key
     CD --> Key
+    PW --> Key
 ```
 
 ### CLI Layer（コマンドライン層）— 新規
@@ -424,6 +428,102 @@ sequenceDiagram
     CLI-->>User: "prod-server に接続しました (2 forwards started)"
 ```
 
+### クレデンシャルコールバック（パスワード認証の例）
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant CLI as CLI (moleport connect prod-server)
+    participant Daemon as デーモン (IPCServer)
+    participant Core as Core Layer
+    participant Infra as Infra Layer
+    participant Remote as SSH Server
+
+    User->>CLI: moleport connect prod-server
+    CLI->>Daemon: JSON-RPC: ssh.connect {"host":"prod-server"}
+    Daemon->>Core: SSHManager.Connect("prod-server")
+    Core->>Infra: Dial(host)
+    Infra->>Remote: SSH Handshake 開始
+
+    Note over Infra,Remote: エージェント・鍵認証が失敗
+
+    Remote-->>Infra: パスワード認証を要求
+    Infra-->>Core: CredentialRequest{type:"password", host:"prod-server"}
+    Core-->>Daemon: CredentialRequest イベント
+    Daemon-->>CLI: credential.request {"request_id":"cr-1","type":"password","host":"prod-server","prompt":"Password:"}
+
+    CLI->>User: パスワード入力プロンプト（エコーなし）
+    User->>CLI: パスワードを入力
+    CLI->>Daemon: credential.response {"request_id":"cr-1","value":"****"}
+    Daemon->>Core: CredentialResponse 転送
+    Core->>Infra: パスワードを認証メソッドに渡す
+
+    Infra->>Remote: パスワードで認証
+    Remote-->>Infra: 認証成功
+    Infra-->>Core: Connection established
+    Core->>Core: auto_connect ルールのフォワーディング開始
+    Core-->>Daemon: 接続完了
+    Daemon-->>CLI: {"result":{"status":"connected","host":"prod-server"}}
+    CLI-->>User: "prod-server に接続しました"
+```
+
+### クレデンシャルコールバック（keyboard-interactive 複数チャレンジの例）
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Client as CLI / TUI
+    participant Daemon as デーモン
+    participant Remote as SSH Server
+
+    Client->>Daemon: ssh.connect {"host":"2fa-server"}
+
+    Note over Daemon,Remote: keyboard-interactive 認証開始
+
+    Remote-->>Daemon: Challenge 1: "Password:"
+    Daemon-->>Client: credential.request {"request_id":"cr-1","type":"keyboard-interactive","prompts":[{"prompt":"Password:","echo":false}]}
+    Client->>User: "Password:" プロンプト
+    User->>Client: パスワード入力
+    Client->>Daemon: credential.response {"request_id":"cr-1","answers":["****"]}
+
+    Remote-->>Daemon: Challenge 2: "OTP Code:"
+    Daemon-->>Client: credential.request {"request_id":"cr-2","type":"keyboard-interactive","prompts":[{"prompt":"OTP Code:","echo":true}]}
+    Client->>User: "OTP Code:" プロンプト
+    User->>Client: OTP コード入力
+    Client->>Daemon: credential.response {"request_id":"cr-2","answers":["123456"]}
+
+    Remote-->>Daemon: 認証成功
+    Daemon-->>Client: {"result":{"status":"connected"}}
+```
+
+### セッション復元時の pending_auth フロー
+
+```mermaid
+sequenceDiagram
+    participant Daemon as デーモン起動時
+    participant State as state.yaml
+
+    Daemon->>State: 前回アクティブ転送を読み込み
+    State-->>Daemon: [prod-server, 2fa-server]
+
+    Note over Daemon: prod-server: エージェント認証 → 成功
+    Daemon->>Daemon: prod-server を Connected に
+
+    Note over Daemon: 2fa-server: エージェント認証 → 失敗（パスワード必要）
+    Daemon->>Daemon: 2fa-server を PendingAuth に
+
+    Note over Daemon: クライアント接続時
+
+    participant TUI as TUI クライアント
+    TUI->>Daemon: events.subscribe
+    Daemon-->>TUI: event.ssh {"type":"pending_auth","host":"2fa-server"}
+    TUI->>TUI: ホスト一覧に "⏳ Pending Auth" を表示
+
+    Note over TUI: ユーザーが connect を実行
+    TUI->>Daemon: ssh.connect {"host":"2fa-server"}
+    Note over Daemon,TUI: UC-13 クレデンシャルコールバックフローへ
+```
+
 ### TUI のリアルタイム更新
 
 ```mermaid
@@ -514,3 +614,4 @@ graph LR
 | 1.0 | 2026-02-10 | 初版作成 | — |
 | 1.1 | 2026-02-10 | TUI を Atomic Design に再設計、図を Mermaid に変更 | ユーザー要望 |
 | 2.0 | 2026-02-11 | デーモン + クライアントアーキテクチャに全面改訂。IPC Layer / CLI Layer 追加。JSON-RPC 2.0 over Unix Socket 採用 | デーモン化対応 |
+| 2.1 | 2026-02-11 | クレデンシャルコールバック通信フロー追加、credential.request/response メソッド追加、pending_auth 状態フロー追加、PasswordInput コンポーネント追加 | #11 クレデンシャル入力機能追加 |

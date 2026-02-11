@@ -12,19 +12,25 @@ import (
 	"time"
 )
 
+// CredentialHandler はクレデンシャル要求を処理するコールバック関数の型。
+// CLI や TUI がそれぞれの方法で実装する。
+// Connect() の前に SetCredentialHandler で設定すること。
+type CredentialHandler func(req CredentialRequestNotification) (*CredentialResponseParams, error)
+
 // IPCClient は Unix ドメインソケット経由でデーモンと通信するクライアント。
 type IPCClient struct {
-	socketPath string
-	conn       net.Conn
-	enc        *json.Encoder
-	scanner    *bufio.Scanner
-	nextID     atomic.Int64
-	mu         sync.Mutex
-	pending    map[int]chan *Response
-	pendingMu  sync.Mutex
-	eventCh    chan *Notification
-	done       chan struct{}
-	connected  atomic.Bool
+	socketPath  string
+	conn        net.Conn
+	enc         *json.Encoder
+	scanner     *bufio.Scanner
+	nextID      atomic.Int64
+	mu          sync.Mutex
+	pending     map[int]chan *Response
+	pendingMu   sync.Mutex
+	eventCh     chan *Notification
+	done        chan struct{}
+	connected   atomic.Bool
+	credHandler CredentialHandler
 }
 
 // NewIPCClient は新しい IPCClient を生成する。
@@ -175,6 +181,12 @@ func (c *IPCClient) IsConnected() bool {
 	return c.connected.Load()
 }
 
+// SetCredentialHandler はクレデンシャル要求を処理するハンドラーを設定する。
+// Connect() の前に呼び出すこと。
+func (c *IPCClient) SetCredentialHandler(handler CredentialHandler) {
+	c.credHandler = handler
+}
+
 func (c *IPCClient) readLoop() {
 	defer func() {
 		c.connected.Store(false)
@@ -214,6 +226,11 @@ func (c *IPCClient) readLoop() {
 			if err := json.Unmarshal(line, &notif); err != nil {
 				continue
 			}
+			// credential.request は専用ハンドラーで処理
+			if notif.Method == "credential.request" {
+				go c.handleCredentialRequest(notif)
+				continue
+			}
 			select {
 			case c.eventCh <- &notif:
 			default:
@@ -221,4 +238,52 @@ func (c *IPCClient) readLoop() {
 			}
 		}
 	}
+}
+
+// handleCredentialRequest は credential.request 通知を処理し、credential.response を送信する。
+func (c *IPCClient) handleCredentialRequest(notif Notification) {
+	handler := c.credHandler
+	if handler == nil {
+		// ハンドラー未設定の場合、パラメータからリクエスト ID を取得してキャンセルを送信
+		var req CredentialRequestNotification
+		if err := json.Unmarshal(notif.Params, &req); err != nil {
+			return
+		}
+		c.sendCredentialCancel(req.RequestID)
+		return
+	}
+
+	var req CredentialRequestNotification
+	if err := json.Unmarshal(notif.Params, &req); err != nil {
+		return
+	}
+
+	resp, err := handler(req)
+	if err != nil || resp == nil {
+		// エラー or nil の場合、キャンセルを送信
+		c.sendCredentialCancel(req.RequestID)
+		return
+	}
+
+	c.sendCredentialResult(resp)
+}
+
+// sendCredentialCancel はクレデンシャル要求をキャンセルする credential.response を送信する。
+func (c *IPCClient) sendCredentialCancel(requestID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	params := CredentialResponseParams{
+		RequestID: requestID,
+		Cancelled: true,
+	}
+	var result CredentialResponseResult
+	_ = c.Call(ctx, "credential.response", params, &result)
+}
+
+// sendCredentialResult はクレデンシャル応答を credential.response で送信する。
+func (c *IPCClient) sendCredentialResult(resp *CredentialResponseParams) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var result CredentialResponseResult
+	_ = c.Call(ctx, "credential.response", resp, &result)
 }
