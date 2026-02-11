@@ -471,7 +471,7 @@ type HostInfo struct {
     HostName          string `json:"hostname"`
     Port              int    `json:"port"`
     User              string `json:"user"`
-    State             string `json:"state"`               // "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
+    State             string `json:"state"`               // "disconnected" | "connecting" | "connected" | "reconnecting" | "pending_auth" | "error"
     ActiveForwardCount int   `json:"active_forward_count"`
 }
 
