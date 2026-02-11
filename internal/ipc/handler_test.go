@@ -3,6 +3,7 @@ package ipc
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -887,14 +888,25 @@ func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
 
 // mockNotificationSender はテスト用の通知送信モック。
 type mockNotificationSender struct {
+	mu            sync.Mutex
 	notifications []Notification
 	clientID      string
 }
 
 func (m *mockNotificationSender) SendNotification(clientID string, notification Notification) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.clientID = clientID
 	m.notifications = append(m.notifications, notification)
 	return nil
+}
+
+func (m *mockNotificationSender) getNotifications() []Notification {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]Notification, len(m.notifications))
+	copy(cp, m.notifications)
+	return cp
 }
 
 func TestHandler_CredentialResponse_NoPending(t *testing.T) {
@@ -985,11 +997,12 @@ func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
 	// 通知が送信されるまで待機
 	time.Sleep(50 * time.Millisecond)
 
-	if len(sender.notifications) == 0 {
+	notifications := sender.getNotifications()
+	if len(notifications) == 0 {
 		t.Fatal("expected credential.request notification to be sent")
 	}
 
-	notif := sender.notifications[0]
+	notif := notifications[0]
 	if notif.Method != "credential.request" {
 		t.Errorf("expected method 'credential.request', got %q", notif.Method)
 	}
