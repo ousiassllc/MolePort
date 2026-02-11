@@ -324,7 +324,7 @@ func (m *forwardManager) dialRemote(rule ForwardRule, sshClient interface {
 func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface {
 	Dial(n, addr string) (net.Conn, error)
 }) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if rule.Type == Dynamic {
 		m.handleSOCKS5(af, conn, sshClient)

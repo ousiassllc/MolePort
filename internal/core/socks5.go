@@ -33,11 +33,11 @@ func socks5Negotiate(conn net.Conn) error {
 		return err
 	}
 
-	if header[0] != socks5Version { //nolint:gosec // io.ReadFull guarantees len(header)==2
-		return fmt.Errorf("unsupported SOCKS version: %d", header[0])
+	if header[0] != socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", header[0]) //nolint:gosec // io.ReadFull guarantees len(header)==2
 	}
 
-	nmethods := int(header[1])
+	nmethods := int(header[1]) //nolint:gosec // io.ReadFull guarantees len(header)==2
 	methods := make([]byte, nmethods)
 	if _, err := io.ReadFull(conn, methods); err != nil {
 		return err
@@ -72,10 +72,10 @@ func socks5ParseRequest(conn net.Conn) (string, error) {
 		return "", err
 	}
 
-	if reqHeader[0] != socks5Version || reqHeader[1] != socks5CmdConnect { //nolint:gosec // io.ReadFull guarantees len(reqHeader)==4
+	if reqHeader[0] != socks5Version || reqHeader[1] != socks5CmdConnect {
 		// Command not supported
 		_, _ = conn.Write([]byte{socks5Version, socks5ReplyCommandNotSupported, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
-		return "", fmt.Errorf("unsupported SOCKS5 command: %d", reqHeader[1])
+		return "", fmt.Errorf("unsupported SOCKS5 command: %d", reqHeader[1]) //nolint:gosec // io.ReadFull guarantees len(reqHeader)==4
 	}
 
 	switch reqHeader[3] { // Address type
