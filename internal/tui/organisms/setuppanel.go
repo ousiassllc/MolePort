@@ -29,10 +29,10 @@ const (
 
 // SetupPanel はホスト選択 + フォワード追加ウィザードを提供するパネル。
 type SetupPanel struct {
-	hosts      []core.SSHHost
-	hostCursor int
-	step       WizardStep
-	typeCursor int
+	hosts       []core.SSHHost
+	hostCursor  int
+	step        WizardStep
+	typeCursor  int
 	typeOptions []string
 
 	portInput textinput.Model

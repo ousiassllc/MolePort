@@ -1,0 +1,14 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: test -z "$(gofmt -l {staged_files})" || (echo "gofmt が必要です:" && gofmt -l {staged_files} && false)
+    govet:
+      glob: "*.go"
+      run: go vet ./...
+
+pre-push:
+  commands:
+    test-race:
+      run: go test -race ./...

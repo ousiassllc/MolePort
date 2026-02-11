@@ -260,7 +260,9 @@ func (m *forwardManager) StartForward(ruleName string) error {
 }
 
 // acceptLoop はリスナーで接続を受け付け、ブリッジを作成する。
-func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
+func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
 	for {
 		conn, err := af.listener.Accept()
 		if err != nil {
@@ -278,7 +280,9 @@ func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClie
 }
 
 // bridge は受け付けた接続とリモート/ローカルの間でデータを転送する。
-func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
+func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
 	defer conn.Close()
 
 	var remote net.Conn
@@ -306,7 +310,9 @@ func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Co
 }
 
 // handleSOCKS5 は最小限の SOCKS5 プロトコルを処理する（認証なし、CONNECT のみ）。
-func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
+func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
 	// SOCKS5 ネゴシエーション
 	// Client greeting: VER + NMETHODS (2 bytes)
 	header := make([]byte, 2)

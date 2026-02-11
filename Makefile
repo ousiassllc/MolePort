@@ -36,6 +36,9 @@ vet: ## go vet を実行
 fmt: ## go fmt を実行
 	gofmt -w .
 
+lint: ## golangci-lint を実行
+	golangci-lint run ./...
+
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)
 

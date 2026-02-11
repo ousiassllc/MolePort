@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gosec
+
+# 既存コードの lint 違反は段階的に修正するため、
+# main からの差分のみチェック対象とする。
+# 全体チェックが必要な場合は new-from-rev を削除する。
+issues:
+  new-from-rev: main

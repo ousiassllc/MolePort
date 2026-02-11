@@ -70,15 +70,15 @@ func (m *mockSSHManager) Subscribe() <-chan core.SSHEvent {
 func (m *mockSSHManager) Close() {}
 
 type mockForwardManager struct {
-	rules          []core.ForwardRule
-	sessions       []core.ForwardSession
-	addErr         error
-	deleteErr      error
-	startErr       error
-	stopErr        error
-	stopAllErr     error
-	stopAllCalled  bool
-	sessionErr     error
+	rules         []core.ForwardRule
+	sessions      []core.ForwardSession
+	addErr        error
+	deleteErr     error
+	startErr      error
+	stopErr       error
+	stopAllErr    error
+	stopAllCalled bool
+	sessionErr    error
 }
 
 func (m *mockForwardManager) AddRule(rule core.ForwardRule) error {
@@ -152,8 +152,8 @@ func (m *mockForwardManager) Subscribe() <-chan core.ForwardEvent {
 func (m *mockForwardManager) Close() {}
 
 type mockConfigManager struct {
-	config         *core.Config
-	err            error
+	config          *core.Config
+	err             error
 	updateCallCount int
 }
 
