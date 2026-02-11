@@ -55,7 +55,7 @@ func StartDaemonProcess(configDir string) (int, error) {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return pid, nil
 		}
 		time.Sleep(50 * time.Millisecond)

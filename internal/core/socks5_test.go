@@ -41,8 +41,8 @@ func TestSocks5Negotiate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientConn, serverConn := net.Pipe()
-			defer clientConn.Close()
-			defer serverConn.Close()
+			defer func() { _ = clientConn.Close() }()
+			defer func() { _ = serverConn.Close() }()
 
 			errCh := make(chan error, 1)
 			go func() {
@@ -53,7 +53,7 @@ func TestSocks5Negotiate(t *testing.T) {
 			// エラーケースでは書き込みがブロックされる可能性がある。
 			// 書き込みをゴルーチンで行い、デッドロックを防ぐ。
 			go func() {
-				clientConn.Write(tt.clientData)
+				_, _ = clientConn.Write(tt.clientData)
 			}()
 
 			if tt.wantResp != nil {
@@ -145,8 +145,8 @@ func TestSocks5ParseRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientConn, serverConn := net.Pipe()
-			defer clientConn.Close()
-			defer serverConn.Close()
+			defer func() { _ = clientConn.Close() }()
+			defer func() { _ = serverConn.Close() }()
 
 			type result struct {
 				addr string
@@ -164,7 +164,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 			//   - サーバーもクライアントが応答を読まないためブロック
 			// 書き込みと応答読み取りを別々のゴルーチンで行い、デッドロックを防ぐ。
 			go func() {
-				clientConn.Write(tt.clientData)
+				_, _ = clientConn.Write(tt.clientData)
 			}()
 			// エラーケースではサーバーが応答を書くため、それを読んでブロックを解除する
 			if tt.wantErr != "" {
