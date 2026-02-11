@@ -146,14 +146,8 @@ func (p SetupPanel) Update(msg tea.Msg) (SetupPanel, tea.Cmd) {
 		return p.updateIdle(keyMsg, keys)
 	case StepSelectType:
 		return p.updateSelectType(keyMsg, keys)
-	case StepLocalPort:
-		return p.updateTextInput(msg, &p.portInput)
-	case StepRemoteHost:
-		return p.updateTextInput(msg, &p.hostInput)
-	case StepRemotePort:
-		return p.updateTextInput(msg, &p.portInput)
-	case StepRuleName:
-		return p.updateTextInput(msg, &p.nameInput)
+	case StepLocalPort, StepRemoteHost, StepRemotePort, StepRuleName:
+		return p.updateTextInput(msg)
 	case StepConfirm:
 		return p.updateConfirm(keyMsg, keys)
 	}
@@ -241,16 +235,22 @@ func (p SetupPanel) updateSelectType(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupP
 	return p, nil
 }
 
-func (p SetupPanel) updateTextInput(msg tea.Msg, input *textinput.Model) (SetupPanel, tea.Cmd) {
+func (p SetupPanel) updateTextInput(msg tea.Msg) (SetupPanel, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if ok && keyMsg.Type == tea.KeyEnter {
-		value := input.Value()
+		var value string
+		switch p.step {
+		case StepLocalPort, StepRemotePort:
+			value = p.portInput.Value()
+		case StepRemoteHost:
+			value = p.hostInput.Value()
+		case StepRuleName:
+			value = p.nameInput.Value()
+		}
 		return p.advanceFromTextStep(value)
 	}
 
-	var cmd tea.Cmd
-	*input, cmd = input.Update(msg)
-	return p, cmd
+	return p.updateTextInputs(msg)
 }
 
 func (p SetupPanel) advanceFromTextStep(value string) (SetupPanel, tea.Cmd) {
