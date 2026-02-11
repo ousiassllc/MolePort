@@ -41,3 +41,13 @@ clean: ## ビルド成果物を削除
 
 install: ## $GOPATH/bin にインストール
 	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" ./cmd/moleport
+	@GOBIN=$$(go env GOPATH)/bin; \
+	case ":$$PATH:" in \
+		*":$$GOBIN:"*) ;; \
+		*) echo ""; \
+		   echo "  \033[33m警告: $$GOBIN が PATH に含まれていません\033[0m"; \
+		   echo "  以下をシェル設定に追加してください:"; \
+		   echo ""; \
+		   echo "    export PATH=\"\$$PATH:$$GOBIN\""; \
+		   echo "" ;; \
+	esac
