@@ -156,7 +156,11 @@ func (p ForwardPanel) View() string {
 				Selected: i == p.cursor,
 				Width:    contentWidth,
 			}
-			rows = append(rows, "  "+row.View())
+			prefix := "  "
+			if i == p.cursor {
+				prefix = tui.ActiveStyle.Render("> ")
+			}
+			rows = append(rows, prefix+row.View())
 		}
 	}
 

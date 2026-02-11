@@ -72,15 +72,5 @@ func (r ForwardRow) View() string {
 	}
 	row = lipgloss.JoinHorizontal(lipgloss.Top, row, "  ", traffic)
 
-	if r.Selected {
-		rowWidth := r.Width
-		if rowWidth <= 0 {
-			rowWidth = lipgloss.Width(row)
-		}
-		return lipgloss.NewStyle().
-			Background(tui.BgHighlight).
-			Width(rowWidth).
-			Render(row)
-	}
 	return row
 }

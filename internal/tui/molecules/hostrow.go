@@ -40,19 +40,7 @@ func (r HostRow) View() string {
 		forwards = tui.MutedStyle.Render("0 fwd")
 	}
 
-	row := lipgloss.JoinHorizontal(lipgloss.Top,
+	return lipgloss.JoinHorizontal(lipgloss.Top,
 		badge, " ", name, "  ", addr, "  ", forwards,
 	)
-
-	if r.Selected {
-		rowWidth := r.Width
-		if rowWidth <= 0 {
-			rowWidth = lipgloss.Width(row)
-		}
-		return lipgloss.NewStyle().
-			Background(tui.BgHighlight).
-			Width(rowWidth).
-			Render(row)
-	}
-	return row
 }
