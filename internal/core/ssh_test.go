@@ -504,7 +504,6 @@ func TestSSHManager_HandleDisconnect_WithReconnect(t *testing.T) {
 				// 最初の接続: KeepAlive がすぐに返ることで切断をシミュレート
 				mock.keepAliveF = func(ctx context.Context, interval time.Duration) {
 					// すぐに返る = 切断検出
-					return
 				}
 			}
 			return mock
@@ -617,7 +616,6 @@ func TestSSHManager_Disconnect_StopsReconnect(t *testing.T) {
 			if count == 1 {
 				// 最初の接続: KeepAlive がすぐに返ることで切断をシミュレート
 				mock.keepAliveF = func(ctx context.Context, interval time.Duration) {
-					return
 				}
 			}
 			// 2回目以降の接続（再接続試行）: Dial に少し時間がかかる

@@ -15,6 +15,7 @@ const (
 	Connecting
 	Connected
 	Reconnecting
+	PendingAuth
 	ConnectionError
 )
 
@@ -28,6 +29,8 @@ func (s ConnectionState) String() string {
 		return "Connected"
 	case Reconnecting:
 		return "Reconnecting"
+	case PendingAuth:
+		return "PendingAuth"
 	case ConnectionError:
 		return "Error"
 	default:
@@ -100,7 +103,7 @@ func ParseForwardType(s string) (ForwardType, error) {
 }
 
 // MarshalYAML は ForwardType を YAML 文字列としてシリアライズする。
-func (t ForwardType) MarshalYAML() (interface{}, error) {
+func (t ForwardType) MarshalYAML() (any, error) {
 	return t.String(), nil
 }
 
@@ -124,7 +127,7 @@ type Duration struct {
 }
 
 // MarshalYAML は Duration を文字列としてシリアライズする。
-func (d Duration) MarshalYAML() (interface{}, error) {
+func (d Duration) MarshalYAML() (any, error) {
 	return d.Duration.String(), nil
 }
 
@@ -239,6 +242,7 @@ const (
 	SSHEventConnected SSHEventType = iota
 	SSHEventDisconnected
 	SSHEventReconnecting
+	SSHEventPendingAuth
 	SSHEventError
 )
 
@@ -250,6 +254,8 @@ func (t SSHEventType) String() string {
 		return "Disconnected"
 	case SSHEventReconnecting:
 		return "Reconnecting"
+	case SSHEventPendingAuth:
+		return "PendingAuth"
 	case SSHEventError:
 		return "Error"
 	default:
@@ -296,3 +302,39 @@ type ForwardEvent struct {
 	Session  *ForwardSession
 	Error    error
 }
+
+// CredentialType はクレデンシャル要求の種別を表す。
+type CredentialType string
+
+const (
+	CredentialPassword            CredentialType = "password"
+	CredentialPassphrase          CredentialType = "passphrase"
+	CredentialKeyboardInteractive CredentialType = "keyboard-interactive"
+)
+
+// PromptInfo は keyboard-interactive 認証の個別プロンプト情報。
+type PromptInfo struct {
+	Prompt string
+	Echo   bool
+}
+
+// CredentialRequest はクレデンシャル要求を表す。
+type CredentialRequest struct {
+	RequestID string
+	Type      CredentialType
+	Host      string
+	Prompt    string       // password/passphrase 用
+	Prompts   []PromptInfo // keyboard-interactive 用
+}
+
+// CredentialResponse はクレデンシャル応答を表す。
+type CredentialResponse struct {
+	RequestID string
+	Value     string   // password/passphrase 用
+	Answers   []string // keyboard-interactive 用
+	Cancelled bool
+}
+
+// CredentialCallback はクレデンシャル要求時に呼び出されるコールバック関数の型。
+// デーモンがクライアントにクレデンシャルを要求し、応答を受け取る。
+type CredentialCallback func(req CredentialRequest) (CredentialResponse, error)

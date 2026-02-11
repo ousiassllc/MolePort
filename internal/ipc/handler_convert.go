@@ -28,6 +28,10 @@ func toRPCError(err error, defaultCode int) *RPCError {
 		return &RPCError{Code: NotConnected, Message: msg}
 	case strings.Contains(msg, "already connected"):
 		return &RPCError{Code: AlreadyConnected, Message: msg}
+	case strings.Contains(msg, "credential timeout"):
+		return &RPCError{Code: CredentialTimeout, Message: msg}
+	case strings.Contains(msg, "credential cancelled"):
+		return &RPCError{Code: CredentialCancelled, Message: msg}
 	}
 
 	return &RPCError{Code: defaultCode, Message: msg}
