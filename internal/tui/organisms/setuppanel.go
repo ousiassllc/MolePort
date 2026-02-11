@@ -29,10 +29,10 @@ const (
 
 // SetupPanel はホスト選択 + フォワード追加ウィザードを提供するパネル。
 type SetupPanel struct {
-	hosts      []core.SSHHost
-	hostCursor int
-	step       WizardStep
-	typeCursor int
+	hosts       []core.SSHHost
+	hostCursor  int
+	step        WizardStep
+	typeCursor  int
 	typeOptions []string
 
 	portInput textinput.Model
@@ -500,36 +500,19 @@ func (p SetupPanel) viewConfirm() []string {
 	return rows
 }
 
+// wizardSteps はフォワード種別ごとのウィザードステップ順序を定義する。
+var wizardSteps = map[bool][]WizardStep{
+	true:  {StepSelectType, StepLocalPort, StepRuleName, StepConfirm},                                 // Dynamic
+	false: {StepSelectType, StepLocalPort, StepRemoteHost, StepRemotePort, StepRuleName, StepConfirm}, // Local/Remote
+}
+
 func (p SetupPanel) stepProgress() (current int, total int) {
-	if p.selectedType == core.Dynamic {
-		// StepSelectType(1) -> StepLocalPort(2) -> StepRuleName(3) -> StepConfirm(4)
-		total = 4
-		switch p.step {
-		case StepSelectType:
-			current = 1
-		case StepLocalPort:
-			current = 2
-		case StepRuleName:
-			current = 3
-		case StepConfirm:
-			current = 4
-		}
-	} else {
-		// StepSelectType(1) -> StepLocalPort(2) -> StepRemoteHost(3) -> StepRemotePort(4) -> StepRuleName(5) -> StepConfirm(6)
-		total = 6
-		switch p.step {
-		case StepSelectType:
-			current = 1
-		case StepLocalPort:
-			current = 2
-		case StepRemoteHost:
-			current = 3
-		case StepRemotePort:
-			current = 4
-		case StepRuleName:
-			current = 5
-		case StepConfirm:
-			current = 6
+	steps := wizardSteps[p.selectedType == core.Dynamic]
+	total = len(steps)
+	for i, s := range steps {
+		if s == p.step {
+			current = i + 1
+			break
 		}
 	}
 	return

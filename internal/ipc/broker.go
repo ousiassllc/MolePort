@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
@@ -25,7 +26,7 @@ type EventBroker struct {
 	subscriptions map[string]*Subscription // subscriptionID -> Subscription
 	clientSubs    map[string][]string      // clientID -> []subscriptionID
 	sender        NotifySender
-	nextID        int
+	nextID        atomic.Int64
 }
 
 // NewEventBroker は新しい EventBroker を生成する。
@@ -42,8 +43,8 @@ func (b *EventBroker) Subscribe(clientID string, types []string) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.nextID++
-	subID := fmt.Sprintf("sub-%s-%d", clientID, b.nextID)
+	id := b.nextID.Add(1)
+	subID := fmt.Sprintf("sub-%s-%d", clientID, id)
 
 	typeMap := make(map[string]bool, len(types))
 	for _, t := range types {

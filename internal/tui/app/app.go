@@ -14,8 +14,16 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
 
-// metricsInterval はメトリクス更新の間隔。
-const metricsInterval = 2 * time.Second
+const (
+	// metricsInterval はメトリクス更新の間隔。
+	metricsInterval = 2 * time.Second
+	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
+	ipcReadTimeout = 5 * time.Second
+	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
+	ipcWriteTimeout = 10 * time.Second
+	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
+	ipcShutdownTimeout = 2 * time.Second
+)
 
 // --- 内部メッセージ型 ---
 
@@ -39,9 +47,9 @@ type MainModel struct {
 }
 
 // NewMainModel は新しい MainModel を生成する。
-func NewMainModel(client *ipc.IPCClient) MainModel {
+func NewMainModel(client *ipc.IPCClient, version string) MainModel {
 	return MainModel{
-		dashboard: pages.NewDashboardPage(),
+		dashboard: pages.NewDashboardPage(version),
 		client:    client,
 		keys:      tui.DefaultKeyMap(),
 	}
@@ -174,7 +182,7 @@ func (m MainModel) View() string {
 // loadHosts は host.list を呼んでホスト一覧を取得する。
 func (m *MainModel) loadHosts() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
 		defer cancel()
 		var result ipc.HostListResult
 		if err := m.client.Call(ctx, "host.list", nil, &result); err != nil {
@@ -191,7 +199,7 @@ func (m *MainModel) loadHosts() tea.Cmd {
 // loadSessions は session.list を呼んでセッション一覧を取得する。
 func (m *MainModel) loadSessions() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
 		defer cancel()
 		var result ipc.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
@@ -208,7 +216,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 // subscribeEvents はイベント購読を開始する。
 func (m *MainModel) subscribeEvents() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
 		defer cancel()
 		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
 		if err != nil {
@@ -264,7 +272,7 @@ func (m *MainModel) handleIPCNotification(notif *ipc.Notification) {
 
 func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := ipc.ForwardAddParams{
 			Name:        msg.Name,
@@ -296,7 +304,7 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 
 func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := ipc.ForwardDeleteParams{Name: ruleName}
 		var result ipc.ForwardDeleteResult
@@ -322,7 +330,7 @@ func (m *MainModel) toggleForward(ruleName string) tea.Cmd {
 
 func (m *MainModel) startForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := ipc.ForwardStartParams{Name: ruleName}
 		var result ipc.ForwardStartResult
@@ -335,7 +343,7 @@ func (m *MainModel) startForward(ruleName string) tea.Cmd {
 
 func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := ipc.ForwardStopParams{Name: ruleName}
 		var result ipc.ForwardStopResult
@@ -360,45 +368,6 @@ func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("  q / Ctrl+C  : 終了")
 }
 
-func (m *MainModel) showList() {
-	if len(m.sessions) == 0 {
-		m.dashboard.AppendLog("フォワーディングルールがありません")
-		return
-	}
-
-	m.dashboard.AppendLog("--- フォワーディングルール一覧 ---")
-	for _, s := range m.sessions {
-		status := s.Status.String()
-		var desc string
-		if s.Rule.Type == core.Dynamic {
-			desc = fmt.Sprintf("  %s: %s :%d (SOCKS) [%s]", s.Rule.Name, s.Rule.Type, s.Rule.LocalPort, status)
-		} else {
-			desc = fmt.Sprintf("  %s: %s :%d -> %s:%d [%s]", s.Rule.Name, s.Rule.Type, s.Rule.LocalPort, s.Rule.RemoteHost, s.Rule.RemotePort, status)
-		}
-		m.dashboard.AppendLog(desc)
-	}
-}
-
-func (m *MainModel) showStatus() {
-	connectedCount := 0
-	for _, h := range m.hosts {
-		if h.State == core.Connected {
-			connectedCount++
-		}
-	}
-
-	activeCount := 0
-	for _, s := range m.sessions {
-		if s.Status == core.Active {
-			activeCount++
-		}
-	}
-
-	m.dashboard.AppendLog("--- ステータス ---")
-	m.dashboard.AppendLog(fmt.Sprintf("  ホスト: %d (接続中: %d)", len(m.hosts), connectedCount))
-	m.dashboard.AppendLog(fmt.Sprintf("  フォワード: %d (アクティブ: %d)", len(m.sessions), activeCount))
-}
-
 func (m *MainModel) refreshForwardPanel() {
 	m.dashboard.SetForwardSessions(m.sessions)
 }
@@ -407,78 +376,9 @@ func (m *MainModel) shutdown() tea.Cmd {
 	m.quitting = true
 	// IPC クライアントをクリーンアップ（daemon は停止しない）
 	if m.subscriptionID != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcShutdownTimeout)
 		defer cancel()
 		_ = m.client.Unsubscribe(ctx, m.subscriptionID)
 	}
 	return tea.Quit
-}
-
-// --- データ変換ヘルパー ---
-
-func hostInfoToSSHHost(info ipc.HostInfo) core.SSHHost {
-	return core.SSHHost{
-		Name:               info.Name,
-		HostName:           info.HostName,
-		Port:               info.Port,
-		User:               info.User,
-		State:              parseConnectionState(info.State),
-		ActiveForwardCount: info.ActiveForwardCount,
-	}
-}
-
-func sessionInfoToForwardSession(info ipc.SessionInfo) core.ForwardSession {
-	fwdType, _ := core.ParseForwardType(info.Type)
-	status := parseSessionStatus(info.Status)
-	var connectedAt time.Time
-	if info.ConnectedAt != "" {
-		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt)
-	}
-	return core.ForwardSession{
-		ID: info.ID,
-		Rule: core.ForwardRule{
-			Name:       info.Name,
-			Host:       info.Host,
-			Type:       fwdType,
-			LocalPort:  info.LocalPort,
-			RemoteHost: info.RemoteHost,
-			RemotePort: info.RemotePort,
-		},
-		Status:         status,
-		ConnectedAt:    connectedAt,
-		BytesSent:      info.BytesSent,
-		BytesReceived:  info.BytesReceived,
-		ReconnectCount: info.ReconnectCount,
-		LastError:      info.LastError,
-	}
-}
-
-func parseConnectionState(s string) core.ConnectionState {
-	switch s {
-	case "connected":
-		return core.Connected
-	case "connecting":
-		return core.Connecting
-	case "reconnecting":
-		return core.Reconnecting
-	case "error":
-		return core.ConnectionError
-	default:
-		return core.Disconnected
-	}
-}
-
-func parseSessionStatus(s string) core.SessionStatus {
-	switch s {
-	case "active":
-		return core.Active
-	case "starting":
-		return core.Starting
-	case "reconnecting":
-		return core.SessionReconnecting
-	case "error":
-		return core.SessionError
-	default:
-		return core.Stopped
-	}
 }

@@ -2,12 +2,11 @@ package core
 
 import (
 	"context"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,16 +14,41 @@ import (
 
 // ForwardManager はポートフォワーディングルールとセッションを管理する。
 type ForwardManager interface {
-	AddRule(rule ForwardRule) error
+	// AddRule はフォワーディングルールを追加し、割り当てられたルール名を返す。
+	// Name が空の場合は自動生成される。同名ルールが存在する場合はエラーを返す。
+	AddRule(rule ForwardRule) (string, error)
+
+	// DeleteRule は指定名のルールを削除する。アクティブなセッションがあれば先に停止する。
 	DeleteRule(name string) error
+
+	// GetRules は登録済みの全ルールを追加順に返す。
 	GetRules() []ForwardRule
+
+	// GetRulesByHost は指定ホストに紐づくルールのみを追加順に返す。
 	GetRulesByHost(hostName string) []ForwardRule
+
+	// StartForward は指定ルールのポートフォワーディングを開始する。
+	// 必要に応じて SSH 接続を確立し、リスナーを作成して accept ループを起動する。
 	StartForward(ruleName string) error
+
+	// StopForward は指定ルールのフォワーディングセッションを停止する。
+	// アクティブでない場合はエラーなしで何もしない。
 	StopForward(ruleName string) error
+
+	// StopAllForwards は全てのアクティブなフォワーディングセッションを停止する。
 	StopAllForwards() error
+
+	// GetSession は指定ルールの現在のセッション情報を返す。
+	// アクティブでないルールには Status=Stopped のセッションを返す。
 	GetSession(ruleName string) (*ForwardSession, error)
+
+	// GetAllSessions は全ルールのセッション情報を追加順に返す。
 	GetAllSessions() []ForwardSession
+
+	// Subscribe はフォワーディングイベントを受信するチャネルを返す。
 	Subscribe() <-chan ForwardEvent
+
+	// Close は全フォワーディングを停止し、サブスクライバーチャネルを閉じる。
 	Close()
 }
 
@@ -59,7 +83,8 @@ func NewForwardManager(sshManager SSHManager) ForwardManager {
 }
 
 // AddRule はフォワーディングルールを追加する。
-func (m *forwardManager) AddRule(rule ForwardRule) error {
+// 成功時はルール名（自動生成名を含む）を返す。
+func (m *forwardManager) AddRule(rule ForwardRule) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -71,21 +96,21 @@ func (m *forwardManager) AddRule(rule ForwardRule) error {
 
 	// 名前の一意性チェック
 	if _, exists := m.rules[rule.Name]; exists {
-		return fmt.Errorf("rule %q already exists", rule.Name)
+		return "", fmt.Errorf("rule %q already exists", rule.Name)
 	}
 
 	// バリデーション
 	if rule.Host == "" {
-		return fmt.Errorf("host is required")
+		return "", fmt.Errorf("host is required")
 	}
 
 	if rule.LocalPort < 1 || rule.LocalPort > 65535 {
-		return fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
+		return "", fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
 	}
 
 	if rule.Type == Local || rule.Type == Remote {
 		if rule.RemotePort < 1 || rule.RemotePort > 65535 {
-			return fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
+			return "", fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
 		}
 		if rule.RemoteHost == "" {
 			rule.RemoteHost = "localhost"
@@ -94,7 +119,7 @@ func (m *forwardManager) AddRule(rule ForwardRule) error {
 
 	m.rules[rule.Name] = rule
 	m.ruleOrder = append(m.ruleOrder, rule.Name)
-	return nil
+	return rule.Name, nil
 }
 
 // DeleteRule はフォワーディングルールを削除する。アクティブな場合は停止する。
@@ -260,7 +285,9 @@ func (m *forwardManager) StartForward(ruleName string) error {
 }
 
 // acceptLoop はリスナーで接続を受け付け、ブリッジを作成する。
-func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
+func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
 	for {
 		conn, err := af.listener.Accept()
 		if err != nil {
@@ -277,25 +304,34 @@ func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClie
 	}
 }
 
-// bridge は受け付けた接続とリモート/ローカルの間でデータを転送する。
-func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
-	defer conn.Close()
-
-	var remote net.Conn
-	var err error
-
+// dialRemote はルールの種類に応じてリモート接続を確立する。
+func (m *forwardManager) dialRemote(rule ForwardRule, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) (net.Conn, error) {
 	switch rule.Type {
 	case Local:
 		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
-		remote, err = sshClient.Dial("tcp", remoteAddr)
+		return sshClient.Dial("tcp", remoteAddr)
 	case Remote:
 		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
-		remote, err = net.Dial("tcp", localAddr)
-	case Dynamic:
+		return net.Dial("tcp", localAddr)
+	default:
+		return nil, fmt.Errorf("unsupported forward type for bridge: %v", rule.Type)
+	}
+}
+
+// bridge は受け付けた接続とリモート/ローカルの間でデータを転送する。
+func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
+	defer func() { _ = conn.Close() }()
+
+	if rule.Type == Dynamic {
 		m.handleSOCKS5(af, conn, sshClient)
 		return
 	}
 
+	remote, err := m.dialRemote(rule, sshClient)
 	if err != nil {
 		slog.Warn("bridge dial failed", "rule", rule.Name, "error", err)
 		return
@@ -306,103 +342,30 @@ func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Co
 }
 
 // handleSOCKS5 は最小限の SOCKS5 プロトコルを処理する（認証なし、CONNECT のみ）。
-func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface{ Dial(n, addr string) (net.Conn, error) }) {
-	// SOCKS5 ネゴシエーション
-	// Client greeting: VER + NMETHODS (2 bytes)
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(conn, header); err != nil {
+func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
+	if err := socks5Negotiate(conn); err != nil {
+		slog.Debug("socks5 negotiate failed", "rule", af.session.Rule.Name, "error", err)
 		return
 	}
 
-	if header[0] != 0x05 { // SOCKS version 5
-		return
-	}
-
-	nmethods := int(header[1])
-	methods := make([]byte, nmethods)
-	if _, err := io.ReadFull(conn, methods); err != nil {
-		return
-	}
-
-	// クライアントが No Authentication (0x00) をサポートしているか確認
-	noAuthSupported := false
-	for _, method := range methods {
-		if method == 0x00 {
-			noAuthSupported = true
-			break
-		}
-	}
-	if !noAuthSupported {
-		// No acceptable methods
-		conn.Write([]byte{0x05, 0xFF})
-		return
-	}
-
-	// No authentication
-	if _, err := conn.Write([]byte{0x05, 0x00}); err != nil {
-		return
-	}
-
-	// SOCKS5 request: VER, CMD, RSV, ATYP (4 bytes)
-	reqHeader := make([]byte, 4)
-	if _, err := io.ReadFull(conn, reqHeader); err != nil {
-		return
-	}
-
-	if reqHeader[0] != 0x05 || reqHeader[1] != 0x01 { // Version 5, CONNECT command
-		// Command not supported
-		conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-		return
-	}
-
-	var targetAddr string
-	switch reqHeader[3] { // Address type
-	case 0x01: // IPv4
-		addrPort := make([]byte, 4+2)
-		if _, err := io.ReadFull(conn, addrPort); err != nil {
-			return
-		}
-		ip := net.IP(addrPort[:4])
-		port := binary.BigEndian.Uint16(addrPort[4:6])
-		targetAddr = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
-	case 0x03: // Domain name
-		domainLenBuf := make([]byte, 1)
-		if _, err := io.ReadFull(conn, domainLenBuf); err != nil {
-			return
-		}
-		domainLen := int(domainLenBuf[0])
-		domainPort := make([]byte, domainLen+2)
-		if _, err := io.ReadFull(conn, domainPort); err != nil {
-			return
-		}
-		domain := string(domainPort[:domainLen])
-		port := binary.BigEndian.Uint16(domainPort[domainLen : domainLen+2])
-		targetAddr = net.JoinHostPort(domain, strconv.Itoa(int(port)))
-	case 0x04: // IPv6
-		addrPort := make([]byte, 16+2)
-		if _, err := io.ReadFull(conn, addrPort); err != nil {
-			return
-		}
-		ip := net.IP(addrPort[:16])
-		port := binary.BigEndian.Uint16(addrPort[16:18])
-		targetAddr = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
-	default:
-		// Address type not supported
-		conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+	targetAddr, err := socks5ParseRequest(conn)
+	if err != nil {
+		slog.Debug("socks5 parse request failed", "rule", af.session.Rule.Name, "error", err)
 		return
 	}
 
 	remote, err := sshClient.Dial("tcp", targetAddr)
 	if err != nil {
 		// Connection refused
-		conn.Write([]byte{0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{socks5Version, socks5ReplyConnectionRefused, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	defer remote.Close()
 
 	// Success response
-	_, err = conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-	if err != nil {
+	if _, err := conn.Write([]byte{socks5Version, socks5ReplySuccess, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
 		return
 	}
 
@@ -416,13 +379,19 @@ func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 
 	go func() {
 		defer wg.Done()
-		n, _ := io.Copy(b, a)
+		n, err := io.Copy(b, a)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
+		}
 		af.sent.Add(n)
 	}()
 
 	go func() {
 		defer wg.Done()
-		n, _ := io.Copy(a, b)
+		n, err := io.Copy(a, b)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
+		}
 		af.received.Add(n)
 	}()
 

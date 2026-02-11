@@ -50,15 +50,6 @@ func (p *ForwardPanel) SetSize(width, height int) {
 	p.height = height
 }
 
-// SelectedSession は現在選択中のセッションを返す。
-func (p ForwardPanel) SelectedSession() *core.ForwardSession {
-	if len(p.sessions) == 0 || p.cursor >= len(p.sessions) {
-		return nil
-	}
-	s := p.sessions[p.cursor]
-	return &s
-}
-
 // Update はキー入力を処理する。
 func (p ForwardPanel) Update(msg tea.Msg) (ForwardPanel, tea.Cmd) {
 	if !p.focused {

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"syscall"
 	"time"
@@ -48,11 +49,13 @@ func StartDaemonProcess(configDir string) (int, error) {
 	pid := proc.Pid
 	proc.Release()
 
-	// Wait for daemon to be ready (poll socket)
+	// Wait for daemon to be ready (try connecting to socket)
 	socketPath := SocketPath(configDir)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socketPath); err == nil {
+		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+		if err == nil {
+			_ = conn.Close()
 			return pid, nil
 		}
 		time.Sleep(50 * time.Millisecond)

@@ -5,11 +5,11 @@ import "github.com/charmbracelet/bubbles/key"
 // KeyMap はアプリケーション全体のキーバインドを定義する。
 type KeyMap struct {
 	// グローバルキー
-	Tab    key.Binding
-	Help   key.Binding
-	Search key.Binding
-	Escape key.Binding
-	Quit   key.Binding
+	Tab       key.Binding
+	Help      key.Binding
+	Search    key.Binding
+	Escape    key.Binding
+	Quit      key.Binding
 	ForceQuit key.Binding
 
 	// ナビゲーション

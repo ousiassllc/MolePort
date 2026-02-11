@@ -11,7 +11,7 @@ import (
 type ConnectionState int
 
 const (
-	Disconnected    ConnectionState = iota
+	Disconnected ConnectionState = iota
 	Connecting
 	Connected
 	Reconnecting
@@ -39,7 +39,7 @@ func (s ConnectionState) String() string {
 type SessionStatus int
 
 const (
-	Stopped             SessionStatus = iota
+	Stopped SessionStatus = iota
 	Starting
 	Active
 	SessionReconnecting
@@ -67,7 +67,7 @@ func (s SessionStatus) String() string {
 type ForwardType int
 
 const (
-	Local   ForwardType = iota
+	Local ForwardType = iota
 	Remote
 	Dynamic
 )
@@ -236,7 +236,7 @@ func DefaultConfig() Config {
 type SSHEventType int
 
 const (
-	SSHEventConnected    SSHEventType = iota
+	SSHEventConnected SSHEventType = iota
 	SSHEventDisconnected
 	SSHEventReconnecting
 	SSHEventError
@@ -268,7 +268,7 @@ type SSHEvent struct {
 type ForwardEventType int
 
 const (
-	ForwardEventStarted        ForwardEventType = iota
+	ForwardEventStarted ForwardEventType = iota
 	ForwardEventStopped
 	ForwardEventError
 	ForwardEventMetricsUpdated
