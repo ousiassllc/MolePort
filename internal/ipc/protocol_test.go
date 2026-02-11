@@ -406,15 +406,22 @@ func TestConfigUpdateParams_PointerFields(t *testing.T) {
 
 func TestConfigUpdateParams_AllFields(t *testing.T) {
 	path := "/custom/ssh/config"
-	reconnect := ReconnectInfo{Enabled: true, MaxRetries: 5, InitialDelay: "2s", MaxDelay: "30s"}
-	session := SessionCfgInfo{AutoRestore: false}
-	log := LogInfo{Level: "debug", File: "/tmp/test.log"}
+	enabled := true
+	maxRetries := 5
+	initialDelay := "2s"
+	maxDelay := "30s"
+	autoRestore := false
+	level := "debug"
+	file := "/tmp/test.log"
 
 	params := ConfigUpdateParams{
 		SSHConfigPath: &path,
-		Reconnect:     &reconnect,
-		Session:       &session,
-		Log:           &log,
+		Reconnect: &ReconnectUpdateInfo{
+			Enabled: &enabled, MaxRetries: &maxRetries,
+			InitialDelay: &initialDelay, MaxDelay: &maxDelay,
+		},
+		Session: &SessionCfgUpdateInfo{AutoRestore: &autoRestore},
+		Log:     &LogUpdateInfo{Level: &level, File: &file},
 	}
 
 	data, err := json.Marshal(params)
@@ -427,13 +434,13 @@ func TestConfigUpdateParams_AllFields(t *testing.T) {
 		t.Fatalf("Unmarshal ConfigUpdateParams: %v", err)
 	}
 
-	if got.Reconnect == nil || got.Reconnect.MaxRetries != 5 {
+	if got.Reconnect == nil || got.Reconnect.MaxRetries == nil || *got.Reconnect.MaxRetries != 5 {
 		t.Errorf("Reconnect.MaxRetries = %v, want 5", got.Reconnect)
 	}
-	if got.Session == nil || got.Session.AutoRestore != false {
+	if got.Session == nil || got.Session.AutoRestore == nil || *got.Session.AutoRestore != false {
 		t.Errorf("Session.AutoRestore = %v, want false", got.Session)
 	}
-	if got.Log == nil || got.Log.Level != "debug" {
+	if got.Log == nil || got.Log.Level == nil || *got.Log.Level != "debug" {
 		t.Errorf("Log.Level = %v, want debug", got.Log)
 	}
 }

@@ -10,13 +10,15 @@ import (
 	"time"
 )
 
-func testCtx() context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+func testCtxWithCleanup(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
 	return ctx
 }
 
 // echoHandler はメソッド名に応じた固定レスポンスを返すテスト用ハンドラ。
-func echoHandler(method string, params json.RawMessage) (any, *RPCError) {
+func echoHandler(_ string, method string, params json.RawMessage) (any, *RPCError) {
 	switch method {
 	case "echo":
 		return json.RawMessage(params), nil
@@ -54,7 +56,7 @@ func TestServerClient_BasicCall(t *testing.T) {
 
 	params := map[string]string{"msg": "hello"}
 	var result map[string]string
-	if err := client.Call(testCtx(), "echo", params, &result); err != nil {
+	if err := client.Call(testCtxWithCleanup(t), "echo", params, &result); err != nil {
 		t.Fatalf("Call echo: %v", err)
 	}
 
@@ -67,7 +69,7 @@ func TestServerClient_ErrorResponse(t *testing.T) {
 	_, sockPath := startTestServer(t, echoHandler)
 	client := connectTestClient(t, sockPath)
 
-	err := client.Call(testCtx(), "error", nil, nil)
+	err := client.Call(testCtxWithCleanup(t), "error", nil, nil)
 	if err == nil {
 		t.Fatal("Call should return error")
 	}
@@ -98,7 +100,7 @@ func TestServerClient_MultipleClients(t *testing.T) {
 
 			params := map[string]int{"n": n}
 			var result map[string]int
-			if err := client.Call(testCtx(), "echo", params, &result); err != nil {
+			if err := client.Call(testCtxWithCleanup(t), "echo", params, &result); err != nil {
 				t.Errorf("client %d: Call echo: %v", n, err)
 				return
 			}
@@ -270,7 +272,7 @@ func TestServerClient_ServerStop(t *testing.T) {
 	}
 
 	// クライアントからの呼び出しはエラーになるべき
-	err := client.Call(testCtx(), "echo", nil, nil)
+	err := client.Call(testCtxWithCleanup(t), "echo", nil, nil)
 	if err == nil {
 		t.Fatal("Call after server stop should return error")
 	}
@@ -294,7 +296,7 @@ func TestServerClient_SendNotification_UnknownClient(t *testing.T) {
 
 func TestIPCClient_CallNotConnected(t *testing.T) {
 	client := NewIPCClient("/nonexistent.sock")
-	err := client.Call(testCtx(), "echo", nil, nil)
+	err := client.Call(testCtxWithCleanup(t), "echo", nil, nil)
 	if err == nil {
 		t.Fatal("Call on unconnected client should return error")
 	}
@@ -302,7 +304,7 @@ func TestIPCClient_CallNotConnected(t *testing.T) {
 
 func TestIPCClient_CallContextTimeout(t *testing.T) {
 	// レスポンスを返さないハンドラでタイムアウトを検証する
-	slowHandler := func(method string, params json.RawMessage) (any, *RPCError) {
+	slowHandler := func(_ string, method string, params json.RawMessage) (any, *RPCError) {
 		time.Sleep(5 * time.Second)
 		return nil, nil
 	}

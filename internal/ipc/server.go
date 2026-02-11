@@ -12,7 +12,8 @@ import (
 )
 
 // HandlerFunc は RPC リクエストを処理するハンドラ関数の型。
-type HandlerFunc func(method string, params json.RawMessage) (any, *RPCError)
+// clientID はリクエスト元のクライアント識別子。
+type HandlerFunc func(clientID string, method string, params json.RawMessage) (any, *RPCError)
 
 // IPCServer は Unix ドメインソケット上で JSON-RPC 2.0 通信を行うサーバー。
 type IPCServer struct {
@@ -225,11 +226,11 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 		// ID が nil の場合は通知（レスポンス不要）
 		if req.ID == nil {
-			s.handler(req.Method, req.Params)
+			s.handler(c.id, req.Method, req.Params)
 			continue
 		}
 
-		result, rpcErr := s.handler(req.Method, req.Params)
+		result, rpcErr := s.handler(c.id, req.Method, req.Params)
 		if rpcErr != nil {
 			resp := NewErrorResponse(req.ID, rpcErr.Code, rpcErr.Message)
 			if err := c.send(resp); err != nil {
