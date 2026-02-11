@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc"
 )
@@ -21,4 +22,19 @@ func EnsureDaemon(configDir string) (*ipc.IPCClient, error) {
 	}
 
 	return client, nil
+}
+
+// EnsureDaemonWithRetry はデーモンが起動するまでリトライし、接続済みの IPCClient を返す。
+func EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*ipc.IPCClient, error) {
+	deadline := time.Now().Add(maxWait)
+	for {
+		client, err := EnsureDaemon(configDir)
+		if err == nil {
+			return client, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("daemon not ready after %s: %w", maxWait, err)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }

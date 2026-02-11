@@ -1,12 +1,15 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
@@ -14,45 +17,42 @@ import (
 // metricsInterval はメトリクス更新の間隔。
 const metricsInterval = 2 * time.Second
 
+// --- 内部メッセージ型 ---
+
+type sessionsLoadedMsg struct {
+	Sessions []core.ForwardSession
+}
+
+type subscriptionStartedMsg struct {
+	SubscriptionID string
+}
+
 // MainModel はアプリケーションのルート Bubble Tea モデル。
 type MainModel struct {
 	dashboard      pages.DashboardPage
-	sshManager     core.SSHManager
-	forwardManager core.ForwardManager
-	configManager  core.ConfigManager
+	client         *ipc.IPCClient
 	keys           tui.KeyMap
-	config         *core.Config
 	hosts          []core.SSHHost
+	sessions       []core.ForwardSession
 	quitting       bool
-	sshSub         <-chan core.SSHEvent
-	fwdSub         <-chan core.ForwardEvent
+	subscriptionID string
 }
 
 // NewMainModel は新しい MainModel を生成する。
-func NewMainModel(
-	sshMgr core.SSHManager,
-	fwdMgr core.ForwardManager,
-	cfgMgr core.ConfigManager,
-) MainModel {
+func NewMainModel(client *ipc.IPCClient) MainModel {
 	return MainModel{
-		dashboard:      pages.NewDashboardPage(),
-		sshManager:     sshMgr,
-		forwardManager: fwdMgr,
-		configManager:  cfgMgr,
-		keys:           tui.DefaultKeyMap(),
-		config:         cfgMgr.GetConfig(),
+		dashboard: pages.NewDashboardPage(),
+		client:    client,
+		keys:      tui.DefaultKeyMap(),
 	}
 }
 
 // Init は Bubble Tea の Init メソッド。初期読み込みコマンドを返す。
 func (m MainModel) Init() tea.Cmd {
-	m.sshSub = m.sshManager.Subscribe()
-	m.fwdSub = m.forwardManager.Subscribe()
-
 	return tea.Batch(
 		m.loadHosts(),
-		m.listenSSHEvents(),
-		m.listenForwardEvents(),
+		m.loadSessions(),
+		m.subscribeEvents(),
 		m.metricsTick(),
 		m.dashboard.Init(),
 	)
@@ -95,11 +95,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.dashboard.SetHosts(msg.Hosts)
 			m.refreshForwardPanel()
 			m.dashboard.AppendLog(fmt.Sprintf("%d 件のホストを読み込みました", len(msg.Hosts)))
-
-			// セッション自動復元
-			if m.config.Session.AutoRestore {
-				cmds = append(cmds, m.restoreSession())
-			}
 		}
 
 	case tui.HostsReloadedMsg:
@@ -114,16 +109,24 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.HostSelectedMsg:
 		// セットアップパネルが内部管理するため、ここでは何もしない
 
-	case tui.SSHEventMsg:
-		m.handleSSHEvent(msg.Event)
-		cmds = append(cmds, m.listenSSHEvents())
+	case subscriptionStartedMsg:
+		m.subscriptionID = msg.SubscriptionID
+		cmds = append(cmds, m.listenIPCEvents())
 
-	case tui.ForwardUpdatedMsg:
-		m.refreshForwardPanel()
-		cmds = append(cmds, m.listenForwardEvents())
+	case sessionsLoadedMsg:
+		m.sessions = msg.Sessions
+		m.dashboard.SetForwardSessions(msg.Sessions)
+
+	case tui.IPCNotificationMsg:
+		m.handleIPCNotification(msg.Notification)
+		cmds = append(cmds, m.listenIPCEvents())
+
+	case tui.IPCDisconnectedMsg:
+		m.dashboard.AppendLog("デーモンとの接続が切断されました")
+		return m, m.shutdown()
 
 	case tui.MetricsTickMsg:
-		m.refreshForwardPanel()
+		cmds = append(cmds, m.loadSessions())
 		cmds = append(cmds, m.metricsTick())
 
 	case tui.ForwardAddRequestMsg:
@@ -143,14 +146,6 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.ForwardDeleteConfirmedMsg:
 		cmds = append(cmds, m.deleteForwardRule(msg.RuleName))
-
-	case tui.SessionRestoredMsg:
-		if msg.Err != nil {
-			m.dashboard.AppendLog(fmt.Sprintf("セッション復元エラー: %s", msg.Err))
-		} else {
-			m.dashboard.AppendLog("セッションを復元しました")
-		}
-		m.refreshForwardPanel()
 
 	case tui.QuitRequestMsg:
 		return m, m.shutdown()
@@ -174,66 +169,164 @@ func (m MainModel) View() string {
 	return m.dashboard.View()
 }
 
+// --- IPC 操作 ---
+
+// loadHosts は host.list を呼んでホスト一覧を取得する。
+func (m *MainModel) loadHosts() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var result ipc.HostListResult
+		if err := m.client.Call(ctx, "host.list", nil, &result); err != nil {
+			return tui.HostsLoadedMsg{Err: err}
+		}
+		hosts := make([]core.SSHHost, len(result.Hosts))
+		for i, h := range result.Hosts {
+			hosts[i] = hostInfoToSSHHost(h)
+		}
+		return tui.HostsLoadedMsg{Hosts: hosts}
+	}
+}
+
+// loadSessions は session.list を呼んでセッション一覧を取得する。
+func (m *MainModel) loadSessions() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var result ipc.SessionListResult
+		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
+			return tui.LogOutputMsg{Text: fmt.Sprintf("セッション取得エラー: %s", err)}
+		}
+		sessions := make([]core.ForwardSession, len(result.Sessions))
+		for i, s := range result.Sessions {
+			sessions[i] = sessionInfoToForwardSession(s)
+		}
+		return sessionsLoadedMsg{Sessions: sessions}
+	}
+}
+
+// subscribeEvents はイベント購読を開始する。
+func (m *MainModel) subscribeEvents() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
+		if err != nil {
+			return tui.LogOutputMsg{Text: fmt.Sprintf("イベント購読エラー: %s", err)}
+		}
+		return subscriptionStartedMsg{SubscriptionID: subID}
+	}
+}
+
+// listenIPCEvents は IPC イベントチャネルから次の通知を受信する。
+func (m *MainModel) listenIPCEvents() tea.Cmd {
+	events := m.client.Events()
+	return func() tea.Msg {
+		notif, ok := <-events
+		if !ok {
+			return tui.IPCDisconnectedMsg{}
+		}
+		return tui.IPCNotificationMsg{Notification: notif}
+	}
+}
+
+func (m *MainModel) metricsTick() tea.Cmd {
+	return tea.Tick(metricsInterval, func(time.Time) tea.Msg {
+		return tui.MetricsTickMsg{}
+	})
+}
+
+// --- IPC 通知ハンドリング ---
+
+func (m *MainModel) handleIPCNotification(notif *ipc.Notification) {
+	switch notif.Method {
+	case "event.ssh":
+		var evt ipc.SSHEventNotification
+		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			return
+		}
+		state := parseConnectionState(evt.Type)
+		m.dashboard.UpdateHostState(evt.Host, state)
+		if evt.Error != "" {
+			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error))
+		}
+	case "event.forward":
+		var evt ipc.ForwardEventNotification
+		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			return
+		}
+		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type))
+		// セッション一覧は次の metricsTick で再読み込みされる
+	}
+}
+
 // --- フォワード操作 ---
 
 func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
-	remoteHost := msg.RemoteHost
-	if remoteHost == "" && msg.Type != core.Dynamic {
-		remoteHost = "localhost"
-	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		params := ipc.ForwardAddParams{
+			Name:        msg.Name,
+			Host:        msg.Host,
+			Type:        msg.Type.String(),
+			LocalPort:   msg.LocalPort,
+			RemoteHost:  msg.RemoteHost,
+			RemotePort:  msg.RemotePort,
+			AutoConnect: msg.AutoConnect,
+		}
+		var result ipc.ForwardAddResult
+		if err := m.client.Call(ctx, "forward.add", params, &result); err != nil {
+			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール追加エラー: %s", err)}
+		}
 
-	rule := core.ForwardRule{
-		Name:        msg.Name,
-		Host:        msg.Host,
-		Type:        msg.Type,
-		LocalPort:   msg.LocalPort,
-		RemoteHost:  remoteHost,
-		RemotePort:  msg.RemotePort,
-		AutoConnect: msg.AutoConnect,
-	}
+		// AutoConnect が設定されている場合はフォワードも開始
+		if msg.AutoConnect {
+			startParams := ipc.ForwardStartParams{Name: result.Name}
+			var startResult ipc.ForwardStartResult
+			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
+				return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加しましたが、開始に失敗: %s", result.Name, err)}
+			}
+			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加し、開始しました", result.Name)}
+		}
 
-	if err := m.forwardManager.AddRule(rule); err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("ルール追加エラー: %s", err))
-		return nil
+		return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加しました", result.Name)}
 	}
-
-	m.dashboard.AppendLog(fmt.Sprintf("ルール '%s' を追加しました", rule.Name))
-	m.refreshForwardPanel()
-	m.saveForwardRules()
-
-	if msg.AutoConnect {
-		return m.startForward(rule.Name)
-	}
-	return nil
 }
 
 func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
-	if err := m.forwardManager.DeleteRule(ruleName); err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("ルール削除エラー: %s", err))
-		return nil
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		params := ipc.ForwardDeleteParams{Name: ruleName}
+		var result ipc.ForwardDeleteResult
+		if err := m.client.Call(ctx, "forward.delete", params, &result); err != nil {
+			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール削除エラー: %s", err)}
+		}
+		return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を削除しました", ruleName)}
 	}
-	m.dashboard.AppendLog(fmt.Sprintf("ルール '%s' を削除しました", ruleName))
-	m.refreshForwardPanel()
-	m.saveForwardRules()
-	return nil
 }
 
 func (m *MainModel) toggleForward(ruleName string) tea.Cmd {
-	session, err := m.forwardManager.GetSession(ruleName)
-	if err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("セッション取得エラー: %s", err))
-		return nil
-	}
-
-	if session.Status == core.Active {
-		return m.stopForward(ruleName)
+	// ローカルのセッション情報から状態を判定する
+	for _, s := range m.sessions {
+		if s.Rule.Name == ruleName {
+			if s.Status == core.Active {
+				return m.stopForward(ruleName)
+			}
+			return m.startForward(ruleName)
+		}
 	}
 	return m.startForward(ruleName)
 }
 
 func (m *MainModel) startForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		if err := m.forwardManager.StartForward(ruleName); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		params := ipc.ForwardStartParams{Name: ruleName}
+		var result ipc.ForwardStartResult
+		if err := m.client.Call(ctx, "forward.start", params, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード開始エラー (%s): %s", ruleName, err)}
 		}
 		return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード '%s' を開始しました", ruleName)}
@@ -241,14 +334,19 @@ func (m *MainModel) startForward(ruleName string) tea.Cmd {
 }
 
 func (m *MainModel) stopForward(ruleName string) tea.Cmd {
-	if err := m.forwardManager.StopForward(ruleName); err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("フォワード停止エラー: %s", err))
-		return nil
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		params := ipc.ForwardStopParams{Name: ruleName}
+		var result ipc.ForwardStopResult
+		if err := m.client.Call(ctx, "forward.stop", params, &result); err != nil {
+			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード停止エラー: %s", err)}
+		}
+		return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード '%s' を停止しました", ruleName)}
 	}
-	m.dashboard.AppendLog(fmt.Sprintf("フォワード '%s' を停止しました", ruleName))
-	m.refreshForwardPanel()
-	return nil
 }
+
+// --- ヘルパー ---
 
 func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("--- キー操作 ---")
@@ -263,14 +361,13 @@ func (m *MainModel) showHelp() {
 }
 
 func (m *MainModel) showList() {
-	sessions := m.forwardManager.GetAllSessions()
-	if len(sessions) == 0 {
+	if len(m.sessions) == 0 {
 		m.dashboard.AppendLog("フォワーディングルールがありません")
 		return
 	}
 
 	m.dashboard.AppendLog("--- フォワーディングルール一覧 ---")
-	for _, s := range sessions {
+	for _, s := range m.sessions {
 		status := s.Status.String()
 		var desc string
 		if s.Rule.Type == core.Dynamic {
@@ -290,9 +387,8 @@ func (m *MainModel) showStatus() {
 		}
 	}
 
-	sessions := m.forwardManager.GetAllSessions()
 	activeCount := 0
-	for _, s := range sessions {
+	for _, s := range m.sessions {
 		if s.Status == core.Active {
 			activeCount++
 		}
@@ -300,123 +396,89 @@ func (m *MainModel) showStatus() {
 
 	m.dashboard.AppendLog("--- ステータス ---")
 	m.dashboard.AppendLog(fmt.Sprintf("  ホスト: %d (接続中: %d)", len(m.hosts), connectedCount))
-	m.dashboard.AppendLog(fmt.Sprintf("  フォワード: %d (アクティブ: %d)", len(sessions), activeCount))
+	m.dashboard.AppendLog(fmt.Sprintf("  フォワード: %d (アクティブ: %d)", len(m.sessions), activeCount))
 }
 
-// --- 非同期コマンド ---
-
-func (m *MainModel) loadHosts() tea.Cmd {
-	return func() tea.Msg {
-		hosts, err := m.sshManager.LoadHosts()
-		return tui.HostsLoadedMsg{Hosts: hosts, Err: err}
-	}
-}
-
-func (m *MainModel) listenSSHEvents() tea.Cmd {
-	sub := m.sshSub
-	return func() tea.Msg {
-		event, ok := <-sub
-		if !ok {
-			return nil
-		}
-		return tui.SSHEventMsg{Event: event}
-	}
-}
-
-func (m *MainModel) listenForwardEvents() tea.Cmd {
-	sub := m.fwdSub
-	return func() tea.Msg {
-		event, ok := <-sub
-		if !ok {
-			return nil
-		}
-		return tui.ForwardUpdatedMsg{Event: event}
-	}
-}
-
-func (m *MainModel) metricsTick() tea.Cmd {
-	return tea.Tick(metricsInterval, func(time.Time) tea.Msg {
-		return tui.MetricsTickMsg{}
-	})
-}
-
-func (m *MainModel) restoreSession() tea.Cmd {
-	return func() tea.Msg {
-		state, err := m.configManager.LoadState()
-		if err != nil {
-			return tui.SessionRestoredMsg{Err: err}
-		}
-		if state == nil {
-			return tui.SessionRestoredMsg{}
-		}
-
-		for _, rule := range state.ActiveForwards {
-			_ = m.forwardManager.StartForward(rule.Name)
-		}
-		return tui.SessionRestoredMsg{}
-	}
+func (m *MainModel) refreshForwardPanel() {
+	m.dashboard.SetForwardSessions(m.sessions)
 }
 
 func (m *MainModel) shutdown() tea.Cmd {
 	m.quitting = true
-
-	// アクティブなフォワードの状態を保存
-	sessions := m.forwardManager.GetAllSessions()
-	var activeRules []core.ForwardRule
-	for _, s := range sessions {
-		if s.Status == core.Active {
-			activeRules = append(activeRules, s.Rule)
-		}
+	// IPC クライアントをクリーンアップ（daemon は停止しない）
+	if m.subscriptionID != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = m.client.Unsubscribe(ctx, m.subscriptionID)
 	}
-
-	state := &core.State{
-		LastUpdated:    time.Now(),
-		ActiveForwards: activeRules,
-	}
-	_ = m.configManager.SaveState(state)
-
-	// 全フォワードを停止
-	m.forwardManager.Close()
-	m.sshManager.Close()
-
 	return tea.Quit
 }
 
-// --- ヘルパー ---
+// --- データ変換ヘルパー ---
 
-func (m *MainModel) handleSSHEvent(event core.SSHEvent) {
-	m.dashboard.UpdateHostState(event.HostName, connectionStateFromEvent(event.Type))
-	if event.Error != nil {
-		m.dashboard.AppendLog(
-			fmt.Sprintf("SSH [%s] %s: %s", event.HostName, event.Type, event.Error),
-		)
+func hostInfoToSSHHost(info ipc.HostInfo) core.SSHHost {
+	return core.SSHHost{
+		Name:               info.Name,
+		HostName:           info.HostName,
+		Port:               info.Port,
+		User:               info.User,
+		State:              parseConnectionState(info.State),
+		ActiveForwardCount: info.ActiveForwardCount,
 	}
 }
 
-func connectionStateFromEvent(eventType core.SSHEventType) core.ConnectionState {
-	switch eventType {
-	case core.SSHEventConnected:
+func sessionInfoToForwardSession(info ipc.SessionInfo) core.ForwardSession {
+	fwdType, _ := core.ParseForwardType(info.Type)
+	status := parseSessionStatus(info.Status)
+	var connectedAt time.Time
+	if info.ConnectedAt != "" {
+		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt)
+	}
+	return core.ForwardSession{
+		ID: info.ID,
+		Rule: core.ForwardRule{
+			Name:       info.Name,
+			Host:       info.Host,
+			Type:       fwdType,
+			LocalPort:  info.LocalPort,
+			RemoteHost: info.RemoteHost,
+			RemotePort: info.RemotePort,
+		},
+		Status:         status,
+		ConnectedAt:    connectedAt,
+		BytesSent:      info.BytesSent,
+		BytesReceived:  info.BytesReceived,
+		ReconnectCount: info.ReconnectCount,
+		LastError:      info.LastError,
+	}
+}
+
+func parseConnectionState(s string) core.ConnectionState {
+	switch s {
+	case "connected":
 		return core.Connected
-	case core.SSHEventDisconnected:
-		return core.Disconnected
-	case core.SSHEventReconnecting:
+	case "connecting":
+		return core.Connecting
+	case "reconnecting":
 		return core.Reconnecting
-	case core.SSHEventError:
+	case "error":
 		return core.ConnectionError
 	default:
 		return core.Disconnected
 	}
 }
 
-func (m *MainModel) refreshForwardPanel() {
-	sessions := m.forwardManager.GetAllSessions()
-	m.dashboard.SetForwardSessions(sessions)
-}
-
-func (m *MainModel) saveForwardRules() {
-	rules := m.forwardManager.GetRules()
-	_ = m.configManager.UpdateConfig(func(c *core.Config) {
-		c.Forwards = rules
-	})
-	m.config = m.configManager.GetConfig()
+func parseSessionStatus(s string) core.SessionStatus {
+	switch s {
+	case "active":
+		return core.Active
+	case "starting":
+		return core.Starting
+	case "reconnecting":
+		return core.SessionReconnecting
+	case "error":
+		return core.SessionError
+	default:
+		return core.Stopped
+	}
 }

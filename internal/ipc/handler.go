@@ -208,6 +208,7 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *RPCError) {
 		}
 	}
 
+	h.saveForwardRulesToConfig()
 	return ForwardAddResult{Name: name}, nil
 }
 
@@ -221,6 +222,7 @@ func (h *Handler) forwardDelete(params json.RawMessage) (any, *RPCError) {
 		return nil, toRPCError(err, InternalError)
 	}
 
+	h.saveForwardRulesToConfig()
 	return ForwardDeleteResult{OK: true}, nil
 }
 
@@ -412,6 +414,14 @@ func (h *Handler) eventsUnsubscribe(params json.RawMessage) (any, *RPCError) {
 }
 
 // --- ヘルパー関数 ---
+
+// saveForwardRulesToConfig はフォワードルールを設定ファイルに保存する。
+func (h *Handler) saveForwardRulesToConfig() {
+	rules := h.fwdMgr.GetRules()
+	_ = h.cfgMgr.UpdateConfig(func(c *core.Config) {
+		c.Forwards = rules
+	})
+}
 
 // parseParams は JSON-RPC パラメータをアンマーシャルする。
 func parseParams(params json.RawMessage, target any) *RPCError {

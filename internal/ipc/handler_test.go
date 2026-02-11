@@ -147,8 +147,9 @@ func (m *mockForwardManager) Subscribe() <-chan core.ForwardEvent {
 func (m *mockForwardManager) Close() {}
 
 type mockConfigManager struct {
-	config *core.Config
-	err    error
+	config         *core.Config
+	err            error
+	updateCallCount int
 }
 
 func (m *mockConfigManager) LoadConfig() (*core.Config, error)    { return m.config, m.err }
@@ -161,6 +162,7 @@ func (m *mockConfigManager) GetConfig() *core.Config {
 	return m.config
 }
 func (m *mockConfigManager) UpdateConfig(fn func(*core.Config)) error {
+	m.updateCallCount++
 	if m.err != nil {
 		return m.err
 	}
@@ -740,5 +742,57 @@ func TestHandler_MethodNotFound(t *testing.T) {
 	}
 	if rpcErr.Code != MethodNotFound {
 		t.Errorf("error code = %d, want %d (MethodNotFound)", rpcErr.Code, MethodNotFound)
+	}
+}
+
+func TestHandler_ForwardAdd_SavesConfig(t *testing.T) {
+	h, _, _, cfgMgr := newTestHandler()
+
+	params := mustMarshal(t, ForwardAddParams{
+		Name:       "db-tunnel",
+		Host:       "prod",
+		Type:       "local",
+		LocalPort:  5432,
+		RemoteHost: "localhost",
+		RemotePort: 5432,
+	})
+
+	before := cfgMgr.updateCallCount
+	_, rpcErr := h.Handle("client-1", "forward.add", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	if cfgMgr.updateCallCount <= before {
+		t.Error("forward.add should call UpdateConfig to auto-save rules")
+	}
+
+	// 保存されたルールに追加したルールが含まれることを確認
+	cfg := cfgMgr.GetConfig()
+	found := false
+	for _, f := range cfg.Forwards {
+		if f.Name == "db-tunnel" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("config.Forwards should contain the added rule")
+	}
+}
+
+func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
+	h, _, _, cfgMgr := newTestHandler()
+
+	params := mustMarshal(t, ForwardDeleteParams{Name: "web"})
+
+	before := cfgMgr.updateCallCount
+	_, rpcErr := h.Handle("client-1", "forward.delete", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	if cfgMgr.updateCallCount <= before {
+		t.Error("forward.delete should call UpdateConfig to auto-save rules")
 	}
 }
