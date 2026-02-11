@@ -72,7 +72,7 @@ func socks5ParseRequest(conn net.Conn) (string, error) {
 		return "", err
 	}
 
-	if reqHeader[0] != socks5Version || reqHeader[1] != socks5CmdConnect {
+	if reqHeader[0] != socks5Version || reqHeader[1] != socks5CmdConnect { //nolint:gosec // io.ReadFull guarantees len==4
 		// Command not supported
 		_, _ = conn.Write([]byte{socks5Version, socks5ReplyCommandNotSupported, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return "", fmt.Errorf("unsupported SOCKS5 command: %d", reqHeader[1]) //nolint:gosec // io.ReadFull guarantees len(reqHeader)==4
