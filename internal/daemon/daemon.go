@@ -281,16 +281,11 @@ func (d *Daemon) Status() ipc.DaemonStatusResult {
 		}
 	}
 
-	// SSH 接続数はホスト一覧から計算する
-	// ReloadHosts ではなく GetRules のように副作用のないアクセスを使いたいが、
-	// 現在の SSHManager には読み取り専用の GetHosts がないため LoadHosts を使用する
+	// SSH 接続数はキャッシュ済みホスト一覧から計算する（再解析の副作用なし）
 	activeSSH := 0
-	hosts, err := d.sshMgr.LoadHosts()
-	if err == nil {
-		for _, h := range hosts {
-			if h.State == core.Connected {
-				activeSSH++
-			}
+	for _, h := range d.sshMgr.GetHosts() {
+		if h.State == core.Connected {
+			activeSSH++
 		}
 	}
 

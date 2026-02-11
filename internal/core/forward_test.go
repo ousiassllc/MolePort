@@ -35,6 +35,7 @@ func newMockSSHManager() *mockSSHManager {
 
 func (m *mockSSHManager) LoadHosts() ([]SSHHost, error)   { return nil, nil }
 func (m *mockSSHManager) ReloadHosts() ([]SSHHost, error) { return nil, nil }
+func (m *mockSSHManager) GetHosts() []SSHHost             { return nil }
 
 func (m *mockSSHManager) GetHost(name string) (*SSHHost, error) {
 	m.mu.RLock()

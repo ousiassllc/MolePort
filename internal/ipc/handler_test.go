@@ -34,6 +34,10 @@ func (m *mockSSHManager) ReloadHosts() ([]core.SSHHost, error) {
 	return m.hosts, nil
 }
 
+func (m *mockSSHManager) GetHosts() []core.SSHHost {
+	return m.hosts
+}
+
 func (m *mockSSHManager) GetHost(name string) (*core.SSHHost, error) {
 	for _, h := range m.hosts {
 		if h.Name == name {
