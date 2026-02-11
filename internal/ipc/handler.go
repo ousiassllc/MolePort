@@ -11,7 +11,7 @@ import (
 // DaemonInfo はデーモンの状態情報とシャットダウンを提供するインターフェース。
 type DaemonInfo interface {
 	Status() DaemonStatusResult
-	Shutdown() error
+	Shutdown(purge bool) error
 }
 
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
@@ -61,6 +61,8 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 		return h.forwardStart(params)
 	case "forward.stop":
 		return h.forwardStop(params)
+	case "forward.stopAll":
+		return h.forwardStopAll()
 	case "session.list":
 		return h.sessionList()
 	case "session.get":
@@ -72,7 +74,7 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 	case "daemon.status":
 		return h.daemonStatus()
 	case "daemon.shutdown":
-		return h.daemonShutdown()
+		return h.daemonShutdown(params)
 	case "events.subscribe":
 		return h.eventsSubscribe(clientID, params)
 	case "events.unsubscribe":
@@ -258,6 +260,22 @@ func (h *Handler) forwardStop(params json.RawMessage) (any, *RPCError) {
 	}, nil
 }
 
+func (h *Handler) forwardStopAll() (any, *RPCError) {
+	sessions := h.fwdMgr.GetAllSessions()
+	active := 0
+	for _, s := range sessions {
+		if s.Status == core.Active {
+			active++
+		}
+	}
+
+	if err := h.fwdMgr.StopAllForwards(); err != nil {
+		return nil, toRPCError(err, InternalError)
+	}
+
+	return ForwardStopAllResult{Stopped: active}, nil
+}
+
 // --- セッション情報 ---
 
 func (h *Handler) sessionList() (any, *RPCError) {
@@ -365,11 +383,17 @@ func (h *Handler) daemonStatus() (any, *RPCError) {
 	return h.daemon.Status(), nil
 }
 
-func (h *Handler) daemonShutdown() (any, *RPCError) {
+func (h *Handler) daemonShutdown(params json.RawMessage) (any, *RPCError) {
 	if h.daemon == nil {
 		return nil, &RPCError{Code: InternalError, Message: "daemon not available"}
 	}
-	if err := h.daemon.Shutdown(); err != nil {
+
+	var p DaemonShutdownParams
+	if len(params) > 0 {
+		json.Unmarshal(params, &p)
+	}
+
+	if err := h.daemon.Shutdown(p.Purge); err != nil {
 		return nil, toRPCError(err, InternalError)
 	}
 	return DaemonShutdownResult{OK: true}, nil

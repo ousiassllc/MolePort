@@ -45,6 +45,7 @@ type Daemon struct {
 	mu      sync.Mutex
 	wg      sync.WaitGroup
 	stopped bool
+	purge   bool
 }
 
 // New は新しい Daemon を生成する。
@@ -162,7 +163,13 @@ func (d *Daemon) Stop() error {
 		d.cancel()
 	}
 
-	d.saveState()
+	if d.purge {
+		if err := d.cfgMgr.DeleteState(); err != nil {
+			slog.Warn("failed to delete state", "error", err)
+		}
+	} else {
+		d.saveState()
+	}
 
 	if err := d.fwdMgr.StopAllForwards(); err != nil {
 		slog.Warn("failed to stop all forwards", "error", err)
@@ -303,7 +310,12 @@ func (d *Daemon) Status() ipc.DaemonStatusResult {
 }
 
 // Shutdown はデーモンのコンテキストをキャンセルし、Wait() 経由で graceful shutdown を開始する。
-func (d *Daemon) Shutdown() error {
+// purge が true の場合、停止時に状態ファイルを削除する。
+func (d *Daemon) Shutdown(purge bool) error {
+	d.mu.Lock()
+	d.purge = purge
+	d.mu.Unlock()
+
 	if d.cancel != nil {
 		d.cancel()
 	}

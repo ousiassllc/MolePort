@@ -218,6 +218,11 @@ type ForwardStopResult struct {
 	Status string `json:"status"`
 }
 
+// ForwardStopAllResult は forward.stopAll リクエストの結果。
+type ForwardStopAllResult struct {
+	Stopped int `json:"stopped"`
+}
+
 // --- セッション情報 ---
 
 // SessionListParams は session.list リクエストのパラメータ。
@@ -335,7 +340,9 @@ type DaemonStatusResult struct {
 }
 
 // DaemonShutdownParams は daemon.shutdown リクエストのパラメータ。
-type DaemonShutdownParams struct{}
+type DaemonShutdownParams struct {
+	Purge bool `json:"purge,omitempty"`
+}
 
 // DaemonShutdownResult は daemon.shutdown リクエストの結果。
 type DaemonShutdownResult struct {

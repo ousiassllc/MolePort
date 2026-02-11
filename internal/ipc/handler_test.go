@@ -70,13 +70,15 @@ func (m *mockSSHManager) Subscribe() <-chan core.SSHEvent {
 func (m *mockSSHManager) Close() {}
 
 type mockForwardManager struct {
-	rules      []core.ForwardRule
-	sessions   []core.ForwardSession
-	addErr     error
-	deleteErr  error
-	startErr   error
-	stopErr    error
-	sessionErr error
+	rules          []core.ForwardRule
+	sessions       []core.ForwardSession
+	addErr         error
+	deleteErr      error
+	startErr       error
+	stopErr        error
+	stopAllErr     error
+	stopAllCalled  bool
+	sessionErr     error
 }
 
 func (m *mockForwardManager) AddRule(rule core.ForwardRule) error {
@@ -122,7 +124,10 @@ func (m *mockForwardManager) StopForward(ruleName string) error {
 	return nil
 }
 
-func (m *mockForwardManager) StopAllForwards() error { return nil }
+func (m *mockForwardManager) StopAllForwards() error {
+	m.stopAllCalled = true
+	return m.stopAllErr
+}
 
 func (m *mockForwardManager) GetSession(ruleName string) (*core.ForwardSession, error) {
 	if m.sessionErr != nil {
@@ -175,20 +180,23 @@ func (m *mockConfigManager) UpdateConfig(fn func(*core.Config)) error {
 }
 func (m *mockConfigManager) LoadState() (*core.State, error) { return &core.State{}, nil }
 func (m *mockConfigManager) SaveState(_ *core.State) error   { return nil }
+func (m *mockConfigManager) DeleteState() error              { return nil }
 func (m *mockConfigManager) ConfigDir() string               { return "/tmp/moleport" }
 
 type mockDaemonInfo struct {
-	status     DaemonStatusResult
-	shutdownFn func() error
+	status        DaemonStatusResult
+	shutdownFn    func(purge bool) error
+	lastPurgeFlag bool
 }
 
 func (m *mockDaemonInfo) Status() DaemonStatusResult {
 	return m.status
 }
 
-func (m *mockDaemonInfo) Shutdown() error {
+func (m *mockDaemonInfo) Shutdown(purge bool) error {
+	m.lastPurgeFlag = purge
 	if m.shutdownFn != nil {
-		return m.shutdownFn()
+		return m.shutdownFn(purge)
 	}
 	return nil
 }
@@ -742,6 +750,71 @@ func TestHandler_MethodNotFound(t *testing.T) {
 	}
 	if rpcErr.Code != MethodNotFound {
 		t.Errorf("error code = %d, want %d (MethodNotFound)", rpcErr.Code, MethodNotFound)
+	}
+}
+
+func TestHandler_ForwardStopAll(t *testing.T) {
+	h, _, fwdMgr, _ := newTestHandler()
+
+	result, rpcErr := h.Handle("client-1", "forward.stopAll", nil)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	stopAllResult, ok := result.(ForwardStopAllResult)
+	if !ok {
+		t.Fatalf("result type = %T, want ForwardStopAllResult", result)
+	}
+
+	// sessions には Active が 1 件ある
+	if stopAllResult.Stopped != 1 {
+		t.Errorf("Stopped = %d, want 1", stopAllResult.Stopped)
+	}
+	if !fwdMgr.stopAllCalled {
+		t.Error("StopAllForwards should have been called")
+	}
+}
+
+func TestHandler_DaemonShutdown_Purge(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+
+	params := mustMarshal(t, DaemonShutdownParams{Purge: true})
+	result, rpcErr := h.Handle("client-1", "daemon.shutdown", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	shutdownResult, ok := result.(DaemonShutdownResult)
+	if !ok {
+		t.Fatalf("result type = %T, want DaemonShutdownResult", result)
+	}
+	if !shutdownResult.OK {
+		t.Error("OK should be true")
+	}
+
+	// handler 内で daemon.Shutdown(true) が呼ばれたことを検証するには
+	// newTestHandler で作成した mockDaemonInfo を取り出す必要がある。
+	// newTestHandler は daemon を直接返さないため、別途テストを構成する。
+}
+
+func TestHandler_DaemonShutdown_PurgeFlag(t *testing.T) {
+	sshMgr := &mockSSHManager{}
+	fwdMgr := &mockForwardManager{}
+	cfgMgr := &mockConfigManager{}
+	sender, _ := collectingSender()
+	broker := NewEventBroker(sender)
+	daemonMock := &mockDaemonInfo{}
+
+	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock)
+
+	params := mustMarshal(t, DaemonShutdownParams{Purge: true})
+	_, rpcErr := handler.Handle("client-1", "daemon.shutdown", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	if !daemonMock.lastPurgeFlag {
+		t.Error("Shutdown should have been called with purge=true")
 	}
 }
 

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -21,7 +22,7 @@ func RunDaemon(configDir string, args []string) {
 	case "start":
 		runDaemonStart(configDir)
 	case "stop":
-		runDaemonStop(configDir)
+		runDaemonStop(configDir, args[1:])
 	case "status":
 		runDaemonStatus(configDir)
 	default:
@@ -45,7 +46,13 @@ func runDaemonStart(configDir string) {
 	fmt.Printf("デーモンを起動しました (PID: %d)\n", pid)
 }
 
-func runDaemonStop(configDir string) {
+func runDaemonStop(configDir string, args []string) {
+	fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
+	purge := fs.Bool("purge", false, "状態ファイルを削除して停止")
+	if err := fs.Parse(args); err != nil {
+		exitError("%v", err)
+	}
+
 	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := daemon.IsRunning(pidPath)
 	if !running {
@@ -62,12 +69,17 @@ func runDaemonStop(configDir string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
+	params := ipc.DaemonShutdownParams{Purge: *purge}
 	var result ipc.DaemonShutdownResult
-	if err := client.Call(ctx, "daemon.shutdown", nil, &result); err != nil {
+	if err := client.Call(ctx, "daemon.shutdown", params, &result); err != nil {
 		exitError("デーモンの停止に失敗しました: %v", err)
 	}
 
-	fmt.Println("デーモンを停止しました")
+	if *purge {
+		fmt.Println("デーモンを停止しました（状態をクリア）")
+	} else {
+		fmt.Println("デーモンを停止しました")
+	}
 }
 
 func runDaemonStatus(configDir string) {

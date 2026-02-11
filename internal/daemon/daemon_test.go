@@ -162,7 +162,7 @@ func TestDaemon_Shutdown(t *testing.T) {
 	}
 
 	// Shutdown はコンテキストをキャンセルする
-	if err := d.Shutdown(); err != nil {
+	if err := d.Shutdown(false); err != nil {
 		t.Fatalf("Shutdown() error: %v", err)
 	}
 
