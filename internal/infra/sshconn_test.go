@@ -2,7 +2,11 @@ package infra
 
 import (
 	"context"
+	"net"
 	"testing"
+	"time"
+
+	"github.com/ousiassllc/moleport/internal/core"
 )
 
 func TestNewSSHConnection_IsAliveReturnsFalse(t *testing.T) {
@@ -54,5 +58,53 @@ func TestSSHConnection_DynamicForwardNotConnected(t *testing.T) {
 	_, err := conn.DynamicForward(ctx, 1080)
 	if err == nil {
 		t.Error("DynamicForward should return error when not connected")
+	}
+}
+
+// TestSSHConnection_DialTimeoutOnHangingHandshake は SSH ハンドシェイクが
+// ハングした場合にタイムアウトでエラーが返ることを検証する回帰テスト。
+func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
+	// TCP accept するがデータを送らないサーバー（ハンドシェイクがハングする状況を再現）
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	// accept してコネクションを保持するだけ（何も送らない）
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			// コネクションを閉じずに保持（ハンドシェイクがハングする状況）
+			defer func() { _ = conn.Close() }()
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+
+	host := core.SSHHost{
+		Name:     "test-hang",
+		HostName: "127.0.0.1",
+		Port:     addr.Port,
+		User:     "testuser",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	start := time.Now()
+	_, dialErr := conn.Dial(host)
+	elapsed := time.Since(start)
+
+	if dialErr == nil {
+		t.Fatal("Dial should return error when handshake hangs")
+	}
+
+	// 10 秒タイムアウト + 余裕で 15 秒以内に返ること
+	if elapsed > 15*time.Second {
+		t.Errorf("Dial took too long: %v (expected < 15s)", elapsed)
 	}
 }

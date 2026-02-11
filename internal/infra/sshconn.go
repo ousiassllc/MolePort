@@ -77,15 +77,41 @@ func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
 		User:            host.User,
 		Auth:            authMethods,
 		HostKeyCallback: hostKeyCallback,
-		Timeout:         10 * time.Second,
 	}
 
-	addr := fmt.Sprintf("%s:%d", host.HostName, host.Port)
-	client, err := ssh.Dial("tcp", addr, config)
+	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
+	timeout := 10 * time.Second
+
+	// TCP 接続（タイムアウト付き）
+	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		closeAgent()
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
+
+	// TCP + SSH ハンドシェイク全体にデッドラインを設定
+	if err := tcpConn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		_ = tcpConn.Close()
+		closeAgent()
+		return nil, fmt.Errorf("failed to set deadline: %w", err)
+	}
+
+	// SSH ハンドシェイク（デッドラインが適用される）
+	sshConn, chans, reqs, err := ssh.NewClientConn(tcpConn, addr, config)
+	if err != nil {
+		_ = tcpConn.Close()
+		closeAgent()
+		return nil, fmt.Errorf("failed to establish SSH connection to %s: %w", addr, err)
+	}
+
+	// ハンドシェイク完了後、デッドラインをクリア
+	if err := tcpConn.SetDeadline(time.Time{}); err != nil {
+		_ = sshConn.Close()
+		closeAgent()
+		return nil, fmt.Errorf("failed to clear deadline: %w", err)
+	}
+
+	client := ssh.NewClient(sshConn, chans, reqs)
 
 	c.mu.Lock()
 	c.client = client

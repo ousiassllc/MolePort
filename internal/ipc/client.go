@@ -9,6 +9,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // IPCClient は Unix ドメインソケット経由でデーモンと通信するクライアント。
@@ -66,8 +67,11 @@ func (c *IPCClient) Close() error {
 		err = c.conn.Close()
 	}
 
-	// readLoop の終了を待つ
-	<-c.done
+	// readLoop の終了を待つ（タイムアウト付き）
+	select {
+	case <-c.done:
+	case <-time.After(3 * time.Second):
+	}
 
 	// 保留中のリクエストをすべてエラーで解決する
 	c.pendingMu.Lock()
