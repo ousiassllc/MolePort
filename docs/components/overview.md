@@ -313,6 +313,8 @@ case "config.get":    return h.handleConfigGet(params)
 case "config.update": return h.handleConfigUpdate(params)
 case "daemon.status": return h.handleDaemonStatus(params)
 case "daemon.shutdown": return h.handleDaemonShutdown(params)
+case "events.subscribe": return h.handleEventsSubscribe(params)
+case "events.unsubscribe": return h.handleEventsUnsubscribe(params)
 default:              return nil, &RPCError{Code: -32601, Message: "method not found"}
 }
 ```

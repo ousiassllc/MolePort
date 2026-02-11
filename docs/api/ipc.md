@@ -699,7 +699,7 @@ SSH 接続状態の変化。
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| type | string | `"connected"` / `"disconnected"` / `"reconnecting"` / `"error"` |
+| type | string | `"connecting"` / `"connected"` / `"disconnected"` / `"reconnecting"` / `"error"` |
 | host | string | ホスト名 |
 | error | string | エラーメッセージ（エラー時のみ） |
 

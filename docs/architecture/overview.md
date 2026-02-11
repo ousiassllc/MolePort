@@ -137,7 +137,7 @@ sequenceDiagram
     participant Daemon as デーモンプロセス
 
     User->>CLI: moleport daemon stop
-    CLI->>Daemon: JSON-RPC: shutdown
+    CLI->>Daemon: JSON-RPC: daemon.shutdown
     Daemon->>Daemon: 全クライアントに shutdown 通知
     Daemon->>Daemon: 全ポートフォワーディング停止
     Daemon->>Daemon: 全 SSH 接続切断
@@ -193,7 +193,7 @@ sequenceDiagram
     participant Daemon as デーモン
 
     TUI->>Daemon: {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"types":["forward","ssh","metrics"]}}
-    Daemon-->>TUI: {"jsonrpc":"2.0","id":1,"result":{"subscriptionId":"sub-1"}}
+    Daemon-->>TUI: {"jsonrpc":"2.0","id":1,"result":{"subscription_id":"sub-1"}}
 
     Note over Daemon,TUI: 以降、状態変化時にデーモンから通知が送られる
 
@@ -201,7 +201,7 @@ sequenceDiagram
     Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.metrics","params":{"sessions":[...]}}
     Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.ssh","params":{"type":"disconnected","host":"prod-server",...}}
 
-    TUI->>Daemon: {"jsonrpc":"2.0","id":2,"method":"events.unsubscribe","params":{"subscriptionId":"sub-1"}}
+    TUI->>Daemon: {"jsonrpc":"2.0","id":2,"method":"events.unsubscribe","params":{"subscription_id":"sub-1"}}
     Daemon-->>TUI: {"jsonrpc":"2.0","id":2,"result":{"ok":true}}
 ```
 
@@ -332,7 +332,7 @@ graph TD
 - **設計方針**: 各サブコマンドが IPC Client を介してデーモンに操作を要求し、結果を表示する
 - **主要コンポーネント**:
   - `CLIRouter`: サブコマンドの解析とディスパッチ（Go 標準の `flag` パッケージ）
-  - 各サブコマンドハンドラ: `daemon`, `connect`, `disconnect`, `add`, `delete`, `list`, `status`, `tui` 等
+  - 各サブコマンドハンドラ: `daemon`, `connect`, `disconnect`, `add`, `delete`, `start`, `stop`, `list`, `status`, `config`, `reload`, `tui`, `help`, `version`
 
 ## ディレクトリ構成
 
