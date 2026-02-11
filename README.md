@@ -36,8 +36,12 @@ cd MolePort
 make install
 ```
 
-`make install` は `$GOPATH/bin`（または `~/go/bin`）にバイナリをコピーします。
-PATH に含まれていれば `moleport` コマンドとして使えます。
+`make install` は `go install` でバイナリを `$(go env GOPATH)/bin` にインストールします。
+PATH に含まれていない場合はシェル設定に追加してください:
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
 
 ビルドのみ（`./bin/moleport` に出力）の場合:
 

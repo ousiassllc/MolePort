@@ -39,6 +39,5 @@ fmt: ## go fmt を実行
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)
 
-install: build ## $GOPATH/bin にインストール
-	cp $(BUILD_DIR)/$(APP_NAME) $(GOPATH)/bin/$(APP_NAME) 2>/dev/null || \
-		cp $(BUILD_DIR)/$(APP_NAME) $(HOME)/go/bin/$(APP_NAME)
+install: ## $GOPATH/bin にインストール
+	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" ./cmd/moleport
