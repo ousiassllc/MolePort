@@ -82,17 +82,24 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	}
 
 	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
-	timeout := 10 * time.Second
+	dialTimeout := 10 * time.Second
+
+	// クレデンシャルコールバックがある場合、ハンドシェイク中にユーザー入力を待つため
+	// デッドラインを長くする。
+	handshakeTimeout := dialTimeout
+	if cb != nil {
+		handshakeTimeout = 120 * time.Second
+	}
 
 	// TCP 接続（タイムアウト付き）
-	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
+	tcpConn, err := net.DialTimeout("tcp", addr, dialTimeout)
 	if err != nil {
 		closeAgent()
 		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
 	}
 
 	// TCP + SSH ハンドシェイク全体にデッドラインを設定
-	if err := tcpConn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err := tcpConn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
 		_ = tcpConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to set deadline: %w", err)
