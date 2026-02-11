@@ -238,6 +238,7 @@ classDiagram
         Connecting
         Connected
         Reconnecting
+        PendingAuth
         Error
     }
 
@@ -320,6 +321,7 @@ const (
     Connecting
     Connected
     Reconnecting
+    PendingAuth      // セッション復元時にクレデンシャル待ち
     ConnectionError
 )
 
@@ -388,12 +390,15 @@ stateDiagram-v2
     [*] --> Disconnected
 
     Disconnected --> Connecting : Connect()
+    Disconnected --> PendingAuth : セッション復元（クレデンシャル必要）
     Connecting --> Connected : 認証成功
     Connecting --> Error : 認証失敗 / タイムアウト
     Connected --> Disconnected : Disconnect()
     Connected --> Reconnecting : 接続断検知
     Reconnecting --> Connected : 再接続成功
     Reconnecting --> Error : 最大リトライ超過
+    PendingAuth --> Connecting : Connect()（ユーザー手動）
+    PendingAuth --> Disconnected : Dismiss()
     Error --> Connecting : Connect() (手動)
     Error --> Disconnected : Dismiss()
 ```
@@ -695,7 +700,7 @@ type EventsUnsubscribeResult struct {
 ```go
 // event.ssh（デーモン → クライアント通知）
 type SSHEventNotification struct {
-    Type  string `json:"type"`  // "connected" | "disconnected" | "reconnecting" | "error"
+    Type  string `json:"type"`  // "connected" | "disconnected" | "reconnecting" | "pending_auth" | "error"
     Host  string `json:"host"`
     Error string `json:"error,omitempty"`
 }
@@ -721,6 +726,45 @@ type SessionMetrics struct {
 }
 ```
 
+### クレデンシャル要求/応答
+
+```go
+// CredentialType はクレデンシャル要求の種別を表す。
+type CredentialType string
+
+const (
+    CredentialPassword            CredentialType = "password"              // パスワード認証
+    CredentialPassphrase          CredentialType = "passphrase"            // パスフレーズ付き秘密鍵
+    CredentialKeyboardInteractive CredentialType = "keyboard-interactive"  // keyboard-interactive 認証
+)
+
+// credential.request（デーモン → クライアント通知）
+// ssh.connect の処理中にクレデンシャルが必要になった場合に送信される。
+type CredentialRequestNotification struct {
+    RequestID string         `json:"request_id"`             // リクエスト一意 ID（レスポンスとの紐付け用）
+    Type      CredentialType `json:"type"`                   // 認証種別
+    Host      string         `json:"host"`                   // 対象ホスト名
+    Prompt    string         `json:"prompt,omitempty"`       // password/passphrase 用の表示プロンプト
+    Prompts   []PromptInfo   `json:"prompts,omitempty"`      // keyboard-interactive 用（複数プロンプト対応）
+}
+
+type PromptInfo struct {
+    Prompt string `json:"prompt"`    // プロンプト文字列（例: "Password:", "OTP Code:"）
+    Echo   bool   `json:"echo"`      // true の場合は入力をエコー表示する（OTP 等）
+}
+
+// credential.response（クライアント → デーモン）
+type CredentialResponseParams struct {
+    RequestID string   `json:"request_id"`             // 対応する request_id
+    Value     string   `json:"value,omitempty"`        // password/passphrase 用の値
+    Answers   []string `json:"answers,omitempty"`      // keyboard-interactive 用の回答リスト
+    Cancelled bool     `json:"cancelled,omitempty"`    // ユーザーがキャンセルした場合 true
+}
+type CredentialResponseResult struct {
+    OK bool `json:"ok"`
+}
+```
+
 ### JSON-RPC エラーコード
 
 | コード | 定数名 | 説明 |
@@ -737,6 +781,8 @@ type SessionMetrics struct {
 | 1005 | RuleAlreadyExists | ルール名が重複 |
 | 1006 | PortConflict | ポートが使用中 |
 | 1007 | AuthenticationFailed | SSH 認証失敗 |
+| 1008 | CredentialTimeout | クレデンシャル応答タイムアウト（30秒） |
+| 1009 | CredentialCancelled | ユーザーがクレデンシャル入力をキャンセル |
 
 ## 改訂履歴
 
@@ -745,3 +791,4 @@ type SessionMetrics struct {
 | 1.0 | 2026-02-10 | 初版作成 | — |
 | 1.1 | 2026-02-10 | 内部データモデルの Go 型定義を追加、ForwardRule.Name の一意性スコープを明確化 | 整合性チェック |
 | 2.0 | 2026-02-11 | デーモン化対応: DaemonState 追加、PID ファイル定義、IPC メッセージ型定義（全メソッド）追加 | デーモン化対応 |
+| 2.1 | 2026-02-11 | PendingAuth 状態追加、クレデンシャル要求/応答型定義追加、エラーコード 1008/1009 追加、SSH イベントに pending_auth 追加 | #11 クレデンシャル入力機能追加 |
