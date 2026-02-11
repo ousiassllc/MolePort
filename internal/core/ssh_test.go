@@ -42,7 +42,7 @@ type mockSSHConnection struct {
 	dynamicForwardF func(ctx context.Context, localPort int) (net.Listener, error)
 }
 
-func (m *mockSSHConnection) Dial(host SSHHost) (*ssh.Client, error) {
+func (m *mockSSHConnection) Dial(host SSHHost, cb CredentialCallback) (*ssh.Client, error) {
 	if m.dialErr != nil {
 		return nil, m.dialErr
 	}
@@ -693,6 +693,147 @@ func TestSSHManager_Disconnect_StopsReconnect(t *testing.T) {
 	if countLater > countAfterDisconnect+1 {
 		t.Errorf("reconnect continued after Disconnect: count went from %d to %d",
 			countAfterDisconnect, countLater)
+	}
+
+	sm.Close()
+}
+
+func TestSSHManager_Connect_AuthFailure_PendingAuth(t *testing.T) {
+	hosts := testHosts()
+	sm := newTestSSHManager(hosts, func() SSHConnection {
+		return &mockSSHConnection{
+			dialErr: fmt.Errorf("ssh: handshake failed: ssh: unable to authenticate"),
+			isAlive: false,
+		}
+	})
+
+	if _, err := sm.LoadHosts(); err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+
+	events := sm.Subscribe()
+
+	err := sm.Connect("server1")
+	if err == nil {
+		t.Fatal("Connect() should return error on auth failure")
+	}
+
+	// PendingAuth イベントを受信
+	select {
+	case evt := <-events:
+		if evt.Type != SSHEventPendingAuth {
+			t.Errorf("expected SSHEventPendingAuth, got %v", evt.Type)
+		}
+		if evt.HostName != "server1" {
+			t.Errorf("expected host 'server1', got %q", evt.HostName)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for PendingAuth event")
+	}
+
+	// ホスト状態が PendingAuth であることを確認
+	host, _ := sm.GetHost("server1")
+	if host.State != PendingAuth {
+		t.Errorf("expected PendingAuth state, got %v", host.State)
+	}
+
+	sm.Close()
+}
+
+func TestSSHManager_ConnectWithCallback_Success(t *testing.T) {
+	hosts := testHosts()
+	mockConn := &mockSSHConnection{client: nil, isAlive: true}
+	sm := newTestSSHManager(hosts, func() SSHConnection {
+		return mockConn
+	})
+
+	if _, err := sm.LoadHosts(); err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+
+	cb := func(req CredentialRequest) (CredentialResponse, error) {
+		return CredentialResponse{Value: "secret"}, nil
+	}
+
+	if err := sm.ConnectWithCallback("server1", cb); err != nil {
+		t.Fatalf("ConnectWithCallback() error = %v", err)
+	}
+
+	if !sm.IsConnected("server1") {
+		t.Error("server1 should be connected after ConnectWithCallback")
+	}
+
+	sm.Close()
+}
+
+func TestSSHManager_GetPendingAuthHosts(t *testing.T) {
+	hosts := testHosts()
+	sm := newTestSSHManager(hosts, func() SSHConnection {
+		return &mockSSHConnection{
+			dialErr: fmt.Errorf("ssh: unable to authenticate"),
+			isAlive: false,
+		}
+	})
+
+	if _, err := sm.LoadHosts(); err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+
+	// 両方のホストに接続を試行（認証失敗 → PendingAuth）
+	_ = sm.Connect("server1")
+	_ = sm.Connect("server2")
+
+	pendingHosts := sm.GetPendingAuthHosts()
+	if len(pendingHosts) != 2 {
+		t.Fatalf("expected 2 pending auth hosts, got %d", len(pendingHosts))
+	}
+
+	sm.Close()
+}
+
+func TestSSHManager_ConnectWithCallback_ClearsPendingAuth(t *testing.T) {
+	hosts := testHosts()
+	callCount := 0
+	sm := newTestSSHManager(hosts, func() SSHConnection {
+		callCount++
+		if callCount == 1 {
+			// 最初の Connect (cb=nil) は認証失敗
+			return &mockSSHConnection{
+				dialErr: fmt.Errorf("ssh: unable to authenticate"),
+				isAlive: false,
+			}
+		}
+		// 2回目 ConnectWithCallback は成功
+		return &mockSSHConnection{client: nil, isAlive: true}
+	})
+
+	if _, err := sm.LoadHosts(); err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+
+	// まず Connect で PendingAuth にする
+	_ = sm.Connect("server1")
+	host, _ := sm.GetHost("server1")
+	if host.State != PendingAuth {
+		t.Fatalf("expected PendingAuth, got %v", host.State)
+	}
+
+	// ConnectWithCallback で接続成功
+	cb := func(req CredentialRequest) (CredentialResponse, error) {
+		return CredentialResponse{Value: "password"}, nil
+	}
+	if err := sm.ConnectWithCallback("server1", cb); err != nil {
+		t.Fatalf("ConnectWithCallback() error = %v", err)
+	}
+
+	host, _ = sm.GetHost("server1")
+	if host.State != Connected {
+		t.Errorf("expected Connected, got %v", host.State)
+	}
+
+	pendingHosts := sm.GetPendingAuthHosts()
+	if len(pendingHosts) != 0 {
+		t.Errorf("expected 0 pending auth hosts, got %d", len(pendingHosts))
 	}
 
 	sm.Close()

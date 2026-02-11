@@ -54,6 +54,12 @@ func (m *mockSSHManager) Connect(hostName string) error {
 	return nil
 }
 
+func (m *mockSSHManager) ConnectWithCallback(hostName string, cb core.CredentialCallback) error {
+	return m.Connect(hostName)
+}
+
+func (m *mockSSHManager) GetPendingAuthHosts() []string { return nil }
+
 func (m *mockSSHManager) Disconnect(hostName string) error {
 	if m.disconnFn != nil {
 		return m.disconnFn(hostName)

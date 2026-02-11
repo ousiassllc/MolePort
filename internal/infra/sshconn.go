@@ -20,7 +20,9 @@ import (
 // SSHConnection は SSH 接続とポートフォワーディングの低レベル操作を提供する。
 type SSHConnection interface {
 	// Dial はホストへ SSH 接続を確立する。
-	Dial(host core.SSHHost) (*ssh.Client, error)
+	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。
+	// cb が非 nil の場合、パスワード・パスフレーズ・keyboard-interactive 認証も試行する。
+	Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error)
 
 	// Close は接続を閉じる。
 	Close() error
@@ -52,8 +54,8 @@ func NewSSHConnection() SSHConnection {
 	return &sshConnection{}
 }
 
-func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
-	authMethods, agentCloser := buildAuthMethods(host, nil)
+func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
+	authMethods, agentCloser := buildAuthMethods(host, cb)
 	if len(authMethods) == 0 {
 		if agentCloser != nil {
 			agentCloser.Close()
