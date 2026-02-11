@@ -37,10 +37,7 @@ func (p *PIDFile) Acquire() error {
 		f.Close()
 		return fmt.Errorf("truncate pid file: %w", err)
 	}
-	if _, err := f.Seek(0, 0); err != nil {
-		f.Close()
-		return fmt.Errorf("seek pid file: %w", err)
-	}
+	// OpenFile 直後のためオフセットは 0。Seek は不要。
 
 	pid := os.Getpid()
 	if _, err := fmt.Fprintf(f, "%d\n", pid); err != nil {

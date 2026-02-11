@@ -100,12 +100,22 @@ func buildHostKeyCallback() (ssh.HostKeyCallback, error) {
 	callback, err := knownhosts.New(knownHostsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// known_hosts ファイルが存在しない場合は初回接続と同様に扱う。
-			// SSH の StrictHostKeyChecking=ask と同等の動作。
-			slog.Warn("known_hosts file not found, accepting all host keys",
+			// known_hosts が存在しない場合は空ファイルを自動生成し、
+			// 以降の接続でホストキーが記録されるようにする。
+			slog.Warn("known_hosts file not found, creating empty file",
 				"path", knownHostsPath)
-			//nolint:gosec // 初回接続時: known_hosts が存在しない場合のフォールバック
-			return ssh.InsecureIgnoreHostKey(), nil
+			if mkErr := os.MkdirAll(filepath.Dir(knownHostsPath), 0700); mkErr != nil {
+				return nil, fmt.Errorf("failed to create .ssh directory: %w", mkErr)
+			}
+			if mkErr := os.WriteFile(knownHostsPath, nil, 0600); mkErr != nil {
+				return nil, fmt.Errorf("failed to create known_hosts: %w", mkErr)
+			}
+			// 空ファイルで再読込（全ホストキーを未知として扱う）
+			callback, err = knownhosts.New(knownHostsPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load known_hosts after creation: %w", err)
+			}
+			return callback, nil
 		}
 		return nil, fmt.Errorf("failed to load known_hosts (%s): %w", knownHostsPath, err)
 	}

@@ -12,6 +12,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// defaultKeepAliveInterval は SSH 接続の KeepAlive 送信間隔。
+const defaultKeepAliveInterval = 30 * time.Second
+
 // SSHConfigParser は SSH config ファイルを解析しホスト定義を抽出する。
 // infra.SSHConfigParser と同じインターフェースで、import cycle を回避するために core で定義する。
 type SSHConfigParser interface {
@@ -210,7 +213,7 @@ func (m *sshManager) Connect(hostName string) error {
 
 	// KeepAlive goroutine
 	go func() {
-		conn.KeepAlive(ctx, 30*time.Second)
+		conn.KeepAlive(ctx, defaultKeepAliveInterval)
 		// KeepAlive が終了した場合（コンテキストキャンセル以外）、切断を検出
 		select {
 		case <-ctx.Done():
@@ -333,7 +336,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		m.mu.Unlock()
 
 		go func() {
-			conn.KeepAlive(ctx, 30*time.Second)
+			conn.KeepAlive(ctx, defaultKeepAliveInterval)
 			select {
 			case <-ctx.Done():
 				return
