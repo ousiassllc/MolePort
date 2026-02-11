@@ -419,7 +419,11 @@ func (p SetupPanel) viewHostList(contentWidth int) []string {
 				Selected: i == p.hostCursor,
 				Width:    contentWidth,
 			}
-			rows = append(rows, "  "+row.View())
+			prefix := "  "
+			if i == p.hostCursor {
+				prefix = tui.ActiveStyle.Render("> ")
+			}
+			rows = append(rows, prefix+row.View())
 		}
 	}
 
