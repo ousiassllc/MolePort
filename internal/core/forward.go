@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,23 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+// SOCKS5 プロトコル定数
+const (
+	socks5Version      = 0x05
+	socks5NoAuth       = 0x00
+	socks5NoAcceptable = 0xFF
+	socks5CmdConnect   = 0x01
+	socks5AddrIPv4     = 0x01
+	socks5AddrDomain   = 0x03
+	socks5AddrIPv6     = 0x04
+
+	// SOCKS5 reply codes
+	socks5ReplySuccess              = 0x00
+	socks5ReplyCommandNotSupported  = 0x07
+	socks5ReplyAddrTypeNotSupported = 0x08
+	socks5ReplyConnectionRefused    = 0x05
 )
 
 // ForwardManager はポートフォワーディングルールとセッションを管理する。
@@ -279,27 +297,34 @@ func (m *forwardManager) acceptLoop(af *activeForward, rule ForwardRule, sshClie
 	}
 }
 
+// dialRemote はルールの種類に応じてリモート接続を確立する。
+func (m *forwardManager) dialRemote(rule ForwardRule, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) (net.Conn, error) {
+	switch rule.Type {
+	case Local:
+		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
+		return sshClient.Dial("tcp", remoteAddr)
+	case Remote:
+		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
+		return net.Dial("tcp", localAddr)
+	default:
+		return nil, fmt.Errorf("unsupported forward type for bridge: %v", rule.Type)
+	}
+}
+
 // bridge は受け付けた接続とリモート/ローカルの間でデータを転送する。
 func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Conn, sshClient interface {
 	Dial(n, addr string) (net.Conn, error)
 }) {
 	defer conn.Close()
 
-	var remote net.Conn
-	var err error
-
-	switch rule.Type {
-	case Local:
-		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
-		remote, err = sshClient.Dial("tcp", remoteAddr)
-	case Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
-		remote, err = net.Dial("tcp", localAddr)
-	case Dynamic:
+	if rule.Type == Dynamic {
 		m.handleSOCKS5(af, conn, sshClient)
 		return
 	}
 
+	remote, err := m.dialRemote(rule, sshClient)
 	if err != nil {
 		slog.Warn("bridge dial failed", "rule", rule.Name, "error", err)
 		return
@@ -309,106 +334,121 @@ func (m *forwardManager) bridge(af *activeForward, rule ForwardRule, conn net.Co
 	m.copyBidirectional(af, conn, remote)
 }
 
-// handleSOCKS5 は最小限の SOCKS5 プロトコルを処理する（認証なし、CONNECT のみ）。
-func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
-	Dial(n, addr string) (net.Conn, error)
-}) {
-	// SOCKS5 ネゴシエーション
+// socks5Negotiate は SOCKS5 の挨拶・認証ネゴシエーションを処理する。
+func socks5Negotiate(conn net.Conn) error {
 	// Client greeting: VER + NMETHODS (2 bytes)
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(conn, header); err != nil {
-		return
+		return err
 	}
 
-	if header[0] != 0x05 { // SOCKS version 5
-		return
+	if header[0] != socks5Version {
+		return fmt.Errorf("unsupported SOCKS version: %d", header[0])
 	}
 
 	nmethods := int(header[1])
 	methods := make([]byte, nmethods)
 	if _, err := io.ReadFull(conn, methods); err != nil {
-		return
+		return err
 	}
 
-	// クライアントが No Authentication (0x00) をサポートしているか確認
+	// クライアントが No Authentication をサポートしているか確認
 	noAuthSupported := false
 	for _, method := range methods {
-		if method == 0x00 {
+		if method == socks5NoAuth {
 			noAuthSupported = true
 			break
 		}
 	}
 	if !noAuthSupported {
 		// No acceptable methods
-		conn.Write([]byte{0x05, 0xFF})
-		return
+		_, _ = conn.Write([]byte{socks5Version, socks5NoAcceptable})
+		return fmt.Errorf("no acceptable auth methods")
 	}
 
 	// No authentication
-	if _, err := conn.Write([]byte{0x05, 0x00}); err != nil {
-		return
+	if _, err := conn.Write([]byte{socks5Version, socks5NoAuth}); err != nil {
+		return err
 	}
+	return nil
+}
 
+// socks5ParseRequest は SOCKS5 の CONNECT リクエストを解析し、接続先アドレスを返す。
+func socks5ParseRequest(conn net.Conn) (string, error) {
 	// SOCKS5 request: VER, CMD, RSV, ATYP (4 bytes)
 	reqHeader := make([]byte, 4)
 	if _, err := io.ReadFull(conn, reqHeader); err != nil {
-		return
+		return "", err
 	}
 
-	if reqHeader[0] != 0x05 || reqHeader[1] != 0x01 { // Version 5, CONNECT command
+	if reqHeader[0] != socks5Version || reqHeader[1] != socks5CmdConnect {
 		// Command not supported
-		conn.Write([]byte{0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-		return
+		_, _ = conn.Write([]byte{socks5Version, socks5ReplyCommandNotSupported, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
+		return "", fmt.Errorf("unsupported SOCKS5 command: %d", reqHeader[1])
 	}
 
-	var targetAddr string
 	switch reqHeader[3] { // Address type
-	case 0x01: // IPv4
+	case socks5AddrIPv4:
 		addrPort := make([]byte, 4+2)
 		if _, err := io.ReadFull(conn, addrPort); err != nil {
-			return
+			return "", err
 		}
 		ip := net.IP(addrPort[:4])
 		port := binary.BigEndian.Uint16(addrPort[4:6])
-		targetAddr = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
-	case 0x03: // Domain name
+		return net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
+	case socks5AddrDomain:
 		domainLenBuf := make([]byte, 1)
 		if _, err := io.ReadFull(conn, domainLenBuf); err != nil {
-			return
+			return "", err
 		}
 		domainLen := int(domainLenBuf[0])
 		domainPort := make([]byte, domainLen+2)
 		if _, err := io.ReadFull(conn, domainPort); err != nil {
-			return
+			return "", err
 		}
 		domain := string(domainPort[:domainLen])
 		port := binary.BigEndian.Uint16(domainPort[domainLen : domainLen+2])
-		targetAddr = net.JoinHostPort(domain, strconv.Itoa(int(port)))
-	case 0x04: // IPv6
+		return net.JoinHostPort(domain, strconv.Itoa(int(port))), nil
+	case socks5AddrIPv6:
 		addrPort := make([]byte, 16+2)
 		if _, err := io.ReadFull(conn, addrPort); err != nil {
-			return
+			return "", err
 		}
 		ip := net.IP(addrPort[:16])
 		port := binary.BigEndian.Uint16(addrPort[16:18])
-		targetAddr = net.JoinHostPort(ip.String(), strconv.Itoa(int(port)))
+		return net.JoinHostPort(ip.String(), strconv.Itoa(int(port))), nil
 	default:
 		// Address type not supported
-		conn.Write([]byte{0x05, 0x08, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{socks5Version, socks5ReplyAddrTypeNotSupported, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
+		return "", fmt.Errorf("unsupported address type: %d", reqHeader[3])
+	}
+}
+
+// handleSOCKS5 は最小限の SOCKS5 プロトコルを処理する（認証なし、CONNECT のみ）。
+func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
+	Dial(n, addr string) (net.Conn, error)
+}) {
+	if err := socks5Negotiate(conn); err != nil {
+		slog.Debug("socks5 negotiate failed", "rule", af.session.Rule.Name, "error", err)
+		return
+	}
+
+	targetAddr, err := socks5ParseRequest(conn)
+	if err != nil {
+		slog.Debug("socks5 parse request failed", "rule", af.session.Rule.Name, "error", err)
 		return
 	}
 
 	remote, err := sshClient.Dial("tcp", targetAddr)
 	if err != nil {
 		// Connection refused
-		conn.Write([]byte{0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{socks5Version, socks5ReplyConnectionRefused, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	defer remote.Close()
 
 	// Success response
-	_, err = conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
-	if err != nil {
+	if _, err := conn.Write([]byte{socks5Version, socks5ReplySuccess, 0x00, socks5AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
 		return
 	}
 
@@ -422,13 +462,19 @@ func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 
 	go func() {
 		defer wg.Done()
-		n, _ := io.Copy(b, a)
+		n, err := io.Copy(b, a)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
+		}
 		af.sent.Add(n)
 	}()
 
 	go func() {
 		defer wg.Done()
-		n, _ := io.Copy(a, b)
+		n, err := io.Copy(a, b)
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
+		}
 		af.received.Add(n)
 	}()
 
