@@ -91,7 +91,7 @@ func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
 
 	// TCP + SSH ハンドシェイク全体にデッドラインを設定
 	if err := tcpConn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		tcpConn.Close()
+		_ = tcpConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to set deadline: %w", err)
 	}
@@ -99,14 +99,14 @@ func (c *sshConnection) Dial(host core.SSHHost) (*ssh.Client, error) {
 	// SSH ハンドシェイク（デッドラインが適用される）
 	sshConn, chans, reqs, err := ssh.NewClientConn(tcpConn, addr, config)
 	if err != nil {
-		tcpConn.Close()
+		_ = tcpConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to establish SSH connection to %s: %w", addr, err)
 	}
 
 	// ハンドシェイク完了後、デッドラインをクリア
 	if err := tcpConn.SetDeadline(time.Time{}); err != nil {
-		sshConn.Close()
+		_ = sshConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to clear deadline: %w", err)
 	}

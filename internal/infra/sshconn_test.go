@@ -69,7 +69,7 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	// accept してコネクションを保持するだけ（何も送らない）
 	go func() {
@@ -79,7 +79,7 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 				return
 			}
 			// コネクションを閉じずに保持（ハンドシェイクがハングする状況）
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 		}
 	}()
 
@@ -93,7 +93,7 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 	}
 
 	conn := NewSSHConnection()
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	start := time.Now()
 	_, dialErr := conn.Dial(host)
