@@ -403,6 +403,35 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ---
 
+### forward.stopAll
+
+全てのアクティブなポートフォワーディングを一括停止する。SSH 接続は維持する。
+
+**リクエスト**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "forward.stopAll",
+  "params": {}
+}
+```
+
+**レスポンス**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "stopped": 3
+  }
+}
+```
+
+---
+
 ### session.list
 
 全アクティブセッションの状態とメトリクスを返す。
@@ -580,7 +609,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### daemon.shutdown
 
-デーモンを停止する。全接続をグレースフルに切断し、状態を保存する。
+デーモンを停止する。全接続をグレースフルに切断し、状態を保存する。`purge` を指定すると状態ファイルも削除する。
 
 **リクエスト**:
 
@@ -589,9 +618,15 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "jsonrpc": "2.0",
   "id": 1,
   "method": "daemon.shutdown",
-  "params": {}
+  "params": {
+    "purge": false
+  }
 }
 ```
+
+| パラメータ | 型 | 必須 | デフォルト | 説明 |
+|-----------|------|------|-----------|------|
+| purge | boolean | no | false | `true` の場合、停止時に状態ファイルを削除する |
 
 **レスポンス**:
 
@@ -699,7 +734,7 @@ SSH 接続状態の変化。
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| type | string | `"connecting"` / `"connected"` / `"disconnected"` / `"reconnecting"` / `"error"` |
+| type | string | `"connected"` / `"disconnected"` / `"reconnecting"` / `"error"` |
 | host | string | ホスト名 |
 | error | string | エラーメッセージ（エラー時のみ） |
 

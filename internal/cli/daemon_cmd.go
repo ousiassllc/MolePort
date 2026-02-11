@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/ipc"
 )
 
@@ -139,9 +142,21 @@ func RunDaemonMode(configDir string) {
 }
 
 // setupDaemonLogging はデーモンプロセス用のログ設定を行う。
+// 設定ファイルの log.file と log.level を参照する。
 // ログファイルの作成に失敗した場合はエラーを返す。
 func setupDaemonLogging(configDir string) error {
-	logPath := filepath.Join(configDir, "daemon.log")
+	store := infra.NewYAMLStore()
+	cfgMgr := core.NewConfigManager(store, configDir)
+	cfg, err := cfgMgr.LoadConfig()
+	if err != nil {
+		c := core.DefaultConfig()
+		cfg = &c
+	}
+
+	logPath := cfg.Log.File
+	if expanded, err := infra.ExpandTilde(logPath); err == nil {
+		logPath = expanded
+	}
 
 	if err := os.MkdirAll(filepath.Dir(logPath), 0700); err != nil {
 		return fmt.Errorf("create log directory: %w", err)
@@ -152,7 +167,22 @@ func setupDaemonLogging(configDir string) error {
 		return fmt.Errorf("open log file: %w", err)
 	}
 
-	handler := slog.NewTextHandler(f, &slog.HandlerOptions{Level: slog.LevelInfo})
+	level := parseSlogLevel(cfg.Log.Level)
+	handler := slog.NewTextHandler(f, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(handler))
 	return nil
+}
+
+// parseSlogLevel は文字列を slog.Level に変換する。
+func parseSlogLevel(s string) slog.Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }

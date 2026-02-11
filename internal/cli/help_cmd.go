@@ -26,10 +26,7 @@ Commands:
   version            バージョン情報を表示
 
 Global Flags:
-  --config-dir <path>  設定ディレクトリのパス
-
-Alias:
-  mp                 moleport のエイリアス`
+  --config-dir <path>  設定ディレクトリのパス`
 
 // RunHelp は help サブコマンドを実行する。
 func RunHelp(configDir string, args []string) {

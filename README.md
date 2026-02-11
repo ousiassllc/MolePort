@@ -142,10 +142,32 @@ log:
 ```bash
 make help       # 利用可能なターゲットを表示
 make build      # ビルド
+make run        # ビルドして実行
 make test       # テスト実行
 make test-race  # race detector 付きテスト
 make vet        # go vet
 make fmt        # go fmt
+make lint       # golangci-lint を実行
+make clean      # ビルド成果物を削除
+```
+
+### Git Hooks (lefthook)
+
+[lefthook](https://github.com/evilmartians/lefthook) でコミット・プッシュ時に自動チェックを実行します。
+
+| フック | チェック内容 |
+|--------|-------------|
+| pre-commit | `gofmt` によるフォーマット確認、`go vet` |
+| pre-push | `go test -race` (race detector 付きテスト) |
+
+セットアップ:
+
+```bash
+# lefthook をインストール（未導入の場合）
+go install github.com/evilmartians/lefthook@latest
+
+# Git hooks を有効化
+lefthook install
 ```
 
 ## ライセンス

@@ -62,6 +62,12 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 			return d, nil
 		}
 
+		// / でセットアップパネルにフォーカス（テキスト入力中でない場合）
+		if msg.String() == "/" && !d.IsInputActive() {
+			d.setFocus(tui.PaneSetup)
+			return d, nil
+		}
+
 		// フォーカス中のパネルにキーを送る
 		switch d.focusedPane {
 		case tui.PaneForwards:

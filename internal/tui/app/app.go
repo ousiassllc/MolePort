@@ -359,6 +359,7 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("--- キー操作 ---")
 	m.dashboard.AppendLog("  Tab         : ペイン切替 (Forwards ↔ Setup)")
+	m.dashboard.AppendLog("  /           : セットアップパネルにフォーカス")
 	m.dashboard.AppendLog("  ↑/k ↓/j     : カーソル移動")
 	m.dashboard.AppendLog("  Enter       : 選択 / 接続トグル")
 	m.dashboard.AppendLog("  d           : 切断")

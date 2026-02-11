@@ -3,11 +3,9 @@
 ## 概要
 
 MolePort はサブコマンド形式の CLI で操作する。
-バイナリ名は `moleport`（正式名）と `mp`（エイリアス）の両方が利用可能。
 
 ```
 moleport <subcommand> [options] [arguments]
-mp <subcommand> [options] [arguments]
 ```
 
 ## サブコマンド一覧
@@ -15,17 +13,17 @@ mp <subcommand> [options] [arguments]
 | サブコマンド | 引数 | 説明 |
 |------------|------|------|
 | `daemon start` | — | デーモンをバックグラウンドで起動 |
-| `daemon stop` | — | デーモンを停止 |
+| `daemon stop` | `[--purge]` | デーモンを停止 |
 | `daemon status` | — | デーモンの稼働状態を表示 |
 | `connect` | `<host>` | SSH ホストに接続 |
 | `disconnect` | `<host>` | SSH ホストを切断 |
-| `add` | — | 転送ルールを対話形式で追加 |
+| `add` | `--host, --local-port, ...` | 転送ルールをフラグ指定で追加 |
 | `delete` | `<name>` | 転送ルールを削除 |
 | `start` | `<name>` | 転送ルールのフォワーディングを開始 |
-| `stop` | `<name>` | 転送ルールのフォワーディングを停止 |
-| `list` | `[--host <host>]` | ホスト・転送ルールの一覧を表示 |
-| `status` | — | 全体の接続状態サマリーを表示 |
-| `config` | — | 設定を対話形式で変更 |
+| `stop` | `<name> \| --all` | 転送ルールのフォワーディングを停止 |
+| `list` | `[--host <host>] [--json]` | ホスト・転送ルールの一覧を表示 |
+| `status` | `[name] [--json]` | 接続状態サマリー / セッション詳細を表示 |
+| `config` | `[--json]` | 現在の設定を表示 |
 | `reload` | — | SSH config を再読み込み |
 | `tui` | — | TUI ダッシュボードを起動 |
 | `help` | `[<subcommand>]` | ヘルプを表示 |
@@ -66,18 +64,28 @@ $ moleport daemon start
 デーモンを停止する。
 
 ```
-moleport daemon stop
+moleport daemon stop [--purge]
 ```
+
+**フラグ**:
+
+| フラグ | 説明 |
+|--------|------|
+| `--purge` | 状態ファイルを削除して停止 |
 
 **動作**:
 1. デーモンに shutdown リクエストを送信
 2. 全接続をグレースフルに切断し、状態を保存
+3. `--purge` 指定時は状態ファイルも削除
 
 **出力例**:
 
 ```
 $ moleport daemon stop
 デーモンを停止しました
+
+$ moleport daemon stop --purge
+デーモンを停止しました（状態をクリア）
 
 $ moleport daemon stop
 デーモンは稼働していません
@@ -158,44 +166,43 @@ prod-server を切断しました (2 forwards stopped)
 
 ### add
 
-転送ルールを対話形式で追加する。
+転送ルールをフラグ指定で追加する。
 
 ```
-moleport add
+moleport add --host <host> --local-port <port> [options]
 ```
 
-**対話フロー**:
+**フラグ**:
 
-```mermaid
-flowchart TD
-    Start["moleport add"] --> SelectHost
-    SelectHost["ホストを選択してください<br/>▸ prod-server<br/>  staging<br/>  dev-db"] --> SelectType
-    SelectType["転送種別を選択してください<br/>▸ Local (-L)<br/>  Remote (-R)<br/>  Dynamic (-D)"] --> CheckType
+| フラグ | 必須 | デフォルト | 説明 |
+|--------|------|-----------|------|
+| `--host` | Yes | — | SSH ホスト名 |
+| `--type` | No | `local` | 転送種別: `local`, `remote`, `dynamic` |
+| `--local-port` | Yes | — | ローカルポート (1–65535) |
+| `--remote-host` | No | `localhost` | リモートホスト |
+| `--remote-port` | ※ | — | リモートポート (1–65535)。`local`/`remote` 転送で必須 |
+| `--name` | No | 自動生成 | ルール名 |
+| `--auto-connect` | No | `false` | 起動時に自動接続 |
 
-    CheckType{種別}
-    CheckType -->|Local / Remote| InputPorts
-    CheckType -->|Dynamic| InputLocalPort
+**出力例**:
 
-    InputPorts["ローカルポート: 8080<br/>リモートホスト: localhost<br/>リモートポート: 80"] --> InputName
-    InputLocalPort["ローカルポート: 1080"] --> InputName
+```
+$ moleport add --host prod-server --local-port 8080 --remote-port 80
+ルール 'prod-server-local-8080' を追加しました
 
-    InputName["ルール名 (省略可): prod-web"] --> AutoConnect
-    AutoConnect["起動時に自動接続しますか？<br/>▸ Yes<br/>  No"] --> Confirm
-
-    Confirm["以下の設定で追加します:<br/>Host: prod-server<br/>Type: Local<br/>:8080 → localhost:80<br/><br/>▸ 確認<br/>  キャンセル"]
-    Confirm -->|確認| Created["✓ ルール 'prod-web' を追加しました。フォワーディングを開始します..."]
-    Confirm -->|キャンセル| Cancelled["キャンセルしました"]
+$ moleport add --host prod-server --type dynamic --local-port 1080 --name socks
+ルール 'socks' を追加しました
 ```
 
-**入力バリデーション**:
+**バリデーション**:
 
-| 項目 | バリデーション | エラーメッセージ |
-|------|-------------|----------------|
-| ローカルポート | 1–65535 の範囲 | `ポート番号は 1〜65535 の範囲で入力してください` |
-| ローカルポート | 既に使用中でないこと | `ポート 8080 は既に使用中です。別のポートを指定してください` |
-| リモートポート | 1–65535 の範囲 | `ポート番号は 1〜65535 の範囲で入力してください` |
-| ルール名 | グローバルユニークであること | `ルール名 "prod-web" は既に存在します` |
-| ルール名 | 省略時は自動生成 | `<host>-<type>-<localport>`（例: `prod-server-local-8080`） |
+| 条件 | エラーメッセージ |
+|------|----------------|
+| `--host` 未指定 | `--host フラグは必須です` |
+| `--local-port` 未指定 | `--local-port フラグは必須です` |
+| ポート番号が範囲外 | `ポート番号は 1〜65535 の範囲で入力してください` |
+| `--type` が不正 | `--type は local, remote, dynamic のいずれかを指定してください` |
+| `local`/`remote` で `--remote-port` 未指定 | `--remote-port フラグは local/remote 転送で必須です` |
 
 ---
 
@@ -243,13 +250,23 @@ $ moleport start prod-web
 
 ```
 moleport stop <name>
+moleport stop --all
 ```
+
+**フラグ**:
+
+| フラグ | 説明 |
+|--------|------|
+| `--all` | 全フォワーディングを一括停止 |
 
 **出力例**:
 
 ```
 $ moleport stop prod-web
-✓ prod-web (L :8080 → localhost:80) を停止しました
+prod-web を停止しました
+
+$ moleport stop --all
+全フォワーディングを停止しました (3 件)
 ```
 
 ---
@@ -259,8 +276,15 @@ $ moleport stop prod-web
 全ホストと転送ルールの一覧を表示する。
 
 ```
-moleport list [--host <host>]
+moleport list [--host <host>] [--json]
 ```
+
+**フラグ**:
+
+| フラグ | 説明 |
+|--------|------|
+| `--host <host>` | 特定ホストのルールのみ表示 |
+| `--json` | JSON 形式で出力 |
 
 **出力例**:
 
@@ -288,54 +312,76 @@ $ moleport list --host prod-server
 
 ### status
 
-全体の接続状態をサマリー表示する。
+接続状態を表示する。引数なしで全体サマリー、ルール名を指定するとセッション詳細を表示する。
 
 ```
-moleport status
+moleport status [name] [--json]
 ```
 
-**出力例**:
+**フラグ**:
+
+| フラグ | 説明 |
+|--------|------|
+| `--json` | JSON 形式で出力 |
+
+**出力例（サマリー）**:
 
 ```
 $ moleport status
 MolePort Status:
-  Daemon:    ⬤ Running (PID: 12345, uptime: 3h 30m)
+  Daemon:    Running (PID: 12345, uptime: 3h 30m)
   Hosts:     3 total, 1 connected
   Forwards:  3 total, 2 active, 1 stopped
-  Traffic:   ↑1.3MB ↓468KB
+  Traffic:   sent 1.3MB, recv 468.0KB
+```
+
+**出力例（セッション詳細）**:
+
+```
+$ moleport status prod-web
+Session: prod-web
+  Host:           prod-server
+  Type:           local
+  Local Port:     8080
+  Remote:         localhost:80
+  Status:         active
+  Connected At:   2026-02-11 10:30:00
+  Bytes Sent:     1.2MB
+  Bytes Received: 340.0KB
 ```
 
 ---
 
 ### config
 
-設定を対話形式で変更する。
+現在の設定を表示する。
 
 ```
-moleport config
+moleport config [--json]
 ```
 
-**対話フロー**:
+**フラグ**:
 
-```mermaid
-flowchart TD
-    Start["moleport config"] --> SelectCategory
-    SelectCategory["変更する設定を選択してください<br/>▸ 再接続設定<br/>  セッション復元<br/>  ログ設定<br/>  SSH config パス"]
+| フラグ | 説明 |
+|--------|------|
+| `--json` | JSON 形式で出力 |
 
-    SelectCategory -->|再接続| Reconnect
-    SelectCategory -->|セッション| Session
-    SelectCategory -->|ログ| LogCfg
-    SelectCategory -->|SSH config| SSHPath
+**出力例**:
 
-    Reconnect["自動再接続: [有効] / 無効<br/>最大リトライ回数: [10]<br/>初回待機時間: [1s]<br/>最大待機時間: [60s]"]
-    Session["起動時の自動復元: [有効] / 無効"]
-    LogCfg["ログレベル: debug / [info] / warn / error"]
-    SSHPath["SSH config パス: [~/.ssh/config]"]
-
-    Reconnect --> Saved["✓ 設定を保存しました"]
-    Session --> Saved
-    LogCfg --> Saved
-    SSHPath --> Saved
+```
+$ moleport config
+MolePort Config:
+  SSH Config:     ~/.ssh/config
+  Reconnect:
+    Enabled:      true
+    Max Retries:  10
+    Initial Delay: 1s
+    Max Delay:    60s
+  Session:
+    Auto Restore: true
+  Log:
+    Level:        info
+    File:         ~/.config/moleport/moleport.log
 ```
 
 ---
@@ -400,25 +446,25 @@ Usage:
   moleport <command> [arguments]
 
 Commands:
-  daemon start     デーモンをバックグラウンドで起動
-  daemon stop      デーモンを停止
-  daemon status    デーモンの稼働状態を表示
-  connect <host>   SSH ホストに接続
-  disconnect <host> SSH ホストを切断
-  add              転送ルールを対話形式で追加
-  delete <name>    転送ルールを削除
-  start <name>     フォワーディングを開始
-  stop <name>      フォワーディングを停止
-  list             ホスト・転送ルールの一覧
-  status           接続状態のサマリー
-  config           設定を対話形式で変更
-  reload           SSH config を再読み込み
-  tui              TUI ダッシュボードを起動
-  help             このヘルプを表示
-  version          バージョン情報を表示
+  daemon start       デーモンをバックグラウンドで起動
+  daemon stop [--purge]  デーモンを停止（--purge: 状態クリア）
+  daemon status      デーモンの稼働状態を表示
+  connect <host>     SSH ホストに接続
+  disconnect <host>  SSH ホストを切断
+  add [flags]        転送ルールを追加
+  delete <name>      転送ルールを削除
+  start <name>       フォワーディングを開始
+  stop <name> / --all  フォワーディングを停止（--all: 全停止）
+  list [--json]      ホスト・転送ルールの一覧
+  status [name]      接続状態のサマリー
+  config [--json]    設定を表示
+  reload             SSH config を再読み込み
+  tui                TUI ダッシュボードを起動
+  help               このヘルプを表示
+  version            バージョン情報を表示
 
-Alias:
-  mp               moleport のエイリアス
+Global Flags:
+  --config-dir <path>  設定ディレクトリのパス
 ```
 
 ---
@@ -435,7 +481,7 @@ moleport version
 
 ```
 $ moleport version
-MolePort v0.2.0 (go1.23.0, linux/amd64)
+MolePort 0.1.0 (go1.23.0, linux/amd64)
 ```
 
 ## TUI 内コマンド
@@ -453,7 +499,7 @@ TUI ダッシュボード内のコマンド入力欄で使用できるコマン�
 | `stop` | — | 転送ルールのフォワーディングを停止する |
 | `list` | `ls` | 全ホスト・全転送ルールの一覧を表示する |
 | `status` | `st` | 接続状態のサマリーを表示する |
-| `config` | `cfg` | 設定を変更する |
+| `config` | `cfg` | 設定を表示する |
 | `reload` | — | SSH config を再読み込みする |
 | `help` | `?` | コマンドヘルプを表示する |
 | `quit` | `q` | TUI を終了する（デーモンは継続） |
