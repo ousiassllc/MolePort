@@ -37,9 +37,9 @@ graph TD
     subgraph "TUI Layer"
         App["app.go<br/>MainModel"]
         Dashboard["pages/dashboard.go"]
-        HLP["organisms/hostlistpanel.go"]
+        SP["organisms/setuppanel.go"]
         FP["organisms/forwardpanel.go"]
-        CP["organisms/commandpanel.go"]
+        LP["organisms/logpanel.go"]
         SB["organisms/statusbar.go"]
     end
 
@@ -79,9 +79,9 @@ graph TD
     TUICmd --> App
     App --> IPCCli
     App --> Dashboard
-    Dashboard --> HLP
+    Dashboard --> SP
     Dashboard --> FP
-    Dashboard --> CP
+    Dashboard --> LP
     Dashboard --> SB
 
     IPCSrv --> Handler
@@ -118,18 +118,21 @@ graph TD
 
 ```go
 type Daemon struct {
-    config     *Config
+    configDir  string
+    startedAt  time.Time
+    cfgMgr     ConfigManager
     sshMgr     SSHManager
     fwdMgr     ForwardManager
-    cfgMgr     ConfigManager
-    ipcServer  *IPCServer
+    broker     *EventBroker
+    handler    *Handler
+    server     *IPCServer
     pidFile    *PIDFile
     ctx        context.Context
     cancel     context.CancelFunc
 }
 
-func NewDaemon(cfgPath string) (*Daemon, error)
-func (d *Daemon) Start() error     // 初期化 + IPC Server 起動 + セッション復元
+func New(configDir string) (*Daemon, error)
+func (d *Daemon) Start(ctx context.Context) error     // 初期化 + IPC Server 起動 + セッション復元
 func (d *Daemon) Stop() error      // グレースフルシャットダウン
 func (d *Daemon) Wait() error      // 終了シグナルを待機
 ```
@@ -138,7 +141,7 @@ func (d *Daemon) Wait() error      // 終了シグナルを待機
 
 ```mermaid
 flowchart TD
-    New["NewDaemon()"] --> LoadCfg["config.yaml 読み込み"]
+    New["New()"] --> LoadCfg["config.yaml 読み込み"]
     LoadCfg --> InitMgr["マネージャ初期化<br/>(SSH/Forward/Config)"]
     InitMgr --> PID["PID ファイル作成"]
     PID --> IPC["IPC Server 起動<br/>(Unix ソケット Listen)"]
@@ -163,7 +166,7 @@ type PIDFile struct {
 func NewPIDFile(path string) *PIDFile
 func (p *PIDFile) Acquire() error     // PID ファイル作成 + flock
 func (p *PIDFile) Release() error     // PID ファイル削除 + flock 解放
-func (p *PIDFile) IsRunning() (bool, int)  // 既存デーモンの稼働確認（PID + プロセス生存チェック）
+func IsRunning(path string) (bool, int)  // 既存デーモンの稼働確認（PID + プロセス生存チェック）
 ```
 
 ### Fork
@@ -286,11 +289,12 @@ type Handler struct {
     sshMgr SSHManager
     fwdMgr ForwardManager
     cfgMgr ConfigManager
-    daemon *Daemon
+    broker *EventBroker
+    daemon DaemonInfo
 }
 
-func NewHandler(sshMgr SSHManager, fwdMgr ForwardManager, cfgMgr ConfigManager, daemon *Daemon) *Handler
-func (h *Handler) Handle(method string, params json.RawMessage) (interface{}, *RPCError)
+func NewHandler(sshMgr SSHManager, fwdMgr ForwardManager, cfgMgr ConfigManager, broker *EventBroker, daemon DaemonInfo) *Handler
+func (h *Handler) Handle(clientID string, method string, params json.RawMessage) (any, *RPCError)
 ```
 
 #### メソッドルーティング
@@ -298,24 +302,25 @@ func (h *Handler) Handle(method string, params json.RawMessage) (interface{}, *R
 ```go
 // Handle 内部のルーティング（概要）
 switch method {
-case "host.list":     return h.handleHostList(params)
-case "host.reload":   return h.handleHostReload(params)
-case "ssh.connect":   return h.handleSSHConnect(params)
-case "ssh.disconnect": return h.handleSSHDisconnect(params)
-case "forward.list":  return h.handleForwardList(params)
-case "forward.add":   return h.handleForwardAdd(params)
-case "forward.delete": return h.handleForwardDelete(params)
-case "forward.start": return h.handleForwardStart(params)
-case "forward.stop":  return h.handleForwardStop(params)
-case "session.list":  return h.handleSessionList(params)
-case "session.get":   return h.handleSessionGet(params)
-case "config.get":    return h.handleConfigGet(params)
-case "config.update": return h.handleConfigUpdate(params)
-case "daemon.status": return h.handleDaemonStatus(params)
-case "daemon.shutdown": return h.handleDaemonShutdown(params)
-case "events.subscribe": return h.handleEventsSubscribe(params)
-case "events.unsubscribe": return h.handleEventsUnsubscribe(params)
-default:              return nil, &RPCError{Code: -32601, Message: "method not found"}
+case "host.list":          return h.hostList()
+case "host.reload":        return h.hostReload()
+case "ssh.connect":        return h.sshConnect(params)
+case "ssh.disconnect":     return h.sshDisconnect(params)
+case "forward.list":       return h.forwardList(params)
+case "forward.add":        return h.forwardAdd(params)
+case "forward.delete":     return h.forwardDelete(params)
+case "forward.start":      return h.forwardStart(params)
+case "forward.stop":       return h.forwardStop(params)
+case "forward.stopAll":    return h.forwardStopAll()
+case "session.list":       return h.sessionList()
+case "session.get":        return h.sessionGet(params)
+case "config.get":         return h.configGet()
+case "config.update":      return h.configUpdate(params)
+case "daemon.status":      return h.daemonStatus()
+case "daemon.shutdown":    return h.daemonShutdown(params)
+case "events.subscribe":   return h.eventsSubscribe(clientID, params)
+case "events.unsubscribe": return h.eventsUnsubscribe(params)
+default:                   return nil, &RPCError{Code: MethodNotFound, Message: "method not found: " + method}
 }
 ```
 
@@ -456,12 +461,15 @@ SSH 接続のライフサイクルを管理する。
 type SSHManager interface {
     LoadHosts() ([]SSHHost, error)
     ReloadHosts() ([]SSHHost, error)
+    GetHosts() []SSHHost
     GetHost(name string) (*SSHHost, error)
     Connect(hostName string) error
     Disconnect(hostName string) error
     IsConnected(hostName string) bool
     GetConnection(hostName string) (*ssh.Client, error)
+    GetSSHConnection(hostName string) (SSHConnection, error)
     Subscribe() <-chan SSHEvent
+    Close()
 }
 ```
 
@@ -473,7 +481,7 @@ type SSHManager interface {
 
 ```go
 type ForwardManager interface {
-    AddRule(rule ForwardRule) error
+    AddRule(rule ForwardRule) (string, error)
     DeleteRule(name string) error
     GetRules() []ForwardRule
     GetRulesByHost(hostName string) []ForwardRule
@@ -483,6 +491,7 @@ type ForwardManager interface {
     GetSession(ruleName string) (*ForwardSession, error)
     GetAllSessions() []ForwardSession
     Subscribe() <-chan ForwardEvent
+    Close()
 }
 ```
 
@@ -500,6 +509,7 @@ type ConfigManager interface {
     UpdateConfig(fn func(*Config)) error
     LoadState() (*State, error)
     SaveState(state *State) error
+    DeleteState() error
     ConfigDir() string
 }
 ```
@@ -602,9 +612,9 @@ sequenceDiagram
     TUI->>IPC: Close()
 ```
 
-### Organisms（変更なし）
+### Organisms
 
-HostListPanel / ForwardPanel / CommandPanel / StatusBar の構造は維持。
+SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
 データの取得元が Core Layer 直接から IPCClient 経由に変わるのみ。
 
 ## キーバインド管理方針
