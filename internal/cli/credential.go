@@ -37,8 +37,8 @@ func handlePasswordPrompt(req ipc.CredentialRequestNotification) (*ipc.Credentia
 	}
 
 	fmt.Fprint(os.Stderr, prompt)
-	password, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr) // 改行
+	password, err := term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // stdin fd is always 0
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func handleKeyboardInteractive(req ipc.CredentialRequestNotification) (*ipc.Cred
 			}
 			answers[i] = strings.TrimRight(line, "\r\n")
 		} else {
-			password, err := term.ReadPassword(int(os.Stdin.Fd()))
+			password, err := term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // stdin fd is always 0
 			fmt.Fprintln(os.Stderr)
 			if err != nil {
 				return nil, err

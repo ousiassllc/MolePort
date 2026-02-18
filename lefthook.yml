@@ -12,6 +12,9 @@ pre-commit:
       run: golangci-lint run ./...
 
 pre-push:
+  parallel: true
   commands:
     test-race:
-      run: go test -race ./...
+      run: go test -race -count=1 ./...
+    build:
+      run: go build -o /dev/null ./cmd/moleport/
