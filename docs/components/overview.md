@@ -268,9 +268,33 @@ func (c *IPCClient) Subscribe(types []string) (string, error)
 func (c *IPCClient) Unsubscribe(subscriptionID string) error
 func (c *IPCClient) Events() <-chan *Notification
 
+// クレデンシャルコールバック（CLI/TUI が実装する）
+func (c *IPCClient) SetCredentialHandler(handler CredentialHandler)
+
 // ヘルパーメソッド
 func (c *IPCClient) IsConnected() bool
 ```
+
+#### CredentialHandler
+
+CLI と TUI がそれぞれ実装する、クレデンシャル入力のハンドラインターフェース。
+
+```go
+// CredentialHandler はクレデンシャル要求を処理するインターフェース。
+// IPCClient が credential.request 通知を受信した際に呼び出される。
+type CredentialHandler interface {
+    // HandleCredentialRequest はクレデンシャル入力をユーザーに求め、結果を返す。
+    HandleCredentialRequest(req CredentialRequestNotification) CredentialResponseParams
+}
+```
+
+**CLI 実装**: `internal/cli/credential.go`
+- `golang.org/x/term` を使用してターミナルの秘密入力（エコーなし）を実装
+- keyboard-interactive の場合は `echo` フラグに応じてエコー表示を切り替え
+
+**TUI 実装**: `internal/tui/molecules/passwordinput.go`
+- Bubble Tea の `textinput` をベースにマスク表示の入力フィールドを実装
+- `echo: true` の場合は通常表示、`false` の場合は `*` でマスク
 
 ### Handler
 
@@ -302,25 +326,60 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 ```go
 // Handle 内部のルーティング（概要）
 switch method {
-case "host.list":          return h.hostList()
-case "host.reload":        return h.hostReload()
-case "ssh.connect":        return h.sshConnect(params)
-case "ssh.disconnect":     return h.sshDisconnect(params)
-case "forward.list":       return h.forwardList(params)
-case "forward.add":        return h.forwardAdd(params)
-case "forward.delete":     return h.forwardDelete(params)
-case "forward.start":      return h.forwardStart(params)
-case "forward.stop":       return h.forwardStop(params)
-case "forward.stopAll":    return h.forwardStopAll()
-case "session.list":       return h.sessionList()
-case "session.get":        return h.sessionGet(params)
-case "config.get":         return h.configGet()
-case "config.update":      return h.configUpdate(params)
-case "daemon.status":      return h.daemonStatus()
-case "daemon.shutdown":    return h.daemonShutdown(params)
-case "events.subscribe":   return h.eventsSubscribe(clientID, params)
-case "events.unsubscribe": return h.eventsUnsubscribe(params)
-default:                   return nil, &RPCError{Code: MethodNotFound, Message: "method not found: " + method}
+case "host.list":            return h.hostList()
+case "host.reload":          return h.hostReload()
+case "ssh.connect":          return h.sshConnect(clientID, params)  // クレデンシャルコールバック対応
+case "ssh.disconnect":       return h.sshDisconnect(params)
+case "forward.list":         return h.forwardList(params)
+case "forward.add":          return h.forwardAdd(params)
+case "forward.delete":       return h.forwardDelete(params)
+case "forward.start":        return h.forwardStart(params)
+case "forward.stop":         return h.forwardStop(params)
+case "forward.stopAll":      return h.forwardStopAll()
+case "session.list":         return h.sessionList()
+case "session.get":          return h.sessionGet(params)
+case "config.get":           return h.configGet()
+case "config.update":        return h.configUpdate(params)
+case "daemon.status":        return h.daemonStatus()
+case "daemon.shutdown":      return h.daemonShutdown(params)
+case "events.subscribe":     return h.eventsSubscribe(clientID, params)
+case "events.unsubscribe":   return h.eventsUnsubscribe(params)
+case "credential.response":  return h.credentialResponse(params)   // 新規
+default:                     return nil, &RPCError{Code: MethodNotFound, Message: "method not found: " + method}
+}
+```
+
+#### sshConnect のクレデンシャルコールバック実装
+
+`ssh.connect` ハンドラは、`ConnectWithCallback` に渡す `CredentialCallback` を構築する。
+このコールバックは IPC 経由でクライアントにクレデンシャル要求を送信し、応答を待機する。
+
+```go
+func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPCError) {
+    // ...パラメータ解析...
+
+    // クレデンシャルコールバックを構築
+    cb := func(req CredentialRequest) (CredentialResponse, error) {
+        reqID := generateRequestID()
+        req.RequestID = reqID
+
+        // クライアントに credential.request 通知を送信
+        h.sendNotification(clientID, "credential.request", req)
+
+        // credential.response を待機（30秒タイムアウト）
+        select {
+        case resp := <-h.waitCredentialResponse(reqID):
+            if resp.Cancelled {
+                return CredentialResponse{}, ErrCredentialCancelled
+            }
+            return resp, nil
+        case <-time.After(30 * time.Second):
+            return CredentialResponse{}, ErrCredentialTimeout
+        }
+    }
+
+    err := h.sshMgr.ConnectWithCallback(host, cb)
+    // ...
 }
 ```
 
@@ -442,9 +501,7 @@ func runConnectCmd(args []string) {
 
 ## Core Layer コンポーネント
 
-Core Layer は v1 から変更なし。デーモン内で直接使用される。
-
-### SSHManager
+### SSHManager（変更あり）
 
 SSH 接続のライフサイクルを管理する。
 
@@ -454,24 +511,39 @@ SSH 接続のライフサイクルを管理する。
 - SSH 接続の確立・切断
 - 自動再接続の制御
 - 接続状態の管理と通知
+- **（追加）クレデンシャルコールバック経由の認証制御**
+- **（追加）セッション復元時の pending_auth 状態管理**
 
 #### インターフェース
 
 ```go
+// CredentialCallback は認証時にクレデンシャル入力を要求するコールバック。
+// IPC Handler がクライアントへの通知・応答受信を実装する。
+type CredentialCallback func(req CredentialRequest) (CredentialResponse, error)
+
 type SSHManager interface {
     LoadHosts() ([]SSHHost, error)
     ReloadHosts() ([]SSHHost, error)
     GetHosts() []SSHHost
     GetHost(name string) (*SSHHost, error)
-    Connect(hostName string) error
+    Connect(hostName string) error                               // エージェント・鍵のみで接続（セッション復元用）
+    ConnectWithCallback(hostName string, cb CredentialCallback) error  // クレデンシャルコールバック付き接続
     Disconnect(hostName string) error
     IsConnected(hostName string) bool
     GetConnection(hostName string) (*ssh.Client, error)
     GetSSHConnection(hostName string) (SSHConnection, error)
+    GetPendingAuthHosts() []string                               // pending_auth 状態のホスト一覧
     Subscribe() <-chan SSHEvent
     Close()
 }
 ```
+
+#### Connect と ConnectWithCallback の使い分け
+
+| メソッド | 用途 | クレデンシャルが必要な場合 |
+|---------|------|------------------------|
+| `Connect` | セッション復元・auto_connect・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
+| `ConnectWithCallback` | `ssh.connect` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
 
 ### ForwardManager
 
@@ -516,19 +588,65 @@ type ConfigManager interface {
 
 ## Infra Layer コンポーネント
 
-Infra Layer は v1 から変更なし。
+### SSHConnection（変更あり）
 
-### SSHConnection
+`Dial` メソッドにクレデンシャルコールバックを受け取るオプションを追加する。
 
 ```go
 type SSHConnection interface {
-    Dial(host SSHHost) (*ssh.Client, error)
+    // Dial はホストへ SSH 接続を確立する。
+    // cb が nil の場合はエージェント・鍵ファイルのみで認証を試みる。
+    // cb が non-nil の場合はパスワード・パスフレーズ・keyboard-interactive もフォールバックとして試行する。
+    Dial(host SSHHost, cb CredentialCallback) (*ssh.Client, error)
     Close() error
     LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
     RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
     DynamicForward(ctx context.Context, localPort int) (net.Listener, error)
     IsAlive() bool
     KeepAlive(ctx context.Context, interval time.Duration)
+}
+```
+
+#### buildAuthMethods の変更
+
+`internal/infra/auth.go` の `buildAuthMethods` にクレデンシャルコールバック対応を追加する。
+
+```go
+// buildAuthMethods はホスト情報とクレデンシャルコールバックをもとに認証メソッドのリストを構築する。
+func buildAuthMethods(host SSHHost, cb CredentialCallback) ([]ssh.AuthMethod, io.Closer) {
+    var methods []ssh.AuthMethod
+    var agentCloser io.Closer
+
+    // 1. SSH エージェントを試行（既存）
+    if agentAuth, conn, err := trySSHAgent(); err == nil {
+        methods = append(methods, agentAuth)
+        agentCloser = conn
+    }
+
+    // 2. ホスト固有の IdentityFile（既存 + パスフレーズ対応追加）
+    if host.IdentityFile != "" {
+        if keyAuth, err := tryKeyFile(host.IdentityFile); err == nil {
+            methods = append(methods, keyAuth)
+        } else if cb != nil && isPassphraseError(err) {
+            // パスフレーズ付き鍵: コールバックでパスフレーズを要求
+            methods = append(methods, passphraseAuthMethod(host, host.IdentityFile, cb))
+        }
+    }
+
+    // 3. デフォルト鍵パス（既存 + パスフレーズ対応追加）
+    // ...
+
+    // 4. パスワード認証（cb が non-nil の場合のみ追加）
+    if cb != nil {
+        methods = append(methods, passwordAuthMethod(host, cb))
+    }
+
+    // 5. keyboard-interactive 認証（cb が non-nil の場合のみ追加）
+    if cb != nil {
+        methods = append(methods, keyboardInteractiveAuthMethod(host, cb))
+    }
+
+    return methods, agentCloser
 }
 ```
 
@@ -632,3 +750,4 @@ SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
 | 1.0 | 2026-02-10 | 初版作成 | — |
 | 1.1 | 2026-02-10 | StatusBar TEA インターフェース追加、ForwardManager 依存パス修正、キーバインド管理方針追加 | 整合性チェック |
 | 2.0 | 2026-02-11 | デーモン化対応: Daemon/IPC/CLI Layer コンポーネント追加、TUI の IPCClient 経由化 | デーモン化対応 |
+| 2.1 | 2026-02-11 | SSHManager に ConnectWithCallback/GetPendingAuthHosts 追加、SSHConnection.Dial にコールバック引数追加、buildAuthMethods のパスフレーズ/パスワード/KI 対応、Handler のクレデンシャルコールバック実装、CredentialHandler インターフェース追加 | #11 クレデンシャル入力機能追加 |

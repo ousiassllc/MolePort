@@ -59,6 +59,20 @@ func TestToRPCError(t *testing.T) {
 			wantMsg:     "host already connected",
 		},
 		{
+			name:        "credential timeout",
+			err:         fmt.Errorf("credential timeout"),
+			defaultCode: InternalError,
+			wantCode:    CredentialTimeout,
+			wantMsg:     "credential timeout",
+		},
+		{
+			name:        "credential cancelled",
+			err:         fmt.Errorf("credential cancelled"),
+			defaultCode: InternalError,
+			wantCode:    CredentialCancelled,
+			wantMsg:     "credential cancelled",
+		},
+		{
 			name:        "generic error uses defaultCode",
 			err:         fmt.Errorf("something unexpected happened"),
 			defaultCode: InvalidParams,

@@ -26,6 +26,8 @@ const (
 	RuleAlreadyExists    = 1005
 	PortConflict         = 1006
 	AuthenticationFailed = 1007
+	CredentialTimeout    = 1008
+	CredentialCancelled  = 1009
 )
 
 // Request は JSON-RPC 2.0 リクエストを表す。
@@ -397,4 +399,34 @@ type SessionMetrics struct {
 	BytesSent     int64  `json:"bytes_sent"`
 	BytesReceived int64  `json:"bytes_received"`
 	Uptime        string `json:"uptime"`
+}
+
+// --- クレデンシャル認証 ---
+
+// CredentialRequestNotification はデーモンからクライアントへのクレデンシャル要求通知。
+type CredentialRequestNotification struct {
+	RequestID string       `json:"request_id"`
+	Type      string       `json:"type"` // "password" | "passphrase" | "keyboard-interactive"
+	Host      string       `json:"host"`
+	Prompt    string       `json:"prompt,omitempty"`
+	Prompts   []PromptData `json:"prompts,omitempty"`
+}
+
+// PromptData は keyboard-interactive 認証の個別プロンプト。
+type PromptData struct {
+	Prompt string `json:"prompt"`
+	Echo   bool   `json:"echo"`
+}
+
+// CredentialResponseParams はクライアントからデーモンへのクレデンシャル応答パラメータ。
+type CredentialResponseParams struct {
+	RequestID string   `json:"request_id"`
+	Value     string   `json:"value,omitempty"`
+	Answers   []string `json:"answers,omitempty"`
+	Cancelled bool     `json:"cancelled,omitempty"`
+}
+
+// CredentialResponseResult はクレデンシャル応答の結果。
+type CredentialResponseResult struct {
+	OK bool `json:"ok"`
 }

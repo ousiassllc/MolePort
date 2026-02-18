@@ -69,8 +69,11 @@ func RunList(configDir string, args []string) {
 		}
 
 		icon := "○"
-		if h.State == "connected" {
+		switch h.State {
+		case "connected":
 			icon = "●"
+		case "pending_auth":
+			icon = "◎"
 		}
 
 		fmt.Printf("%s %s (%s:%d, %s)\n", icon, h.Name, h.HostName, h.Port, h.User)

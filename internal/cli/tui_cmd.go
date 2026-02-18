@@ -31,6 +31,10 @@ func RunTUI(configDir string, args []string) {
 	// Bubble Tea プログラム起動
 	model := app.NewMainModel(client, Version)
 	p := tea.NewProgram(model, tea.WithAltScreen())
+
+	// TUI クレデンシャルハンドラーを設定
+	client.SetCredentialHandler(app.NewTUICredentialHandler(p))
+
 	if _, err := p.Run(); err != nil {
 		client.Close()
 		exitError("TUI エラー: %v", err)

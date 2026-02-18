@@ -84,3 +84,16 @@ type IPCNotificationMsg struct {
 
 // IPCDisconnectedMsg は IPC 接続断を通知する。
 type IPCDisconnectedMsg struct{}
+
+// CredentialRequestMsg はデーモンからのクレデンシャル要求を TUI に伝える。
+// ResponseCh に応答を書き込むとクレデンシャルがデーモンに返される。
+type CredentialRequestMsg struct {
+	Request    ipc.CredentialRequestNotification
+	ResponseCh chan<- *ipc.CredentialResponseParams
+}
+
+// CredentialSubmitMsg はパスワード入力完了時に発行される内部メッセージ。
+type CredentialSubmitMsg struct {
+	Value     string
+	Cancelled bool
+}
