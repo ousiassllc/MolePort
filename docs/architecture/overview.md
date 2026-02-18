@@ -283,9 +283,9 @@ graph TD
     end
 
     subgraph Organisms
-        HLP["HostListPanel"]
+        SP["SetupPanel"]
         FP["ForwardPanel"]
-        CP["CommandPanel"]
+        LP["LogPanel"]
         SB["StatusBar"]
     end
 
@@ -307,16 +307,16 @@ graph TD
         Div["Divider"]
     end
 
-    Dashboard --> HLP
+    Dashboard --> SP
     Dashboard --> FP
-    Dashboard --> CP
+    Dashboard --> LP
     Dashboard --> SB
 
-    HLP --> HR
-    HLP --> Div
+    SP --> HR
+    SP --> Div
     FP --> FR
     FP --> Div
-    CP --> PI
+    LP --> PI
     SB --> Key
 
     HR --> Badge
@@ -360,6 +360,7 @@ moleport/
 │   │   └── protocol.go              # JSON-RPC メッセージ型定義
 │   ├── cli/                         # CLI サブコマンド
 │   │   ├── root.go                  # CLIRouter（サブコマンド解析）
+│   │   ├── credential.go            # CLI 用クレデンシャルハンドラ
 │   │   ├── daemon_cmd.go            # moleport daemon start/stop/status
 │   │   ├── connect_cmd.go           # moleport connect <host>
 │   │   ├── disconnect_cmd.go        # moleport disconnect <host>

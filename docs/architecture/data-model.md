@@ -100,10 +100,10 @@ type Config struct {
 }
 
 type ReconnectConfig struct {
-    Enabled      bool          `yaml:"enabled"`
-    MaxRetries   int           `yaml:"max_retries"`
-    InitialDelay time.Duration `yaml:"initial_delay"`
-    MaxDelay     time.Duration `yaml:"max_delay"`
+    Enabled      bool     `yaml:"enabled"`
+    MaxRetries   int      `yaml:"max_retries"`
+    InitialDelay Duration `yaml:"initial_delay"` // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
+    MaxDelay     Duration `yaml:"max_delay"`     // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
 }
 
 type SessionConfig struct {
