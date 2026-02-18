@@ -315,7 +315,11 @@ func (m *sshManager) connectInternal(hostName string, cb CredentialCallback) err
 	}
 	m.mu.Unlock()
 
+	m.emit(SSHEvent{Type: SSHEventConnected, HostName: hostName})
+	slog.Info("SSH connected", "host", hostName)
+
 	// KeepAlive goroutine
+	// Connected イベント emit 後に起動して、イベント順序を保証する
 	go func() {
 		conn.KeepAlive(ctx, defaultKeepAliveInterval)
 		// KeepAlive が終了した場合（コンテキストキャンセル以外）、切断を検出
@@ -327,8 +331,6 @@ func (m *sshManager) connectInternal(hostName string, cb CredentialCallback) err
 		}
 	}()
 
-	m.emit(SSHEvent{Type: SSHEventConnected, HostName: hostName})
-	slog.Info("SSH connected", "host", hostName)
 	return nil
 }
 
@@ -439,6 +441,9 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		}
 		m.mu.Unlock()
 
+		m.emit(SSHEvent{Type: SSHEventConnected, HostName: hostName})
+		slog.Info("SSH reconnected", "host", hostName)
+
 		go func() {
 			conn.KeepAlive(ctx, defaultKeepAliveInterval)
 			select {
@@ -449,8 +454,6 @@ func (m *sshManager) handleDisconnect(hostName string) {
 			}
 		}()
 
-		m.emit(SSHEvent{Type: SSHEventConnected, HostName: hostName})
-		slog.Info("SSH reconnected", "host", hostName)
 		return
 	}
 

@@ -919,8 +919,7 @@ func TestHandler_CredentialResponse_NoPending(t *testing.T) {
 	_, rpcErr := h.Handle("client-1", "credential.response", params)
 	if rpcErr == nil {
 		t.Fatal("expected error for non-existent credential request")
-	}
-	if rpcErr.Code != InvalidParams {
+	} else if rpcErr.Code != InvalidParams {
 		t.Errorf("expected InvalidParams error code, got %d", rpcErr.Code)
 	}
 }
