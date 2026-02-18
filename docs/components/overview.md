@@ -201,19 +201,25 @@ Unix ドメインソケット上で JSON-RPC 2.0 リクエストを受け付け�
 #### インターフェース
 
 ```go
+// HandlerFunc は RPC リクエストを処理するハンドラ関数の型。
+type HandlerFunc func(clientID string, method string, params json.RawMessage) (any, *RPCError)
+
 type IPCServer struct {
-    socketPath string
-    listener   net.Listener
-    handler    *Handler
-    broker     *EventBroker
-    clients    map[string]*clientConn
-    mu         sync.RWMutex
+    socketPath           string
+    listener             net.Listener
+    handler              HandlerFunc
+    clients              map[string]*clientConn
+    mu                   sync.RWMutex
+    OnClientConnected    func(clientID string)
+    OnClientDisconnected func(clientID string)
 }
 
-func NewIPCServer(socketPath string, handler *Handler, broker *EventBroker) *IPCServer
+func NewIPCServer(socketPath string, handler HandlerFunc) *IPCServer
 func (s *IPCServer) Start(ctx context.Context) error
 func (s *IPCServer) Stop() error
 func (s *IPCServer) ConnectedClients() int
+func (s *IPCServer) SendNotification(clientID string, notification Notification) error
+func (s *IPCServer) BroadcastNotification(notification Notification)
 ```
 
 #### クライアント接続処理フロー
@@ -261,11 +267,11 @@ func (c *IPCClient) Connect() error
 func (c *IPCClient) Close() error
 
 // 同期リクエスト（CLI 向け）
-func (c *IPCClient) Call(method string, params interface{}, result interface{}) error
+func (c *IPCClient) Call(ctx context.Context, method string, params any, result any) error
 
 // イベントサブスクリプション（TUI 向け）
-func (c *IPCClient) Subscribe(types []string) (string, error)
-func (c *IPCClient) Unsubscribe(subscriptionID string) error
+func (c *IPCClient) Subscribe(ctx context.Context, types []string) (string, error)
+func (c *IPCClient) Unsubscribe(ctx context.Context, subscriptionID string) error
 func (c *IPCClient) Events() <-chan *Notification
 
 // クレデンシャルコールバック（CLI/TUI が実装する）
@@ -277,15 +283,12 @@ func (c *IPCClient) IsConnected() bool
 
 #### CredentialHandler
 
-CLI と TUI がそれぞれ実装する、クレデンシャル入力のハンドラインターフェース。
+CLI と TUI がそれぞれ実装する、クレデンシャル入力のコールバック関数型。
 
 ```go
-// CredentialHandler はクレデンシャル要求を処理するインターフェース。
+// CredentialHandler はクレデンシャル要求を処理するコールバック関数の型。
 // IPCClient が credential.request 通知を受信した際に呼び出される。
-type CredentialHandler interface {
-    // HandleCredentialRequest はクレデンシャル入力をユーザーに求め、結果を返す。
-    HandleCredentialRequest(req CredentialRequestNotification) CredentialResponseParams
-}
+type CredentialHandler func(req CredentialRequestNotification) (*CredentialResponseParams, error)
 ```
 
 **CLI 実装**: `internal/cli/credential.go`
@@ -397,21 +400,28 @@ Core Layer からのイベントを集約し、サブスクライブ中のクラ
 #### インターフェース
 
 ```go
+// NotifySender はクライアントに通知を送信する関数の型。
+type NotifySender func(clientID string, notification Notification) error
+
 type EventBroker struct {
-    subscriptions map[string]*Subscription
+    subscriptions map[string]*Subscription // subscriptionID -> Subscription
+    clientSubs    map[string][]string      // clientID -> []subscriptionID
+    sender        NotifySender
     mu            sync.RWMutex
 }
 
 type Subscription struct {
-    ID     string
-    Types  []string          // "ssh" | "forward" | "metrics"
-    SendFn func(notification *Notification) error
+    ID       string
+    ClientID string
+    Types    map[string]bool // "ssh" | "forward" | "metrics"
 }
 
-func NewEventBroker() *EventBroker
-func (b *EventBroker) Subscribe(types []string, sendFn func(*Notification) error) string
-func (b *EventBroker) Unsubscribe(id string)
-func (b *EventBroker) Start(ctx context.Context, sshEvents <-chan SSHEvent, fwdEvents <-chan ForwardEvent)
+func NewEventBroker(sender NotifySender) *EventBroker
+func (b *EventBroker) Subscribe(clientID string, types []string) string
+func (b *EventBroker) Unsubscribe(subscriptionID string) bool
+func (b *EventBroker) RemoveClient(clientID string)
+func (b *EventBroker) HandleSSHEvent(evt core.SSHEvent)
+func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent)
 ```
 
 #### イベント配信フロー

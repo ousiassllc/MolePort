@@ -25,7 +25,7 @@ daemon+client アーキテクチャの SSH ポートフォワーディングマ�
 
 ## 必要環境
 
-- Go 1.23+
+- Go 1.25+
 - Linux / macOS
 
 ## インストール
@@ -69,6 +69,8 @@ moleport tui
 ```
 
 ## CLI コマンド
+
+サブコマンドなしで `moleport` を実行すると TUI ダッシュボードが起動します（`moleport tui` と同等）。
 
 | コマンド | 説明 |
 |---------|------|
@@ -157,8 +159,8 @@ make clean      # ビルド成果物を削除
 
 | フック | チェック内容 |
 |--------|-------------|
-| pre-commit | `gofmt` によるフォーマット確認、`go vet` |
-| pre-push | `go test -race` (race detector 付きテスト) |
+| pre-commit | `gofmt` によるフォーマット確認、`go vet`、`golangci-lint` |
+| pre-push | `go test -race` (race detector 付きテスト)、`go build`（ビルドチェック） |
 
 セットアップ:
 

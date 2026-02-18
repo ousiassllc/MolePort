@@ -8,6 +8,8 @@ MolePort はサブコマンド形式の CLI で操作する。
 moleport <subcommand> [options] [arguments]
 ```
 
+サブコマンドを省略して `moleport` のみで実行すると、TUI ダッシュボードが起動する（`moleport tui` と同等）。
+
 ## サブコマンド一覧
 
 | サブコマンド | 引数 | 説明 |

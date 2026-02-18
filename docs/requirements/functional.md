@@ -61,10 +61,10 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 
 - **アクター**: ユーザー
 - **概要**: 新しいポート転送ルールを追加する
-- **CLI**: `moleport add`（対話形式）
+- **CLI**: `moleport add --host <host> --type <type> --local-port <port> [--remote-host <host>] [--remote-port <port>] [--name <name>] [--auto-connect]`
 - **TUI**: コマンド入力欄で `add`
 - **基本フロー**:
-  1. 対話プロンプトで、対象ホスト・転送種別（L/R/D）・ポート情報を入力
+  1. CLI フラグで対象ホスト（`--host`）・転送種別（`--type`: local/remote/dynamic）・ポート情報を指定する
   2. デーモンに forward.add リクエストを送信
   3. 設定が検証され、転送ルールが登録される
   4. 自動的にフォワーディングを開始する
@@ -223,11 +223,11 @@ moleport <subcommand> [options] [arguments]
 | サブコマンド | 引数 | 説明 |
 |------------|------|------|
 | `daemon start` | — | デーモンをバックグラウンドで起動 |
-| `daemon stop` | — | デーモンを停止 |
+| `daemon stop` | `[--purge]` | デーモンを停止（`--purge` で状態をクリア） |
 | `daemon status` | — | デーモンの稼働状態を表示 |
 | `connect` | `<host>` | SSH ホストに接続（auto_connect ルールも開始） |
 | `disconnect` | `<host>` | SSH ホストを切断（全転送も停止） |
-| `add` | — | 転送ルールを対話形式で追加 |
+| `add` | `--host <host> --type <type> --local-port <port> [options]` | 転送ルールをフラグ指定で追加 |
 | `delete` | `<name>` | 転送ルールを削除 |
 | `start` | `<name>` | 転送ルールのフォワーディングを開始 |
 | `stop` | `<name>` | 転送ルールのフォワーディングを停止 |
