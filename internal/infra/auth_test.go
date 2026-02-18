@@ -93,13 +93,7 @@ func generateTestKey(t *testing.T) (unencrypted []byte, encrypted []byte) {
 
 func TestBuildAuthMethods_WithNilCallback(t *testing.T) {
 	// SSH_AUTH_SOCK を無効化してエージェント認証を除外
-	origSock := os.Getenv("SSH_AUTH_SOCK")
 	t.Setenv("SSH_AUTH_SOCK", "")
-	defer func() {
-		if origSock != "" {
-			os.Setenv("SSH_AUTH_SOCK", origSock)
-		}
-	}()
 
 	unencrypted, _ := generateTestKey(t)
 	tmpDir := t.TempDir()
@@ -118,7 +112,9 @@ func TestBuildAuthMethods_WithNilCallback(t *testing.T) {
 
 	methods, closer := buildAuthMethods(host, nil)
 	if closer != nil {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
 	}
 
 	if len(methods) == 0 {
@@ -301,7 +297,9 @@ func TestBuildAuthMethods_PasswordAuth(t *testing.T) {
 
 	methods, closer := buildAuthMethods(host, cb)
 	if closer != nil {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
 	}
 
 	// コールバック付きなのでパスワード認証と keyboard-interactive が含まれるはず
@@ -338,7 +336,9 @@ func TestBuildAuthMethods_KeyboardInteractive(t *testing.T) {
 
 	methods, closer := buildAuthMethods(host, cb)
 	if closer != nil {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
 	}
 
 	// コールバック付きなので少なくともパスワード認証と keyboard-interactive が含まれる
@@ -360,7 +360,9 @@ func TestBuildAuthMethods_NilCallbackNoPasswordOrKBI(t *testing.T) {
 
 	methods, closer := buildAuthMethods(host, nil)
 	if closer != nil {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
 	}
 
 	// nil コールバックの場合、パスワード認証・keyboard-interactive は追加されない
@@ -399,7 +401,9 @@ func TestBuildAuthMethods_WithCallbackAndKeyFile(t *testing.T) {
 
 	methods, closer := buildAuthMethods(host, cb)
 	if closer != nil {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
 	}
 
 	// 鍵ファイル + パスワード + keyboard-interactive の少なくとも 3 つ

@@ -71,7 +71,7 @@ func trySSHAgent() (ssh.AuthMethod, net.Conn, error) {
 // tryKeyFileWithPassphrase は秘密鍵ファイルから認証メソッドを取得する。
 // 鍵がパスフレーズで暗号化されている場合、コールバックを使ってパスフレーズを取得する。
 func tryKeyFileWithPassphrase(path string, cb core.CredentialCallback, host core.SSHHost) (ssh.AuthMethod, error) {
-	keyData, err := os.ReadFile(path)
+	keyData, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read key file %s: %w", path, err)
 	}

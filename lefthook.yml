@@ -7,6 +7,9 @@ pre-commit:
     govet:
       glob: "*.go"
       run: go vet ./...
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run ./...
 
 pre-push:
   commands:

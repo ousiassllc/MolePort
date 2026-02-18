@@ -25,7 +25,7 @@ func newTestClient(t *testing.T, conn net.Conn) *IPCClient {
 	c.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	c.connected.Store(true)
 	go c.readLoop()
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 
@@ -92,7 +92,7 @@ func (s *mockServer) getReceived() []Request {
 
 func TestIPCClient_CredentialHandler_Success(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer serverConn.Close()
+	defer func() { _ = serverConn.Close() }()
 
 	server := newMockServer(t, serverConn)
 
@@ -153,7 +153,7 @@ func TestIPCClient_CredentialHandler_Success(t *testing.T) {
 
 func TestIPCClient_CredentialHandler_Cancelled(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer serverConn.Close()
+	defer func() { _ = serverConn.Close() }()
 
 	server := newMockServer(t, serverConn)
 
@@ -206,7 +206,7 @@ func TestIPCClient_CredentialHandler_Cancelled(t *testing.T) {
 
 func TestIPCClient_CredentialHandler_NoHandler(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer serverConn.Close()
+	defer func() { _ = serverConn.Close() }()
 
 	server := newMockServer(t, serverConn)
 
@@ -257,7 +257,7 @@ func TestIPCClient_CredentialHandler_NoHandler(t *testing.T) {
 
 func TestIPCClient_CredentialHandler_NotForwardedToEventCh(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer serverConn.Close()
+	defer func() { _ = serverConn.Close() }()
 
 	server := newMockServer(t, serverConn)
 

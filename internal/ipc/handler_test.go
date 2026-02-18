@@ -1024,7 +1024,9 @@ func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
 		RequestID: credReq.RequestID,
 		Value:     "secret-pwd",
 	})
-	h.Handle("client-1", "credential.response", respParams)
+	if _, err := h.Handle("client-1", "credential.response", respParams); err != nil {
+		t.Fatalf("Handle credential.response failed: %v", err)
+	}
 
 	// コールバックの完了を待機
 	select {
