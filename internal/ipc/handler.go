@@ -80,7 +80,7 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 	case "forward.delete":
 		return h.forwardDelete(params)
 	case "forward.start":
-		return h.forwardStart(params)
+		return h.forwardStart(clientID, params)
 	case "forward.stop":
 		return h.forwardStop(params)
 	case "forward.stopAll":
@@ -336,10 +336,26 @@ func (h *Handler) forwardDelete(params json.RawMessage) (any, *RPCError) {
 	return ForwardDeleteResult{OK: true}, nil
 }
 
-func (h *Handler) forwardStart(params json.RawMessage) (any, *RPCError) {
+func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *RPCError) {
 	var p ForwardStartParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
+	}
+
+	// ホスト未接続の場合、クレデンシャルコールバック付きで事前接続する。
+	// これにより forward.start でパスワード認証もサポートされる。
+	// 注意: StartForward 内にも Connect のフォールバックがあるが、
+	// そちらはコールバックなしのため、パスワード認証が必要な場合は
+	// ここでの事前接続が必須。
+	session, err := h.fwdMgr.GetSession(p.Name)
+	if err != nil {
+		return nil, toRPCError(err, InternalError)
+	}
+	if !h.sshMgr.IsConnected(session.Rule.Host) {
+		cb := h.buildCredentialCallback(clientID, session.Rule.Host)
+		if err := h.sshMgr.ConnectWithCallback(session.Rule.Host, cb); err != nil {
+			return nil, toRPCError(err, InternalError)
+		}
 	}
 
 	if err := h.fwdMgr.StartForward(p.Name); err != nil {

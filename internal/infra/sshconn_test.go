@@ -61,6 +61,57 @@ func TestSSHConnection_DynamicForwardNotConnected(t *testing.T) {
 	}
 }
 
+// TestSSHConnection_DialAttemptsConnectionWithNoAuthMethods は認証メソッドが
+// 0 個でも Dial が早期リターンせず TCP 接続を試行することを検証する。
+// Tailscale SSH のように none 認証で動作するサーバーをサポートするため必要。
+func TestSSHConnection_DialAttemptsConnectionWithNoAuthMethods(t *testing.T) {
+	// SSH_AUTH_SOCK を無効化して SSH エージェントを使えなくする
+	t.Setenv("SSH_AUTH_SOCK", "")
+	// HOME を空ディレクトリに設定してデフォルト鍵ファイルを見つけられなくする
+	t.Setenv("HOME", t.TempDir())
+
+	// TCP accept するがデータを送らないサーバー
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			defer func() { _ = conn.Close() }()
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+
+	host := core.SSHHost{
+		Name:     "tailscale-host",
+		HostName: "127.0.0.1",
+		Port:     addr.Port,
+		User:     "testuser",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, dialErr := conn.Dial(host, nil)
+	if dialErr == nil {
+		t.Fatal("Dial should return error (handshake fails with dummy server)")
+	}
+
+	// 早期リターンのエラーではなく、TCP/SSH レイヤーのエラーであること
+	errMsg := dialErr.Error()
+	if errMsg == "no authentication methods available for host tailscale-host" {
+		t.Error("Dial should not return early with 'no authentication methods available'; " +
+			"it should attempt TCP connection to allow none auth")
+	}
+}
+
 // TestSSHConnection_DialTimeoutOnHangingHandshake は SSH ハンドシェイクが
 // ハングした場合にタイムアウトでエラーが返ることを検証する回帰テスト。
 func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {

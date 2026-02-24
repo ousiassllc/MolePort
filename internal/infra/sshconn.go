@@ -56,12 +56,9 @@ func NewSSHConnection() SSHConnection {
 
 func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
 	authMethods, agentCloser := buildAuthMethods(host, cb)
-	if len(authMethods) == 0 {
-		if agentCloser != nil {
-			agentCloser.Close()
-		}
-		return nil, fmt.Errorf("no authentication methods available for host %s", host.Name)
-	}
+	// authMethods が空でも早期リターンしない。
+	// Go の crypto/ssh は常に "none" 認証を最初に試行するため、
+	// Tailscale SSH のように none 認証で動作するサーバーへの接続が可能。
 
 	closeAgent := func() {
 		if agentCloser != nil {
