@@ -19,10 +19,19 @@ graph TD
     end
 
     subgraph "IPC Layer"
-        IPCSrv["IPCServer<br/>JSON-RPC サーバー"]
-        IPCCli["IPCClient<br/>JSON-RPC クライアント"]
-        Handler["Handler<br/>RPC メソッドハンドラ"]
-        Broker["EventBroker<br/>イベント配信"]
+        subgraph "ipc/"
+            IPCSrv["IPCServer<br/>JSON-RPC サーバー"]
+            Broker["EventBroker<br/>イベント配信"]
+        end
+        subgraph "ipc/handler/"
+            Handler["Handler<br/>RPC メソッドハンドラ"]
+        end
+        subgraph "ipc/client/"
+            IPCCli["IPCClient<br/>JSON-RPC クライアント"]
+        end
+        subgraph "ipc/protocol/"
+            Proto["Protocol<br/>メッセージ型定義"]
+        end
     end
 
     subgraph "CLI Layer"
@@ -44,10 +53,16 @@ graph TD
     end
 
     subgraph "Core Layer"
-        SSH["SSHManager"]
-        Fwd["ForwardManager"]
-        Cfg["ConfigManager"]
-        Types["types.go"]
+        subgraph "core/"
+            Types["types_*.go<br/>共有型定義"]
+            Cfg["ConfigManager"]
+        end
+        subgraph "core/ssh/"
+            SSH["SSHManager"]
+        end
+        subgraph "core/forward/"
+            Fwd["ForwardManager"]
+        end
     end
 
     subgraph "Infra Layer"
@@ -89,6 +104,8 @@ graph TD
     Handler --> SSH
     Handler --> Fwd
     Handler --> Cfg
+    Handler --> Proto
+    IPCCli --> Proto
 
     SSH --> Conn
     SSH --> Parser
@@ -186,7 +203,9 @@ func IsDaemonMode() bool
 
 ## IPC Layer コンポーネント
 
-### IPCServer
+> **パッケージ構成**: `ipc/`（サーバー・broker）、`ipc/protocol/`（メッセージ型）、`ipc/handler/`（RPCハンドラ）、`ipc/client/`（クライアント）
+
+### IPCServer (`ipc/`)
 
 Unix ドメインソケット上で JSON-RPC 2.0 リクエストを受け付け、ハンドラにディスパッチする。
 
@@ -239,7 +258,7 @@ flowchart TD
     UnSub --> Close["接続 Close"]
 ```
 
-### IPCClient
+### IPCClient (`ipc/client/`)
 
 CLI/TUI が使用する JSON-RPC 2.0 クライアント。
 
@@ -299,9 +318,20 @@ type CredentialHandler func(req CredentialRequestNotification) (*CredentialRespo
 - Bubble Tea の `textinput` をベースにマスク表示の入力フィールドを実装
 - `echo: true` の場合は通常表示、`false` の場合は `*` でマスク
 
-### Handler
+### Handler (`ipc/handler/`)
 
-JSON-RPC メソッドを Core Layer のマネージャに委譲する。
+JSON-RPC メソッドを Core Layer のマネージャに委譲する。ドメイン別にファイルを分割する。
+
+| ファイル | 担当メソッド |
+|---------|------------|
+| `handler.go` | ディスパッチャ・初期化・`parseParams` |
+| `handler_host.go` | `host.list`, `host.reload` |
+| `handler_ssh.go` | `ssh.connect`, `ssh.disconnect`, `credential.*` |
+| `handler_forward.go` | `forward.add/delete/start/stop/list/stopAll` |
+| `handler_session.go` | `session.list`, `session.get` |
+| `handler_config.go` | `config.get`, `config.update` |
+| `handler_daemon.go` | `daemon.status`, `daemon.shutdown` |
+| `handler_events.go` | `events.subscribe/unsubscribe` |
 
 #### 責務
 
@@ -539,9 +569,18 @@ func runConnectCmd(args []string) {
 
 ## Core Layer コンポーネント
 
-### SSHManager（変更あり）
+> **パッケージ構成**: `core/`（共有型定義・設定・SOCKS5）、`core/ssh/`（SSH接続管理）、`core/forward/`（フォワード管理）
 
-SSH 接続のライフサイクルを管理する。
+### SSHManager (`core/ssh/`)
+
+SSH 接続のライフサイクルを管理する。ファイルを責務別に分割する。
+
+| ファイル | 責務 |
+|---------|------|
+| `manager.go` | インターフェース定義・初期化・基本クエリ |
+| `lifecycle.go` | `Connect`/`ConnectWithCallback`/`Disconnect` |
+| `reconnect.go` | 自動再接続（指数バックオフ） |
+| `hosts.go` | ホスト管理（`LoadHosts`/`ReloadHosts`/`GetHosts`） |
 
 #### 責務
 
@@ -583,9 +622,16 @@ type SSHManager interface {
 | `Connect` | セッション復元・auto_connect・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
 | `ConnectWithCallback` | `ssh.connect` / `forward.start` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
 
-### ForwardManager
+### ForwardManager (`core/forward/`)
 
-ポートフォワーディングルールの管理と実行を担う。
+ポートフォワーディングルールの管理と実行を担う。ファイルを責務別に分割する。
+
+| ファイル | 責務 |
+|---------|------|
+| `manager.go` | インターフェース定義・初期化・ルール管理 |
+| `lifecycle.go` | `StartForward`/`StopForward`/`StopAllForwards` |
+| `bridge.go` | 接続ブリッジ（`acceptLoop`/`dialRemote`/`bridge`/SOCKS5） |
+| `events.go` | セッション照会・イベント管理 |
 
 #### インターフェース
 
@@ -605,9 +651,9 @@ type ForwardManager interface {
 }
 ```
 
-### ConfigManager
+### ConfigManager (`core/`)
 
-設定ファイルと状態ファイルの永続化を管理する。
+設定ファイルと状態ファイルの永続化を管理する。`core/` ベースパッケージに残る。
 
 #### インターフェース
 
@@ -784,6 +830,29 @@ SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
 - **ペインローカルキー**（`j`/`k`, `Enter`, `d`, `x`）: フォーカス中の Organism に委譲
 - キー定義は `internal/tui/keys.go` に集約する
 
+## ファイル分割方針
+
+Linterly のファイル行数制限（300行/ファイル）に準拠するため、大きなファイルを責務に基づいて分割する。
+
+### 分割の原則
+
+- **同一パッケージ内での分割を優先**: import パスの変更を最小限に抑える
+- **責務（ドメイン / ライフサイクルフェーズ）で分割**: 関連するロジックを同じファイルにまとめる
+- **テストファイルも対応するソースファイルと同じ粒度で分割**: `handler_ssh.go` → `handler_ssh_test.go`
+
+### 分割対象サマリー
+
+| パッケージ | 分割前ファイル | 行数 | 分割後ファイル数 |
+|-----------|-------------|------|--------------|
+| `core/ssh/` | `ssh.go` | 600 | 4 |
+| `core/forward/` | `forward.go` | 520 | 4 |
+| `core/` | `types.go` | 340 | 4 (`types_enums.go`, `types_models.go`, `types_events.go`, `types_credentials.go`) |
+| `ipc/handler/` | `handler.go` | 587 | 8 |
+| `ipc/protocol/` | `protocol.go` | 432 | 8 |
+| `tui/app/` | `app.go` | 470 | 4 (`app.go`, `app_ipc.go`, `app_forward.go`, `app_credentials.go`) |
+| `tui/organisms/` | `setuppanel.go` | 534 | 3 (`setuppanel.go`, `setuppanel_update.go`, `setuppanel_view.go`) |
+| `daemon/` | `daemon.go` | 321 | 3 (`daemon.go`, `daemon_events.go`, `daemon_state.go`) |
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -793,3 +862,4 @@ SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
 | 2.0 | 2026-02-11 | デーモン化対応: Daemon/IPC/CLI Layer コンポーネント追加、TUI の IPCClient 経由化 | デーモン化対応 |
 | 2.1 | 2026-02-11 | SSHManager に ConnectWithCallback/GetPendingAuthHosts 追加、SSHConnection.Dial にコールバック引数追加、buildAuthMethods のパスフレーズ/パスワード/KI 対応、Handler のクレデンシャルコールバック実装、CredentialHandler インターフェース追加 | #11 クレデンシャル入力機能追加 |
 | 2.2 | 2026-02-24 | forward.start に clientID 引数追加（クレデンシャルコールバック対応）、ConnectWithCallback の用途に forward.start を追加、SSHConnection.Dial に none 認証（Tailscale SSH）の説明追加 | #16 フォワード開始失敗時の修正 |
+| 2.3 | 2026-02-25 | サブパッケージ分割を反映: Core Layer（core/ssh/, core/forward/）、IPC Layer（ipc/protocol/, ipc/handler/, ipc/client/）。ファイル分割方針セクション追加。依存関係図更新 | #17 Linterly 導入 |
