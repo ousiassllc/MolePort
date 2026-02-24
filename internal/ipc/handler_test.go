@@ -14,11 +14,13 @@ import (
 // --- Mock implementations ---
 
 type mockSSHManager struct {
-	hosts     []core.SSHHost
-	loadErr   error
-	reloadErr error
-	connectFn func(hostName string) error
-	disconnFn func(hostName string) error
+	hosts           []core.SSHHost
+	loadErr         error
+	reloadErr       error
+	connectFn       func(hostName string) error
+	connectWithCbFn func(hostName string, cb core.CredentialCallback) error
+	disconnFn       func(hostName string) error
+	connected       map[string]bool
 }
 
 func (m *mockSSHManager) LoadHosts() ([]core.SSHHost, error) {
@@ -56,6 +58,9 @@ func (m *mockSSHManager) Connect(hostName string) error {
 }
 
 func (m *mockSSHManager) ConnectWithCallback(hostName string, cb core.CredentialCallback) error {
+	if m.connectWithCbFn != nil {
+		return m.connectWithCbFn(hostName, cb)
+	}
 	return m.Connect(hostName)
 }
 
@@ -68,7 +73,12 @@ func (m *mockSSHManager) Disconnect(hostName string) error {
 	return nil
 }
 
-func (m *mockSSHManager) IsConnected(_ string) bool { return false }
+func (m *mockSSHManager) IsConnected(hostName string) bool {
+	if m.connected != nil {
+		return m.connected[hostName]
+	}
+	return false
+}
 func (m *mockSSHManager) GetConnection(_ string) (*ssh.Client, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -1041,5 +1051,39 @@ func TestHandler_BuildCredentialCallback_NilSender(t *testing.T) {
 	cb := h.buildCredentialCallback("client-1", "test-host")
 	if cb != nil {
 		t.Error("callback should be nil when sender is nil")
+	}
+}
+
+func TestHandler_ForwardStart_PreConnectsWithCallback(t *testing.T) {
+	h, sshMgr, fwdMgr, _ := newTestHandler()
+	sender := &mockNotificationSender{}
+	h.SetSender(sender)
+
+	// ホストは未接続
+	sshMgr.connected = map[string]bool{"prod": false}
+
+	// ConnectWithCallback が呼ばれたことを記録
+	var cbWasNonNil bool
+	sshMgr.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
+		cbWasNonNil = cb != nil
+		// 接続成功をシミュレート
+		sshMgr.connected[hostName] = true
+		return nil
+	}
+
+	// セッション情報にルールを追加（GetSession で Host を取得するため）
+	fwdMgr.sessions = append(fwdMgr.sessions, core.ForwardSession{
+		Rule:   core.ForwardRule{Name: "db", Host: "prod", Type: core.Local, LocalPort: 5432, RemoteHost: "localhost", RemotePort: 5432},
+		Status: core.Stopped,
+	})
+
+	params := mustMarshal(t, ForwardStartParams{Name: "db"})
+	_, rpcErr := h.Handle("client-1", "forward.start", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	if !cbWasNonNil {
+		t.Error("forwardStart should call ConnectWithCallback with non-nil callback when sender is set")
 	}
 }
