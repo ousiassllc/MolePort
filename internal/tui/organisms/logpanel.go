@@ -77,7 +77,7 @@ func styleLogLine(line string) string {
 		return ""
 	}
 	// エラー行
-	if strings.Contains(line, "エラー") || strings.Contains(line, "Error") {
+	if strings.Contains(line, "エラー") || strings.Contains(line, "Error") || strings.Contains(line, "失敗") {
 		return tui.ErrorStyle.Render("✗") + " " + tui.MutedStyle.Render(line)
 	}
 	// 成功行（「しました」「完了」等）

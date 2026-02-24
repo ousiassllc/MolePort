@@ -303,7 +303,15 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 			startParams := ipc.ForwardStartParams{Name: result.Name}
 			var startResult ipc.ForwardStartResult
 			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
-				return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加しましたが、開始に失敗: %s", result.Name, err)}
+				// 開始に失敗したルールを削除（ロールバック）
+				delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+				defer delCancel()
+				delParams := ipc.ForwardDeleteParams(result)
+				var delResult ipc.ForwardDeleteResult
+				if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
+					return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' の開始に失敗: %s（ルール削除にも失敗: %s）", result.Name, err, delErr)}
+				}
+				return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' の開始に失敗: %s", result.Name, err)}
 			}
 			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加し、開始しました", result.Name)}
 		}
