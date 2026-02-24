@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forward"
 	"github.com/ousiassllc/moleport/internal/core/ssh"
 	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/ipc"
+	ipchandler "github.com/ousiassllc/moleport/internal/ipc/handler"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -38,7 +40,7 @@ type Daemon struct {
 	fwdMgr core.ForwardManager
 
 	broker  *ipc.EventBroker
-	handler *ipc.Handler
+	handler *ipchandler.Handler
 	server  *ipc.IPCServer
 	pidFile *PIDFile
 
@@ -77,7 +79,7 @@ func New(configDir string) (*Daemon, error) {
 		sshConfigPath,
 		cfg.Reconnect,
 	)
-	fwdMgr := core.NewForwardManager(sshMgr)
+	fwdMgr := forward.NewForwardManager(sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
 	for _, rule := range cfg.Forwards {
@@ -103,7 +105,7 @@ func New(configDir string) (*Daemon, error) {
 		return d.server.SendNotification(clientID, notification)
 	})
 
-	handler := ipc.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d)
+	handler := ipchandler.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d)
 	server := ipc.NewIPCServer(SocketPath(configDir), handler.Handle)
 
 	// クライアント切断時にブローカーから購読を削除する
