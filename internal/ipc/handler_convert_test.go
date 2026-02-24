@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 func TestToRPCError(t *testing.T) {
@@ -19,64 +20,64 @@ func TestToRPCError(t *testing.T) {
 		{
 			name:        "host not found",
 			err:         fmt.Errorf("host not found"),
-			defaultCode: InternalError,
-			wantCode:    HostNotFound,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.HostNotFound,
 			wantMsg:     "host not found",
 		},
 		{
 			name:        "rule not found",
 			err:         fmt.Errorf("rule not found"),
-			defaultCode: InternalError,
-			wantCode:    RuleNotFound,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.RuleNotFound,
 			wantMsg:     "rule not found",
 		},
 		{
 			name:        "already exists",
 			err:         fmt.Errorf("rule already exists"),
-			defaultCode: InternalError,
-			wantCode:    RuleAlreadyExists,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.RuleAlreadyExists,
 			wantMsg:     "rule already exists",
 		},
 		{
 			name:        "already active",
 			err:         fmt.Errorf("connection already active"),
-			defaultCode: InternalError,
-			wantCode:    AlreadyConnected,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.AlreadyConnected,
 			wantMsg:     "connection already active",
 		},
 		{
 			name:        "not connected",
 			err:         fmt.Errorf("host is not connected"),
-			defaultCode: InternalError,
-			wantCode:    NotConnected,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.NotConnected,
 			wantMsg:     "host is not connected",
 		},
 		{
 			name:        "already connected",
 			err:         fmt.Errorf("host already connected"),
-			defaultCode: InternalError,
-			wantCode:    AlreadyConnected,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.AlreadyConnected,
 			wantMsg:     "host already connected",
 		},
 		{
 			name:        "credential timeout",
 			err:         fmt.Errorf("credential timeout"),
-			defaultCode: InternalError,
-			wantCode:    CredentialTimeout,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.CredentialTimeout,
 			wantMsg:     "credential timeout",
 		},
 		{
 			name:        "credential cancelled",
 			err:         fmt.Errorf("credential cancelled"),
-			defaultCode: InternalError,
-			wantCode:    CredentialCancelled,
+			defaultCode: protocol.InternalError,
+			wantCode:    protocol.CredentialCancelled,
 			wantMsg:     "credential cancelled",
 		},
 		{
 			name:        "generic error uses defaultCode",
 			err:         fmt.Errorf("something unexpected happened"),
-			defaultCode: InvalidParams,
-			wantCode:    InvalidParams,
+			defaultCode: protocol.InvalidParams,
+			wantCode:    protocol.InvalidParams,
 			wantMsg:     "something unexpected happened",
 		},
 	}
@@ -98,7 +99,7 @@ func TestToHostInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		host core.SSHHost
-		want HostInfo
+		want protocol.HostInfo
 	}{
 		{
 			name: "connected host",
@@ -110,7 +111,7 @@ func TestToHostInfo(t *testing.T) {
 				State:              core.Connected,
 				ActiveForwardCount: 3,
 			},
-			want: HostInfo{
+			want: protocol.HostInfo{
 				Name:               "prod",
 				HostName:           "192.168.1.1",
 				Port:               22,
@@ -129,7 +130,7 @@ func TestToHostInfo(t *testing.T) {
 				State:              core.Disconnected,
 				ActiveForwardCount: 0,
 			},
-			want: HostInfo{
+			want: protocol.HostInfo{
 				Name:               "staging",
 				HostName:           "10.0.0.1",
 				Port:               2222,
@@ -154,7 +155,7 @@ func TestToForwardInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		rule core.ForwardRule
-		want ForwardInfo
+		want protocol.ForwardInfo
 	}{
 		{
 			name: "local forward rule",
@@ -167,7 +168,7 @@ func TestToForwardInfo(t *testing.T) {
 				RemotePort:  80,
 				AutoConnect: true,
 			},
-			want: ForwardInfo{
+			want: protocol.ForwardInfo{
 				Name:        "web",
 				Host:        "prod",
 				Type:        "local",
@@ -195,7 +196,7 @@ func TestToSessionInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		sess core.ForwardSession
-		want SessionInfo
+		want protocol.SessionInfo
 	}{
 		{
 			name: "non-zero ConnectedAt formatted as RFC3339",
@@ -216,7 +217,7 @@ func TestToSessionInfo(t *testing.T) {
 				ReconnectCount: 1,
 				LastError:      "connection reset",
 			},
-			want: SessionInfo{
+			want: protocol.SessionInfo{
 				ID:             "prod-local-8080",
 				Name:           "web",
 				Host:           "prod",
@@ -247,7 +248,7 @@ func TestToSessionInfo(t *testing.T) {
 				Status:      core.Stopped,
 				ConnectedAt: time.Time{},
 			},
-			want: SessionInfo{
+			want: protocol.SessionInfo{
 				ID:         "staging-local-3000",
 				Name:       "api",
 				Host:       "staging",

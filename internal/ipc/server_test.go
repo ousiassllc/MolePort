@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 func testCtxWithCleanup(t *testing.T) context.Context {
@@ -18,14 +20,14 @@ func testCtxWithCleanup(t *testing.T) context.Context {
 }
 
 // echoHandler はメソッド名に応じた固定レスポンスを返すテスト用ハンドラ。
-func echoHandler(_ string, method string, params json.RawMessage) (any, *RPCError) {
+func echoHandler(_ string, method string, params json.RawMessage) (any, *protocol.RPCError) {
 	switch method {
 	case "echo":
 		return json.RawMessage(params), nil
 	case "error":
-		return nil, &RPCError{Code: InternalError, Message: "test error"}
+		return nil, &protocol.RPCError{Code: protocol.InternalError, Message: "test error"}
 	default:
-		return nil, &RPCError{Code: MethodNotFound, Message: "method not found"}
+		return nil, &protocol.RPCError{Code: protocol.MethodNotFound, Message: "method not found"}
 	}
 }
 
@@ -74,12 +76,12 @@ func TestServerClient_ErrorResponse(t *testing.T) {
 		t.Fatal("Call should return error")
 	}
 
-	rpcErr, ok := err.(*RPCError)
+	rpcErr, ok := err.(*protocol.RPCError)
 	if !ok {
-		t.Fatalf("error should be *RPCError, got %T: %v", err, err)
+		t.Fatalf("error should be *protocol.RPCError, got %T: %v", err, err)
 	}
-	if rpcErr.Code != InternalError {
-		t.Errorf("RPCError.Code = %d, want %d", rpcErr.Code, InternalError)
+	if rpcErr.Code != protocol.InternalError {
+		t.Errorf("RPCError.Code = %d, want %d", rpcErr.Code, protocol.InternalError)
 	}
 	if rpcErr.Message != "test error" {
 		t.Errorf("RPCError.Message = %q, want %q", rpcErr.Message, "test error")
@@ -164,12 +166,12 @@ func TestServerClient_Notification(t *testing.T) {
 	cid := connectedID
 	mu.Unlock()
 
-	notifParams, _ := json.Marshal(SSHEventNotification{
+	notifParams, _ := json.Marshal(protocol.SSHEventNotification{
 		Type: "connected",
 		Host: "prod",
 	})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "event.ssh",
 		Params:  notifParams,
 	}
@@ -183,7 +185,7 @@ func TestServerClient_Notification(t *testing.T) {
 		if got.Method != "event.ssh" {
 			t.Errorf("notification method = %q, want %q", got.Method, "event.ssh")
 		}
-		var evt SSHEventNotification
+		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(got.Params, &evt); err != nil {
 			t.Fatalf("unmarshal notification params: %v", err)
 		}
@@ -204,8 +206,8 @@ func TestServerClient_BroadcastNotification(t *testing.T) {
 	waitFor(t, func() bool { return srv.ConnectedClients() == 2 })
 
 	notifParams, _ := json.Marshal(map[string]string{"msg": "broadcast"})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "event.broadcast",
 		Params:  notifParams,
 	}
@@ -283,8 +285,8 @@ func TestServerClient_ServerStop(t *testing.T) {
 func TestServerClient_SendNotification_UnknownClient(t *testing.T) {
 	srv, _ := startTestServer(t, echoHandler)
 
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "event.test",
 	}
 
@@ -304,7 +306,7 @@ func TestIPCClient_CallNotConnected(t *testing.T) {
 
 func TestIPCClient_CallContextTimeout(t *testing.T) {
 	// レスポンスを返さないハンドラでタイムアウトを検証する
-	slowHandler := func(_ string, method string, params json.RawMessage) (any, *RPCError) {
+	slowHandler := func(_ string, method string, params json.RawMessage) (any, *protocol.RPCError) {
 		time.Sleep(5 * time.Second)
 		return nil, nil
 	}

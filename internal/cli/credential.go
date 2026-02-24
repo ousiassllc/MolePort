@@ -9,11 +9,12 @@ import (
 	"golang.org/x/term"
 
 	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // newCLICredentialHandler はターミナルからクレデンシャルを読み取る CredentialHandler を返す。
 func newCLICredentialHandler() ipc.CredentialHandler {
-	return func(req ipc.CredentialRequestNotification) (*ipc.CredentialResponseParams, error) {
+	return func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 		switch req.Type {
 		case "password", "passphrase":
 			return handlePasswordPrompt(req)
@@ -26,7 +27,7 @@ func newCLICredentialHandler() ipc.CredentialHandler {
 }
 
 // handlePasswordPrompt はパスワード/パスフレーズのサイレント入力を行う。
-func handlePasswordPrompt(req ipc.CredentialRequestNotification) (*ipc.CredentialResponseParams, error) {
+func handlePasswordPrompt(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 	prompt := req.Prompt
 	if prompt == "" {
 		if req.Type == "passphrase" {
@@ -43,16 +44,16 @@ func handlePasswordPrompt(req ipc.CredentialRequestNotification) (*ipc.Credentia
 		return nil, err
 	}
 
-	return &ipc.CredentialResponseParams{
+	return &protocol.CredentialResponseParams{
 		RequestID: req.RequestID,
 		Value:     string(password),
 	}, nil
 }
 
 // handleKeyboardInteractive は keyboard-interactive 認証のプロンプトを処理する。
-func handleKeyboardInteractive(req ipc.CredentialRequestNotification) (*ipc.CredentialResponseParams, error) {
+func handleKeyboardInteractive(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 	if len(req.Prompts) == 0 {
-		return &ipc.CredentialResponseParams{
+		return &protocol.CredentialResponseParams{
 			RequestID: req.RequestID,
 			Answers:   []string{},
 		}, nil
@@ -80,7 +81,7 @@ func handleKeyboardInteractive(req ipc.CredentialRequestNotification) (*ipc.Cred
 		}
 	}
 
-	return &ipc.CredentialResponseParams{
+	return &protocol.CredentialResponseParams{
 		RequestID: req.RequestID,
 		Answers:   answers,
 	}, nil

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // connectCallTimeout は ssh.connect 呼び出しのタイムアウト。
@@ -28,8 +28,8 @@ func RunConnect(configDir string, args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), connectCallTimeout)
 	defer cancel()
 
-	params := ipc.SSHConnectParams{Host: host}
-	var result ipc.SSHConnectResult
+	params := protocol.SSHConnectParams{Host: host}
+	var result protocol.SSHConnectResult
 	if err := client.Call(ctx, "ssh.connect", params, &result); err != nil {
 		exitError("%v", err)
 	}

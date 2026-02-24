@@ -9,17 +9,18 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // DaemonInfo はデーモンの状態情報とシャットダウンを提供するインターフェース。
 type DaemonInfo interface {
-	Status() DaemonStatusResult
+	Status() protocol.DaemonStatusResult
 	Shutdown(purge bool) error
 }
 
 // NotificationSender はクライアントに通知を送信するインターフェース。
 type NotificationSender interface {
-	SendNotification(clientID string, notification Notification) error
+	SendNotification(clientID string, notification protocol.Notification) error
 }
 
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
@@ -32,7 +33,7 @@ type Handler struct {
 	sender NotificationSender
 
 	credMu      sync.Mutex
-	credPending map[string]chan CredentialResponseParams
+	credPending map[string]chan protocol.CredentialResponseParams
 	credNextID  atomic.Int64
 }
 
@@ -50,7 +51,7 @@ func NewHandler(
 		cfgMgr:      cfgMgr,
 		broker:      broker,
 		daemon:      daemon,
-		credPending: make(map[string]chan CredentialResponseParams),
+		credPending: make(map[string]chan protocol.CredentialResponseParams),
 	}
 }
 
@@ -61,7 +62,7 @@ func (h *Handler) SetSender(sender NotificationSender) {
 }
 
 // Handle は JSON-RPC メソッドをディスパッチする。HandlerFunc として使用する。
-func (h *Handler) Handle(clientID string, method string, params json.RawMessage) (any, *RPCError) {
+func (h *Handler) Handle(clientID string, method string, params json.RawMessage) (any, *protocol.RPCError) {
 	switch method {
 	case "host.list":
 		return h.hostList()
@@ -102,20 +103,20 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 	case "events.unsubscribe":
 		return h.eventsUnsubscribe(params)
 	default:
-		return nil, &RPCError{Code: MethodNotFound, Message: "method not found: " + method}
+		return nil, &protocol.RPCError{Code: protocol.MethodNotFound, Message: "method not found: " + method}
 	}
 }
 
 // --- ホスト管理 ---
 
-func (h *Handler) hostList() (any, *RPCError) {
+func (h *Handler) hostList() (any, *protocol.RPCError) {
 	hosts, err := h.sshMgr.LoadHosts()
 	if err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	result := HostListResult{
-		Hosts: make([]HostInfo, len(hosts)),
+	result := protocol.HostListResult{
+		Hosts: make([]protocol.HostInfo, len(hosts)),
 	}
 	for i, host := range hosts {
 		result.Hosts[i] = toHostInfo(host)
@@ -123,14 +124,14 @@ func (h *Handler) hostList() (any, *RPCError) {
 	return result, nil
 }
 
-func (h *Handler) hostReload() (any, *RPCError) {
+func (h *Handler) hostReload() (any, *protocol.RPCError) {
 	// TODO: ReloadHosts 前後の差分を計算して Added/Removed を返す
 	hosts, err := h.sshMgr.ReloadHosts()
 	if err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return HostReloadResult{
+	return protocol.HostReloadResult{
 		Total:   len(hosts),
 		Added:   []string{},
 		Removed: []string{},
@@ -142,8 +143,8 @@ func (h *Handler) hostReload() (any, *RPCError) {
 // credentialTimeout はクレデンシャル応答のタイムアウト。
 const credentialTimeout = 30 * time.Second
 
-func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPCError) {
-	var p SSHConnectParams
+func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.SSHConnectParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
@@ -152,10 +153,10 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPC
 	cb := h.buildCredentialCallback(clientID, p.Host)
 
 	if err := h.sshMgr.ConnectWithCallback(p.Host, cb); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return SSHConnectResult{
+	return protocol.SSHConnectResult{
 		Host:   p.Host,
 		Status: "connected",
 	}, nil
@@ -170,7 +171,7 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 		reqID := fmt.Sprintf("cr-%d", h.credNextID.Add(1))
 
 		// レスポンス待機用チャネルを登録
-		ch := make(chan CredentialResponseParams, 1)
+		ch := make(chan protocol.CredentialResponseParams, 1)
 		h.credMu.Lock()
 		h.credPending[reqID] = ch
 		h.credMu.Unlock()
@@ -182,16 +183,16 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 		}()
 
 		// credential.request 通知をクライアントに送信
-		notif := CredentialRequestNotification{
+		notif := protocol.CredentialRequestNotification{
 			RequestID: reqID,
 			Type:      string(req.Type),
 			Host:      req.Host,
 			Prompt:    req.Prompt,
 		}
 		if len(req.Prompts) > 0 {
-			notif.Prompts = make([]PromptData, len(req.Prompts))
+			notif.Prompts = make([]protocol.PromptData, len(req.Prompts))
 			for i, p := range req.Prompts {
-				notif.Prompts[i] = PromptData{Prompt: p.Prompt, Echo: p.Echo}
+				notif.Prompts[i] = protocol.PromptData{Prompt: p.Prompt, Echo: p.Echo}
 			}
 		}
 
@@ -200,8 +201,8 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 			return core.CredentialResponse{}, fmt.Errorf("marshal credential request: %w", err)
 		}
 
-		if err := h.sender.SendNotification(clientID, Notification{
-			JSONRPC: JSONRPCVersion,
+		if err := h.sender.SendNotification(clientID, protocol.Notification{
+			JSONRPC: protocol.JSONRPCVersion,
 			Method:  "credential.request",
 			Params:  data,
 		}); err != nil {
@@ -226,8 +227,8 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 }
 
 // credentialResponse はクライアントからのクレデンシャル応答を処理する。
-func (h *Handler) credentialResponse(params json.RawMessage) (any, *RPCError) {
-	var p CredentialResponseParams
+func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.CredentialResponseParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
@@ -237,7 +238,7 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *RPCError) {
 	h.credMu.Unlock()
 
 	if !ok {
-		return nil, &RPCError{Code: InvalidParams, Message: "no pending credential request for id: " + p.RequestID}
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "no pending credential request for id: " + p.RequestID}
 	}
 
 	// 非ブロッキングで送信（チャネルはバッファ1）
@@ -246,20 +247,20 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *RPCError) {
 	default:
 	}
 
-	return CredentialResponseResult{OK: true}, nil
+	return protocol.CredentialResponseResult{OK: true}, nil
 }
 
-func (h *Handler) sshDisconnect(params json.RawMessage) (any, *RPCError) {
-	var p SSHDisconnectParams
+func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.SSHDisconnectParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	if err := h.sshMgr.Disconnect(p.Host); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return SSHDisconnectResult{
+	return protocol.SSHDisconnectResult{
 		Host:   p.Host,
 		Status: "disconnected",
 	}, nil
@@ -267,8 +268,8 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *RPCError) {
 
 // --- ポートフォワーディング管理 ---
 
-func (h *Handler) forwardList(params json.RawMessage) (any, *RPCError) {
-	var p ForwardListParams
+func (h *Handler) forwardList(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ForwardListParams
 	// params が nil や空の場合はデフォルト値を使用する
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -283,8 +284,8 @@ func (h *Handler) forwardList(params json.RawMessage) (any, *RPCError) {
 		rules = h.fwdMgr.GetRules()
 	}
 
-	result := ForwardListResult{
-		Forwards: make([]ForwardInfo, len(rules)),
+	result := protocol.ForwardListResult{
+		Forwards: make([]protocol.ForwardInfo, len(rules)),
 	}
 	for i, rule := range rules {
 		result.Forwards[i] = toForwardInfo(rule)
@@ -292,15 +293,15 @@ func (h *Handler) forwardList(params json.RawMessage) (any, *RPCError) {
 	return result, nil
 }
 
-func (h *Handler) forwardAdd(params json.RawMessage) (any, *RPCError) {
-	var p ForwardAddParams
+func (h *Handler) forwardAdd(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ForwardAddParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	fwdType, err := core.ParseForwardType(p.Type)
 	if err != nil {
-		return nil, &RPCError{Code: InvalidParams, Message: err.Error()}
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: err.Error()}
 	}
 
 	rule := core.ForwardRule{
@@ -315,29 +316,29 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *RPCError) {
 
 	name, err := h.fwdMgr.AddRule(rule)
 	if err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
 	h.saveForwardRulesToConfig()
-	return ForwardAddResult{Name: name}, nil
+	return protocol.ForwardAddResult{Name: name}, nil
 }
 
-func (h *Handler) forwardDelete(params json.RawMessage) (any, *RPCError) {
-	var p ForwardDeleteParams
+func (h *Handler) forwardDelete(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ForwardDeleteParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	if err := h.fwdMgr.DeleteRule(p.Name); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
 	h.saveForwardRulesToConfig()
-	return ForwardDeleteResult{OK: true}, nil
+	return protocol.ForwardDeleteResult{OK: true}, nil
 }
 
-func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *RPCError) {
-	var p ForwardStartParams
+func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ForwardStartParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
@@ -349,42 +350,42 @@ func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *R
 	// ここでの事前接続が必須。
 	session, err := h.fwdMgr.GetSession(p.Name)
 	if err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 	if !h.sshMgr.IsConnected(session.Rule.Host) {
 		cb := h.buildCredentialCallback(clientID, session.Rule.Host)
 		if err := h.sshMgr.ConnectWithCallback(session.Rule.Host, cb); err != nil {
-			return nil, toRPCError(err, InternalError)
+			return nil, toRPCError(err, protocol.InternalError)
 		}
 	}
 
 	if err := h.fwdMgr.StartForward(p.Name); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return ForwardStartResult{
+	return protocol.ForwardStartResult{
 		Name:   p.Name,
 		Status: "active",
 	}, nil
 }
 
-func (h *Handler) forwardStop(params json.RawMessage) (any, *RPCError) {
-	var p ForwardStopParams
+func (h *Handler) forwardStop(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ForwardStopParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	if err := h.fwdMgr.StopForward(p.Name); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return ForwardStopResult{
+	return protocol.ForwardStopResult{
 		Name:   p.Name,
 		Status: "stopped",
 	}, nil
 }
 
-func (h *Handler) forwardStopAll() (any, *RPCError) {
+func (h *Handler) forwardStopAll() (any, *protocol.RPCError) {
 	sessions := h.fwdMgr.GetAllSessions()
 	active := 0
 	for _, s := range sessions {
@@ -394,19 +395,19 @@ func (h *Handler) forwardStopAll() (any, *RPCError) {
 	}
 
 	if err := h.fwdMgr.StopAllForwards(); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return ForwardStopAllResult{Stopped: active}, nil
+	return protocol.ForwardStopAllResult{Stopped: active}, nil
 }
 
 // --- セッション情報 ---
 
-func (h *Handler) sessionList() (any, *RPCError) {
+func (h *Handler) sessionList() (any, *protocol.RPCError) {
 	sessions := h.fwdMgr.GetAllSessions()
 
-	result := SessionListResult{
-		Sessions: make([]SessionInfo, len(sessions)),
+	result := protocol.SessionListResult{
+		Sessions: make([]protocol.SessionInfo, len(sessions)),
 	}
 	for i, s := range sessions {
 		result.Sessions[i] = toSessionInfo(s)
@@ -414,15 +415,15 @@ func (h *Handler) sessionList() (any, *RPCError) {
 	return result, nil
 }
 
-func (h *Handler) sessionGet(params json.RawMessage) (any, *RPCError) {
-	var p SessionGetParams
+func (h *Handler) sessionGet(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.SessionGetParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	session, err := h.fwdMgr.GetSession(p.Name)
 	if err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
 	info := toSessionInfo(*session)
@@ -431,29 +432,29 @@ func (h *Handler) sessionGet(params json.RawMessage) (any, *RPCError) {
 
 // --- 設定管理 ---
 
-func (h *Handler) configGet() (any, *RPCError) {
+func (h *Handler) configGet() (any, *protocol.RPCError) {
 	cfg := h.cfgMgr.GetConfig()
 
-	return ConfigGetResult{
+	return protocol.ConfigGetResult{
 		SSHConfigPath: cfg.SSHConfigPath,
-		Reconnect: ReconnectInfo{
+		Reconnect: protocol.ReconnectInfo{
 			Enabled:      cfg.Reconnect.Enabled,
 			MaxRetries:   cfg.Reconnect.MaxRetries,
 			InitialDelay: cfg.Reconnect.InitialDelay.Duration.String(),
 			MaxDelay:     cfg.Reconnect.MaxDelay.Duration.String(),
 		},
-		Session: SessionCfgInfo{
+		Session: protocol.SessionCfgInfo{
 			AutoRestore: cfg.Session.AutoRestore,
 		},
-		Log: LogInfo{
+		Log: protocol.LogInfo{
 			Level: cfg.Log.Level,
 			File:  cfg.Log.File,
 		},
 	}, nil
 }
 
-func (h *Handler) configUpdate(params json.RawMessage) (any, *RPCError) {
-	var p ConfigUpdateParams
+func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.ConfigUpdateParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
@@ -492,27 +493,27 @@ func (h *Handler) configUpdate(params json.RawMessage) (any, *RPCError) {
 			}
 		}
 	}); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
 
-	return ConfigUpdateResult{OK: true}, nil
+	return protocol.ConfigUpdateResult{OK: true}, nil
 }
 
 // --- デーモン管理 ---
 
-func (h *Handler) daemonStatus() (any, *RPCError) {
+func (h *Handler) daemonStatus() (any, *protocol.RPCError) {
 	if h.daemon == nil {
-		return nil, &RPCError{Code: InternalError, Message: "daemon not available"}
+		return nil, &protocol.RPCError{Code: protocol.InternalError, Message: "daemon not available"}
 	}
 	return h.daemon.Status(), nil
 }
 
-func (h *Handler) daemonShutdown(params json.RawMessage) (any, *RPCError) {
+func (h *Handler) daemonShutdown(params json.RawMessage) (any, *protocol.RPCError) {
 	if h.daemon == nil {
-		return nil, &RPCError{Code: InternalError, Message: "daemon not available"}
+		return nil, &protocol.RPCError{Code: protocol.InternalError, Message: "daemon not available"}
 	}
 
-	var p DaemonShutdownParams
+	var p protocol.DaemonShutdownParams
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
 			slog.Debug("daemonShutdown: invalid params, using defaults", "error", err)
@@ -520,9 +521,9 @@ func (h *Handler) daemonShutdown(params json.RawMessage) (any, *RPCError) {
 	}
 
 	if err := h.daemon.Shutdown(p.Purge); err != nil {
-		return nil, toRPCError(err, InternalError)
+		return nil, toRPCError(err, protocol.InternalError)
 	}
-	return DaemonShutdownResult{OK: true}, nil
+	return protocol.DaemonShutdownResult{OK: true}, nil
 }
 
 // --- イベントサブスクリプション ---
@@ -534,33 +535,33 @@ var validEventTypes = map[string]bool{
 	"metrics": true,
 }
 
-func (h *Handler) eventsSubscribe(clientID string, params json.RawMessage) (any, *RPCError) {
-	var p EventsSubscribeParams
+func (h *Handler) eventsSubscribe(clientID string, params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.EventsSubscribeParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	for _, t := range p.Types {
 		if !validEventTypes[t] {
-			return nil, &RPCError{Code: InvalidParams, Message: "invalid event type: " + t}
+			return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "invalid event type: " + t}
 		}
 	}
 
 	subID := h.broker.Subscribe(clientID, p.Types)
-	return EventsSubscribeResult{SubscriptionID: subID}, nil
+	return protocol.EventsSubscribeResult{SubscriptionID: subID}, nil
 }
 
-func (h *Handler) eventsUnsubscribe(params json.RawMessage) (any, *RPCError) {
-	var p EventsUnsubscribeParams
+func (h *Handler) eventsUnsubscribe(params json.RawMessage) (any, *protocol.RPCError) {
+	var p protocol.EventsUnsubscribeParams
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
 
 	if !h.broker.Unsubscribe(p.SubscriptionID) {
-		return nil, &RPCError{Code: InvalidParams, Message: "subscription not found"}
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "subscription not found"}
 	}
 
-	return EventsUnsubscribeResult{OK: true}, nil
+	return protocol.EventsUnsubscribeResult{OK: true}, nil
 }
 
 // --- ヘルパー関数 ---
@@ -576,12 +577,12 @@ func (h *Handler) saveForwardRulesToConfig() {
 }
 
 // parseParams は JSON-RPC パラメータをアンマーシャルする。
-func parseParams(params json.RawMessage, target any) *RPCError {
+func parseParams(params json.RawMessage, target any) *protocol.RPCError {
 	if len(params) == 0 {
-		return &RPCError{Code: InvalidParams, Message: "params required"}
+		return &protocol.RPCError{Code: protocol.InvalidParams, Message: "params required"}
 	}
 	if err := json.Unmarshal(params, target); err != nil {
-		return &RPCError{Code: InvalidParams, Message: "invalid params: " + err.Error()}
+		return &protocol.RPCError{Code: protocol.InvalidParams, Message: "invalid params: " + err.Error()}
 	}
 	return nil
 }

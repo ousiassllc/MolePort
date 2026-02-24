@@ -10,12 +10,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // CredentialHandler はクレデンシャル要求を処理するコールバック関数の型。
 // CLI や TUI がそれぞれの方法で実装する。
 // Connect() の前に SetCredentialHandler で設定すること。
-type CredentialHandler func(req CredentialRequestNotification) (*CredentialResponseParams, error)
+type CredentialHandler func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error)
 
 // IPCClient は Unix ドメインソケット経由でデーモンと通信するクライアント。
 type IPCClient struct {
@@ -25,9 +27,9 @@ type IPCClient struct {
 	scanner     *bufio.Scanner
 	nextID      atomic.Int64
 	mu          sync.Mutex
-	pending     map[int]chan *Response
+	pending     map[int]chan *protocol.Response
 	pendingMu   sync.Mutex
-	eventCh     chan *Notification
+	eventCh     chan *protocol.Notification
 	done        chan struct{}
 	connected   atomic.Bool
 	credHandler CredentialHandler
@@ -37,8 +39,8 @@ type IPCClient struct {
 func NewIPCClient(socketPath string) *IPCClient {
 	return &IPCClient{
 		socketPath: socketPath,
-		pending:    make(map[int]chan *Response),
-		eventCh:    make(chan *Notification, 64),
+		pending:    make(map[int]chan *protocol.Response),
+		eventCh:    make(chan *protocol.Notification, 64),
 		done:       make(chan struct{}),
 	}
 }
@@ -110,14 +112,14 @@ func (c *IPCClient) Call(ctx context.Context, method string, params any, result 
 		rawParams = data
 	}
 
-	req := Request{
-		JSONRPC: JSONRPCVersion,
+	req := protocol.Request{
+		JSONRPC: protocol.JSONRPCVersion,
 		ID:      &id,
 		Method:  method,
 		Params:  rawParams,
 	}
 
-	ch := make(chan *Response, 1)
+	ch := make(chan *protocol.Response, 1)
 	c.pendingMu.Lock()
 	c.pending[id] = ch
 	c.pendingMu.Unlock()
@@ -156,8 +158,8 @@ func (c *IPCClient) Call(ctx context.Context, method string, params any, result 
 
 // Subscribe はイベントサブスクリプションを登録する。
 func (c *IPCClient) Subscribe(ctx context.Context, types []string) (string, error) {
-	params := EventsSubscribeParams{Types: types}
-	var result EventsSubscribeResult
+	params := protocol.EventsSubscribeParams{Types: types}
+	var result protocol.EventsSubscribeResult
 	if err := c.Call(ctx, "events.subscribe", params, &result); err != nil {
 		return "", err
 	}
@@ -166,13 +168,13 @@ func (c *IPCClient) Subscribe(ctx context.Context, types []string) (string, erro
 
 // Unsubscribe はイベントサブスクリプションを解除する。
 func (c *IPCClient) Unsubscribe(ctx context.Context, subscriptionID string) error {
-	params := EventsUnsubscribeParams{SubscriptionID: subscriptionID}
-	var result EventsUnsubscribeResult
+	params := protocol.EventsUnsubscribeParams{SubscriptionID: subscriptionID}
+	var result protocol.EventsUnsubscribeResult
 	return c.Call(ctx, "events.unsubscribe", params, &result)
 }
 
 // Events はイベント通知チャネルを返す。
-func (c *IPCClient) Events() <-chan *Notification {
+func (c *IPCClient) Events() <-chan *protocol.Notification {
 	return c.eventCh
 }
 
@@ -206,7 +208,7 @@ func (c *IPCClient) readLoop() {
 		}
 
 		if _, hasID := raw["id"]; hasID {
-			var resp Response
+			var resp protocol.Response
 			if err := json.Unmarshal(line, &resp); err != nil {
 				continue
 			}
@@ -222,7 +224,7 @@ func (c *IPCClient) readLoop() {
 				}
 			}
 		} else {
-			var notif Notification
+			var notif protocol.Notification
 			if err := json.Unmarshal(line, &notif); err != nil {
 				continue
 			}
@@ -241,11 +243,11 @@ func (c *IPCClient) readLoop() {
 }
 
 // handleCredentialRequest は credential.request 通知を処理し、credential.response を送信する。
-func (c *IPCClient) handleCredentialRequest(notif Notification) {
+func (c *IPCClient) handleCredentialRequest(notif protocol.Notification) {
 	handler := c.credHandler
 	if handler == nil {
 		// ハンドラー未設定の場合、パラメータからリクエスト ID を取得してキャンセルを送信
-		var req CredentialRequestNotification
+		var req protocol.CredentialRequestNotification
 		if err := json.Unmarshal(notif.Params, &req); err != nil {
 			return
 		}
@@ -253,7 +255,7 @@ func (c *IPCClient) handleCredentialRequest(notif Notification) {
 		return
 	}
 
-	var req CredentialRequestNotification
+	var req protocol.CredentialRequestNotification
 	if err := json.Unmarshal(notif.Params, &req); err != nil {
 		return
 	}
@@ -272,18 +274,18 @@ func (c *IPCClient) handleCredentialRequest(notif Notification) {
 func (c *IPCClient) sendCredentialCancel(requestID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	params := CredentialResponseParams{
+	params := protocol.CredentialResponseParams{
 		RequestID: requestID,
 		Cancelled: true,
 	}
-	var result CredentialResponseResult
+	var result protocol.CredentialResponseResult
 	_ = c.Call(ctx, "credential.response", params, &result)
 }
 
 // sendCredentialResult はクレデンシャル応答を credential.response で送信する。
-func (c *IPCClient) sendCredentialResult(resp *CredentialResponseParams) {
+func (c *IPCClient) sendCredentialResult(resp *protocol.CredentialResponseParams) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	var result CredentialResponseResult
+	var result protocol.CredentialResponseResult
 	_ = c.Call(ctx, "credential.response", resp, &result)
 }

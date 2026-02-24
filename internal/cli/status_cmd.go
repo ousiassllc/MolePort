@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunStatus は status サブコマンドを実行する。
@@ -36,8 +36,8 @@ func runSessionGet(configDir string, name string, jsonOutput bool) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.SessionGetParams{Name: name}
-	var session ipc.SessionGetResult
+	params := protocol.SessionGetParams{Name: name}
+	var session protocol.SessionGetResult
 	if err := client.Call(ctx, "session.get", params, &session); err != nil {
 		exitError("%v", err)
 	}
@@ -86,28 +86,28 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	defer cancel()
 
 	// デーモンステータス
-	var daemonStatus ipc.DaemonStatusResult
+	var daemonStatus protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &daemonStatus); err != nil {
 		exitError("ステータスの取得に失敗しました: %v", err)
 	}
 
 	// ホスト一覧
-	var hosts ipc.HostListResult
+	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
 		exitError("ホスト一覧の取得に失敗しました: %v", err)
 	}
 
 	// セッション一覧
-	var sessions ipc.SessionListResult
+	var sessions protocol.SessionListResult
 	if err := client.Call(ctx, "session.list", nil, &sessions); err != nil {
 		exitError("セッション一覧の取得に失敗しました: %v", err)
 	}
 
 	if jsonOutput {
 		printJSON(struct {
-			Daemon   ipc.DaemonStatusResult `json:"daemon"`
-			Hosts    []ipc.HostInfo         `json:"hosts"`
-			Sessions []ipc.SessionInfo      `json:"sessions"`
+			Daemon   protocol.DaemonStatusResult `json:"daemon"`
+			Hosts    []protocol.HostInfo         `json:"hosts"`
+			Sessions []protocol.SessionInfo      `json:"sessions"`
 		}{
 			Daemon:   daemonStatus,
 			Hosts:    hosts.Hosts,

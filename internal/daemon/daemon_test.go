@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // createTestConfigDir はテスト用の設定ディレクトリを作成し、最小限の SSH config を配置する。
@@ -254,7 +255,7 @@ func TestEnsureDaemon_Running(t *testing.T) {
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	var status ipc.DaemonStatusResult
+	var status protocol.DaemonStatusResult
 	if err := client.Call(callCtx, "daemon.status", nil, &status); err != nil {
 		t.Fatalf("daemon.status call error: %v", err)
 	}

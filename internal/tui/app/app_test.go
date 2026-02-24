@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 func TestHostInfoToSSHHost(t *testing.T) {
-	info := ipc.HostInfo{
+	info := protocol.HostInfo{
 		Name:               "prod",
 		HostName:           "prod.example.com",
 		Port:               22,
@@ -41,7 +41,7 @@ func TestHostInfoToSSHHost(t *testing.T) {
 }
 
 func TestSessionInfoToForwardSession(t *testing.T) {
-	info := ipc.SessionInfo{
+	info := protocol.SessionInfo{
 		ID:             "session-123",
 		Name:           "web",
 		Host:           "prod",
@@ -102,7 +102,7 @@ func TestSessionInfoToForwardSession(t *testing.T) {
 }
 
 func TestSessionInfoToForwardSession_EmptyConnectedAt(t *testing.T) {
-	info := ipc.SessionInfo{
+	info := protocol.SessionInfo{
 		ID:     "session-456",
 		Name:   "db",
 		Host:   "staging",
@@ -121,7 +121,7 @@ func TestSessionInfoToForwardSession_EmptyConnectedAt(t *testing.T) {
 }
 
 func TestSessionInfoToForwardSession_DynamicType(t *testing.T) {
-	info := ipc.SessionInfo{
+	info := protocol.SessionInfo{
 		ID:     "session-789",
 		Name:   "socks",
 		Host:   "prod",

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunList は list サブコマンドを実行する。
@@ -24,22 +24,22 @@ func RunList(configDir string, args []string) {
 	defer cancel()
 
 	// ホスト一覧を取得
-	var hosts ipc.HostListResult
+	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
 		exitError("ホスト一覧の取得に失敗しました: %v", err)
 	}
 
 	// フォワードルール一覧を取得
-	fwdParams := ipc.ForwardListParams{Host: *hostFlag}
-	var forwards ipc.ForwardListResult
+	fwdParams := protocol.ForwardListParams{Host: *hostFlag}
+	var forwards protocol.ForwardListResult
 	if err := client.Call(ctx, "forward.list", fwdParams, &forwards); err != nil {
 		exitError("転送ルール一覧の取得に失敗しました: %v", err)
 	}
 
 	if *jsonFlag {
 		printJSON(struct {
-			Hosts    []ipc.HostInfo    `json:"hosts"`
-			Forwards []ipc.ForwardInfo `json:"forwards"`
+			Hosts    []protocol.HostInfo    `json:"hosts"`
+			Forwards []protocol.ForwardInfo `json:"forwards"`
 		}{
 			Hosts:    hosts.Hosts,
 			Forwards: forwards.Forwards,
@@ -58,7 +58,7 @@ func RunList(configDir string, args []string) {
 	fmt.Printf("SSH Hosts (%d hosts, %d connected):\n\n", len(hosts.Hosts), connectedCount)
 
 	// ホスト別に転送ルールをまとめて表示
-	fwdByHost := make(map[string][]ipc.ForwardInfo)
+	fwdByHost := make(map[string][]protocol.ForwardInfo)
 	for _, f := range forwards.Forwards {
 		fwdByHost[f.Host] = append(fwdByHost[f.Host], f)
 	}
@@ -90,7 +90,7 @@ func RunList(configDir string, args []string) {
 	}
 }
 
-func printForwardLine(f ipc.ForwardInfo) {
+func printForwardLine(f protocol.ForwardInfo) {
 	typeChar := "L"
 	switch f.Type {
 	case "remote":

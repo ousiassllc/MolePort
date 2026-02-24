@@ -2,7 +2,7 @@ package tui
 
 import (
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // FocusPane はフォーカス中のペインを示す。
@@ -79,7 +79,7 @@ type QuitRequestMsg struct{}
 
 // IPCNotificationMsg は IPC から受信した通知メッセージ。
 type IPCNotificationMsg struct {
-	Notification *ipc.Notification
+	Notification *protocol.Notification
 }
 
 // IPCDisconnectedMsg は IPC 接続断を通知する。
@@ -88,8 +88,8 @@ type IPCDisconnectedMsg struct{}
 // CredentialRequestMsg はデーモンからのクレデンシャル要求を TUI に伝える。
 // ResponseCh に応答を書き込むとクレデンシャルがデーモンに返される。
 type CredentialRequestMsg struct {
-	Request    ipc.CredentialRequestNotification
-	ResponseCh chan<- *ipc.CredentialResponseParams
+	Request    protocol.CredentialRequestNotification
+	ResponseCh chan<- *protocol.CredentialResponseParams
 }
 
 // CredentialSubmitMsg はパスワード入力完了時に発行される内部メッセージ。

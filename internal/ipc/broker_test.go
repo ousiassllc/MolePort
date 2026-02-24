@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // collectingSender はテスト用に通知を収集する NotifySender を返す。
 func collectingSender() (NotifySender, *notifLog) {
 	log := &notifLog{}
-	sender := func(clientID string, notification Notification) error {
+	sender := func(clientID string, notification protocol.Notification) error {
 		log.mu.Lock()
 		defer log.mu.Unlock()
 		log.entries = append(log.entries, notifEntry{
@@ -27,7 +28,7 @@ func collectingSender() (NotifySender, *notifLog) {
 
 type notifEntry struct {
 	ClientID     string
-	Notification Notification
+	Notification protocol.Notification
 }
 
 type notifLog struct {
@@ -160,7 +161,7 @@ func TestEventBroker_HandleSSHEvent(t *testing.T) {
 		t.Errorf("method = %q, want %q", entries[0].Notification.Method, "event.ssh")
 	}
 
-	var notif SSHEventNotification
+	var notif protocol.SSHEventNotification
 	if err := json.Unmarshal(entries[0].Notification.Params, &notif); err != nil {
 		t.Fatalf("unmarshal notification: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestEventBroker_HandleSSHEvent_WithError(t *testing.T) {
 	waitForEntries(t, log, 1)
 
 	entries := log.get()
-	var notif SSHEventNotification
+	var notif protocol.SSHEventNotification
 	if err := json.Unmarshal(entries[0].Notification.Params, &notif); err != nil {
 		t.Fatalf("unmarshal notification: %v", err)
 	}
@@ -232,7 +233,7 @@ func TestEventBroker_HandleForwardEvent(t *testing.T) {
 		t.Errorf("method = %q, want %q", entries[0].Notification.Method, "event.forward")
 	}
 
-	var notif ForwardEventNotification
+	var notif protocol.ForwardEventNotification
 	if err := json.Unmarshal(entries[0].Notification.Params, &notif); err != nil {
 		t.Fatalf("unmarshal notification: %v", err)
 	}

@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDelete は delete サブコマンドを実行する。
@@ -19,8 +19,8 @@ func RunDelete(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.ForwardDeleteParams{Name: name}
-	var result ipc.ForwardDeleteResult
+	params := protocol.ForwardDeleteParams{Name: name}
+	var result protocol.ForwardDeleteResult
 	if err := client.Call(ctx, "forward.delete", params, &result); err != nil {
 		exitError("%v", err)
 	}

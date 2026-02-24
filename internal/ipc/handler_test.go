@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -208,12 +209,12 @@ func (m *mockConfigManager) DeleteState() error              { return nil }
 func (m *mockConfigManager) ConfigDir() string               { return "/tmp/moleport" }
 
 type mockDaemonInfo struct {
-	status        DaemonStatusResult
+	status        protocol.DaemonStatusResult
 	shutdownFn    func(purge bool) error
 	lastPurgeFlag bool
 }
 
-func (m *mockDaemonInfo) Status() DaemonStatusResult {
+func (m *mockDaemonInfo) Status() protocol.DaemonStatusResult {
 	return m.status
 }
 
@@ -256,7 +257,7 @@ func newTestHandler() (*Handler, *mockSSHManager, *mockForwardManager, *mockConf
 	broker := NewEventBroker(sender)
 
 	daemon := &mockDaemonInfo{
-		status: DaemonStatusResult{
+		status: protocol.DaemonStatusResult{
 			PID:              1234,
 			StartedAt:        "2025-01-01T00:00:00Z",
 			Uptime:           "1h0m0s",
@@ -287,9 +288,9 @@ func TestHandler_HostList(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	hostList, ok := result.(HostListResult)
+	hostList, ok := result.(protocol.HostListResult)
 	if !ok {
-		t.Fatalf("result type = %T, want HostListResult", result)
+		t.Fatalf("result type = %T, want protocol.HostListResult", result)
 	}
 
 	if len(hostList.Hosts) != 2 {
@@ -310,15 +311,15 @@ func TestHandler_HostList(t *testing.T) {
 func TestHandler_SSHConnect_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, SSHConnectParams{Host: "prod"})
+	params := mustMarshal(t, protocol.SSHConnectParams{Host: "prod"})
 	result, rpcErr := h.Handle("client-1", "ssh.connect", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	connectResult, ok := result.(SSHConnectResult)
+	connectResult, ok := result.(protocol.SSHConnectResult)
 	if !ok {
-		t.Fatalf("result type = %T, want SSHConnectResult", result)
+		t.Fatalf("result type = %T, want protocol.SSHConnectResult", result)
 	}
 	if connectResult.Host != "prod" {
 		t.Errorf("host = %q, want %q", connectResult.Host, "prod")
@@ -334,13 +335,13 @@ func TestHandler_SSHConnect_Error(t *testing.T) {
 		return fmt.Errorf("host %q not found", hostName)
 	}
 
-	params := mustMarshal(t, SSHConnectParams{Host: "nonexistent"})
+	params := mustMarshal(t, protocol.SSHConnectParams{Host: "nonexistent"})
 	_, rpcErr := h.Handle("client-1", "ssh.connect", params)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != HostNotFound {
-		t.Errorf("error code = %d, want %d (HostNotFound)", rpcErr.Code, HostNotFound)
+	if rpcErr.Code != protocol.HostNotFound {
+		t.Errorf("error code = %d, want %d (HostNotFound)", rpcErr.Code, protocol.HostNotFound)
 	}
 }
 
@@ -352,9 +353,9 @@ func TestHandler_ForwardList(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	fwdList, ok := result.(ForwardListResult)
+	fwdList, ok := result.(protocol.ForwardListResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardListResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardListResult", result)
 	}
 
 	if len(fwdList.Forwards) != 1 {
@@ -371,7 +372,7 @@ func TestHandler_ForwardList(t *testing.T) {
 func TestHandler_ForwardAdd_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, ForwardAddParams{
+	params := mustMarshal(t, protocol.ForwardAddParams{
 		Name:       "db-tunnel",
 		Host:       "prod",
 		Type:       "local",
@@ -385,9 +386,9 @@ func TestHandler_ForwardAdd_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	addResult, ok := result.(ForwardAddResult)
+	addResult, ok := result.(protocol.ForwardAddResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardAddResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardAddResult", result)
 	}
 	if addResult.Name != "db-tunnel" {
 		t.Errorf("name = %q, want %q", addResult.Name, "db-tunnel")
@@ -398,7 +399,7 @@ func TestHandler_ForwardAdd_RuleAlreadyExists(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
 	fwdMgr.addErr = fmt.Errorf("rule %q already exists", "web")
 
-	params := mustMarshal(t, ForwardAddParams{
+	params := mustMarshal(t, protocol.ForwardAddParams{
 		Name:       "web",
 		Host:       "prod",
 		Type:       "local",
@@ -411,8 +412,8 @@ func TestHandler_ForwardAdd_RuleAlreadyExists(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != RuleAlreadyExists {
-		t.Errorf("error code = %d, want %d (RuleAlreadyExists)", rpcErr.Code, RuleAlreadyExists)
+	if rpcErr.Code != protocol.RuleAlreadyExists {
+		t.Errorf("error code = %d, want %d (RuleAlreadyExists)", rpcErr.Code, protocol.RuleAlreadyExists)
 	}
 }
 
@@ -424,9 +425,9 @@ func TestHandler_SessionList(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	sessionList, ok := result.(SessionListResult)
+	sessionList, ok := result.(protocol.SessionListResult)
 	if !ok {
-		t.Fatalf("result type = %T, want SessionListResult", result)
+		t.Fatalf("result type = %T, want protocol.SessionListResult", result)
 	}
 
 	if len(sessionList.Sessions) != 1 {
@@ -451,9 +452,9 @@ func TestHandler_ConfigGet(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	cfgResult, ok := result.(ConfigGetResult)
+	cfgResult, ok := result.(protocol.ConfigGetResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ConfigGetResult", result)
+		t.Fatalf("result type = %T, want protocol.ConfigGetResult", result)
 	}
 
 	if cfgResult.SSHConfigPath != "~/.ssh/config" {
@@ -472,8 +473,8 @@ func TestHandler_ConfigUpdate(t *testing.T) {
 
 	level := "debug"
 	file := "/tmp/test.log"
-	params := mustMarshal(t, ConfigUpdateParams{
-		Log: &LogUpdateInfo{Level: &level, File: &file},
+	params := mustMarshal(t, protocol.ConfigUpdateParams{
+		Log: &protocol.LogUpdateInfo{Level: &level, File: &file},
 	})
 
 	result, rpcErr := h.Handle("client-1", "config.update", params)
@@ -481,9 +482,9 @@ func TestHandler_ConfigUpdate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	updateResult, ok := result.(ConfigUpdateResult)
+	updateResult, ok := result.(protocol.ConfigUpdateResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ConfigUpdateResult", result)
+		t.Fatalf("result type = %T, want protocol.ConfigUpdateResult", result)
 	}
 	if !updateResult.OK {
 		t.Error("OK should be true")
@@ -507,9 +508,9 @@ func TestHandler_DaemonStatus(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	statusResult, ok := result.(DaemonStatusResult)
+	statusResult, ok := result.(protocol.DaemonStatusResult)
 	if !ok {
-		t.Fatalf("result type = %T, want DaemonStatusResult", result)
+		t.Fatalf("result type = %T, want protocol.DaemonStatusResult", result)
 	}
 	if statusResult.PID != 1234 {
 		t.Errorf("PID = %d, want %d", statusResult.PID, 1234)
@@ -528,8 +529,8 @@ func TestHandler_DaemonStatus_NilDaemon(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error when daemon is nil")
 	}
-	if rpcErr.Code != InternalError {
-		t.Errorf("error code = %d, want %d", rpcErr.Code, InternalError)
+	if rpcErr.Code != protocol.InternalError {
+		t.Errorf("error code = %d, want %d", rpcErr.Code, protocol.InternalError)
 	}
 }
 
@@ -541,9 +542,9 @@ func TestHandler_DaemonShutdown(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	shutdownResult, ok := result.(DaemonShutdownResult)
+	shutdownResult, ok := result.(protocol.DaemonShutdownResult)
 	if !ok {
-		t.Fatalf("result type = %T, want DaemonShutdownResult", result)
+		t.Fatalf("result type = %T, want protocol.DaemonShutdownResult", result)
 	}
 	if !shutdownResult.OK {
 		t.Error("OK should be true")
@@ -553,15 +554,15 @@ func TestHandler_DaemonShutdown(t *testing.T) {
 func TestHandler_EventsSubscribe(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, EventsSubscribeParams{Types: []string{"ssh", "forward"}})
+	params := mustMarshal(t, protocol.EventsSubscribeParams{Types: []string{"ssh", "forward"}})
 	result, rpcErr := h.Handle("client-1", "events.subscribe", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	subResult, ok := result.(EventsSubscribeResult)
+	subResult, ok := result.(protocol.EventsSubscribeResult)
 	if !ok {
-		t.Fatalf("result type = %T, want EventsSubscribeResult", result)
+		t.Fatalf("result type = %T, want protocol.EventsSubscribeResult", result)
 	}
 	if subResult.SubscriptionID == "" {
 		t.Error("SubscriptionID should not be empty")
@@ -572,27 +573,27 @@ func TestHandler_EventsUnsubscribe(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
 	// まず購読を作成
-	subParams := mustMarshal(t, EventsSubscribeParams{Types: []string{"ssh"}})
+	subParams := mustMarshal(t, protocol.EventsSubscribeParams{Types: []string{"ssh"}})
 	subResult, _ := h.Handle("client-1", "events.subscribe", subParams)
-	subID := subResult.(EventsSubscribeResult).SubscriptionID
+	subID := subResult.(protocol.EventsSubscribeResult).SubscriptionID
 
 	// 購読を解除
-	unsubParams := mustMarshal(t, EventsUnsubscribeParams{SubscriptionID: subID})
+	unsubParams := mustMarshal(t, protocol.EventsUnsubscribeParams{SubscriptionID: subID})
 	result, rpcErr := h.Handle("client-1", "events.unsubscribe", unsubParams)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	unsubResult, ok := result.(EventsUnsubscribeResult)
+	unsubResult, ok := result.(protocol.EventsUnsubscribeResult)
 	if !ok {
-		t.Fatalf("result type = %T, want EventsUnsubscribeResult", result)
+		t.Fatalf("result type = %T, want protocol.EventsUnsubscribeResult", result)
 	}
 	if !unsubResult.OK {
 		t.Error("OK should be true")
 	}
 
 	// 存在しない購読 ID で解除するとエラー
-	badParams := mustMarshal(t, EventsUnsubscribeParams{SubscriptionID: "nonexistent"})
+	badParams := mustMarshal(t, protocol.EventsUnsubscribeParams{SubscriptionID: "nonexistent"})
 	_, rpcErr = h.Handle("client-1", "events.unsubscribe", badParams)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for nonexistent subscription")
@@ -607,9 +608,9 @@ func TestHandler_HostReload(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	reloadResult, ok := result.(HostReloadResult)
+	reloadResult, ok := result.(protocol.HostReloadResult)
 	if !ok {
-		t.Fatalf("result type = %T, want HostReloadResult", result)
+		t.Fatalf("result type = %T, want protocol.HostReloadResult", result)
 	}
 	if reloadResult.Total != 2 {
 		t.Errorf("Total = %d, want 2", reloadResult.Total)
@@ -619,15 +620,15 @@ func TestHandler_HostReload(t *testing.T) {
 func TestHandler_SSHDisconnect_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, SSHDisconnectParams{Host: "prod"})
+	params := mustMarshal(t, protocol.SSHDisconnectParams{Host: "prod"})
 	result, rpcErr := h.Handle("client-1", "ssh.disconnect", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	discResult, ok := result.(SSHDisconnectResult)
+	discResult, ok := result.(protocol.SSHDisconnectResult)
 	if !ok {
-		t.Fatalf("result type = %T, want SSHDisconnectResult", result)
+		t.Fatalf("result type = %T, want protocol.SSHDisconnectResult", result)
 	}
 	if discResult.Status != "disconnected" {
 		t.Errorf("status = %q, want %q", discResult.Status, "disconnected")
@@ -640,28 +641,28 @@ func TestHandler_SSHDisconnect_NotConnected(t *testing.T) {
 		return fmt.Errorf("host %q not connected", hostName)
 	}
 
-	params := mustMarshal(t, SSHDisconnectParams{Host: "prod"})
+	params := mustMarshal(t, protocol.SSHDisconnectParams{Host: "prod"})
 	_, rpcErr := h.Handle("client-1", "ssh.disconnect", params)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != NotConnected {
-		t.Errorf("error code = %d, want %d (NotConnected)", rpcErr.Code, NotConnected)
+	if rpcErr.Code != protocol.NotConnected {
+		t.Errorf("error code = %d, want %d (NotConnected)", rpcErr.Code, protocol.NotConnected)
 	}
 }
 
 func TestHandler_ForwardDelete_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, ForwardDeleteParams{Name: "web"})
+	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: "web"})
 	result, rpcErr := h.Handle("client-1", "forward.delete", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	deleteResult, ok := result.(ForwardDeleteResult)
+	deleteResult, ok := result.(protocol.ForwardDeleteResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardDeleteResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardDeleteResult", result)
 	}
 	if !deleteResult.OK {
 		t.Error("OK should be true")
@@ -672,28 +673,28 @@ func TestHandler_ForwardDelete_NotFound(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
 	fwdMgr.deleteErr = fmt.Errorf("rule %q not found", "nonexistent")
 
-	params := mustMarshal(t, ForwardDeleteParams{Name: "nonexistent"})
+	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: "nonexistent"})
 	_, rpcErr := h.Handle("client-1", "forward.delete", params)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != RuleNotFound {
-		t.Errorf("error code = %d, want %d (RuleNotFound)", rpcErr.Code, RuleNotFound)
+	if rpcErr.Code != protocol.RuleNotFound {
+		t.Errorf("error code = %d, want %d (RuleNotFound)", rpcErr.Code, protocol.RuleNotFound)
 	}
 }
 
 func TestHandler_ForwardStart_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, ForwardStartParams{Name: "web"})
+	params := mustMarshal(t, protocol.ForwardStartParams{Name: "web"})
 	result, rpcErr := h.Handle("client-1", "forward.start", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	startResult, ok := result.(ForwardStartResult)
+	startResult, ok := result.(protocol.ForwardStartResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardStartResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardStartResult", result)
 	}
 	if startResult.Status != "active" {
 		t.Errorf("status = %q, want %q", startResult.Status, "active")
@@ -703,15 +704,15 @@ func TestHandler_ForwardStart_Success(t *testing.T) {
 func TestHandler_ForwardStop_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, ForwardStopParams{Name: "web"})
+	params := mustMarshal(t, protocol.ForwardStopParams{Name: "web"})
 	result, rpcErr := h.Handle("client-1", "forward.stop", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	stopResult, ok := result.(ForwardStopResult)
+	stopResult, ok := result.(protocol.ForwardStopResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardStopResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardStopResult", result)
 	}
 	if stopResult.Status != "stopped" {
 		t.Errorf("status = %q, want %q", stopResult.Status, "stopped")
@@ -721,15 +722,15 @@ func TestHandler_ForwardStop_Success(t *testing.T) {
 func TestHandler_SessionGet_Success(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, SessionGetParams{Name: "web"})
+	params := mustMarshal(t, protocol.SessionGetParams{Name: "web"})
 	result, rpcErr := h.Handle("client-1", "session.get", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	sessionInfo, ok := result.(SessionInfo)
+	sessionInfo, ok := result.(protocol.SessionInfo)
 	if !ok {
-		t.Fatalf("result type = %T, want SessionInfo", result)
+		t.Fatalf("result type = %T, want protocol.SessionInfo", result)
 	}
 	if sessionInfo.Name != "web" {
 		t.Errorf("Name = %q, want %q", sessionInfo.Name, "web")
@@ -742,26 +743,26 @@ func TestHandler_SessionGet_Success(t *testing.T) {
 func TestHandler_SessionGet_NotFound(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, SessionGetParams{Name: "nonexistent"})
+	params := mustMarshal(t, protocol.SessionGetParams{Name: "nonexistent"})
 	_, rpcErr := h.Handle("client-1", "session.get", params)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != RuleNotFound {
-		t.Errorf("error code = %d, want %d (RuleNotFound)", rpcErr.Code, RuleNotFound)
+	if rpcErr.Code != protocol.RuleNotFound {
+		t.Errorf("error code = %d, want %d (RuleNotFound)", rpcErr.Code, protocol.RuleNotFound)
 	}
 }
 
 func TestHandler_EventsSubscribe_InvalidType(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, EventsSubscribeParams{Types: []string{"ssh", "invalid"}})
+	params := mustMarshal(t, protocol.EventsSubscribeParams{Types: []string{"ssh", "invalid"}})
 	_, rpcErr := h.Handle("client-1", "events.subscribe", params)
 	if rpcErr == nil {
 		t.Fatal("expected RPC error for invalid event type")
 	}
-	if rpcErr.Code != InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, InvalidParams)
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
 	}
 }
 
@@ -772,8 +773,8 @@ func TestHandler_MethodNotFound(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC error")
 	}
-	if rpcErr.Code != MethodNotFound {
-		t.Errorf("error code = %d, want %d (MethodNotFound)", rpcErr.Code, MethodNotFound)
+	if rpcErr.Code != protocol.MethodNotFound {
+		t.Errorf("error code = %d, want %d (MethodNotFound)", rpcErr.Code, protocol.MethodNotFound)
 	}
 }
 
@@ -785,9 +786,9 @@ func TestHandler_ForwardStopAll(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	stopAllResult, ok := result.(ForwardStopAllResult)
+	stopAllResult, ok := result.(protocol.ForwardStopAllResult)
 	if !ok {
-		t.Fatalf("result type = %T, want ForwardStopAllResult", result)
+		t.Fatalf("result type = %T, want protocol.ForwardStopAllResult", result)
 	}
 
 	// sessions には Active が 1 件ある
@@ -802,15 +803,15 @@ func TestHandler_ForwardStopAll(t *testing.T) {
 func TestHandler_DaemonShutdown_Purge(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
-	params := mustMarshal(t, DaemonShutdownParams{Purge: true})
+	params := mustMarshal(t, protocol.DaemonShutdownParams{Purge: true})
 	result, rpcErr := h.Handle("client-1", "daemon.shutdown", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	shutdownResult, ok := result.(DaemonShutdownResult)
+	shutdownResult, ok := result.(protocol.DaemonShutdownResult)
 	if !ok {
-		t.Fatalf("result type = %T, want DaemonShutdownResult", result)
+		t.Fatalf("result type = %T, want protocol.DaemonShutdownResult", result)
 	}
 	if !shutdownResult.OK {
 		t.Error("OK should be true")
@@ -831,7 +832,7 @@ func TestHandler_DaemonShutdown_PurgeFlag(t *testing.T) {
 
 	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock)
 
-	params := mustMarshal(t, DaemonShutdownParams{Purge: true})
+	params := mustMarshal(t, protocol.DaemonShutdownParams{Purge: true})
 	_, rpcErr := handler.Handle("client-1", "daemon.shutdown", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
@@ -845,7 +846,7 @@ func TestHandler_DaemonShutdown_PurgeFlag(t *testing.T) {
 func TestHandler_ForwardAdd_SavesConfig(t *testing.T) {
 	h, _, _, cfgMgr := newTestHandler()
 
-	params := mustMarshal(t, ForwardAddParams{
+	params := mustMarshal(t, protocol.ForwardAddParams{
 		Name:       "db-tunnel",
 		Host:       "prod",
 		Type:       "local",
@@ -881,7 +882,7 @@ func TestHandler_ForwardAdd_SavesConfig(t *testing.T) {
 func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
 	h, _, _, cfgMgr := newTestHandler()
 
-	params := mustMarshal(t, ForwardDeleteParams{Name: "web"})
+	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: "web"})
 
 	before := cfgMgr.updateCallCount
 	_, rpcErr := h.Handle("client-1", "forward.delete", params)
@@ -899,11 +900,11 @@ func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
 // mockNotificationSender はテスト用の通知送信モック。
 type mockNotificationSender struct {
 	mu            sync.Mutex
-	notifications []Notification
+	notifications []protocol.Notification
 	clientID      string
 }
 
-func (m *mockNotificationSender) SendNotification(clientID string, notification Notification) error {
+func (m *mockNotificationSender) SendNotification(clientID string, notification protocol.Notification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.clientID = clientID
@@ -911,17 +912,17 @@ func (m *mockNotificationSender) SendNotification(clientID string, notification 
 	return nil
 }
 
-func (m *mockNotificationSender) getNotifications() []Notification {
+func (m *mockNotificationSender) getNotifications() []protocol.Notification {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	cp := make([]Notification, len(m.notifications))
+	cp := make([]protocol.Notification, len(m.notifications))
 	copy(cp, m.notifications)
 	return cp
 }
 
 func TestHandler_CredentialResponse_NoPending(t *testing.T) {
 	h, _, _, _ := newTestHandler()
-	params, _ := json.Marshal(CredentialResponseParams{
+	params, _ := json.Marshal(protocol.CredentialResponseParams{
 		RequestID: "cr-nonexistent",
 		Value:     "secret",
 	})
@@ -929,7 +930,7 @@ func TestHandler_CredentialResponse_NoPending(t *testing.T) {
 	_, rpcErr := h.Handle("client-1", "credential.response", params)
 	if rpcErr == nil {
 		t.Fatal("expected error for non-existent credential request")
-	} else if rpcErr.Code != InvalidParams {
+	} else if rpcErr.Code != protocol.InvalidParams {
 		t.Errorf("expected InvalidParams error code, got %d", rpcErr.Code)
 	}
 }
@@ -938,12 +939,12 @@ func TestHandler_CredentialResponse_RoutesToPending(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 
 	reqID := "cr-test-1"
-	ch := make(chan CredentialResponseParams, 1)
+	ch := make(chan protocol.CredentialResponseParams, 1)
 	h.credMu.Lock()
 	h.credPending[reqID] = ch
 	h.credMu.Unlock()
 
-	params, _ := json.Marshal(CredentialResponseParams{
+	params, _ := json.Marshal(protocol.CredentialResponseParams{
 		RequestID: reqID,
 		Value:     "my-password",
 	})
@@ -953,7 +954,7 @@ func TestHandler_CredentialResponse_RoutesToPending(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	credResult, ok := result.(CredentialResponseResult)
+	credResult, ok := result.(protocol.CredentialResponseResult)
 	if !ok {
 		t.Fatalf("unexpected result type: %T", result)
 	}
@@ -1017,7 +1018,7 @@ func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
 	}
 
 	// 通知の内容を解析して request_id を取得
-	var credReq CredentialRequestNotification
+	var credReq protocol.CredentialRequestNotification
 	if err := json.Unmarshal(notif.Params, &credReq); err != nil {
 		t.Fatalf("failed to unmarshal notification params: %v", err)
 	}
@@ -1029,7 +1030,7 @@ func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
 	}
 
 	// credential.response を送信
-	respParams, _ := json.Marshal(CredentialResponseParams{
+	respParams, _ := json.Marshal(protocol.CredentialResponseParams{
 		RequestID: credReq.RequestID,
 		Value:     "secret-pwd",
 	})
@@ -1077,7 +1078,7 @@ func TestHandler_ForwardStart_PreConnectsWithCallback(t *testing.T) {
 		Status: core.Stopped,
 	})
 
-	params := mustMarshal(t, ForwardStartParams{Name: "db"})
+	params := mustMarshal(t, protocol.ForwardStartParams{Name: "db"})
 	_, rpcErr := h.Handle("client-1", "forward.start", params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)

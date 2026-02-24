@@ -12,7 +12,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/infra"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDaemon は daemon サブコマンドをルーティングする。
@@ -72,8 +72,8 @@ func runDaemonStop(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.DaemonShutdownParams{Purge: *purge}
-	var result ipc.DaemonShutdownResult
+	params := protocol.DaemonShutdownParams{Purge: *purge}
+	var result protocol.DaemonShutdownResult
 	if err := client.Call(ctx, "daemon.shutdown", params, &result); err != nil {
 		exitError("デーモンの停止に失敗しました: %v", err)
 	}
@@ -102,7 +102,7 @@ func runDaemonStatus(configDir string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	var status ipc.DaemonStatusResult
+	var status protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &status); err != nil {
 		exitError("ステータスの取得に失敗しました: %v", err)
 	}

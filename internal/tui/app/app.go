@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
@@ -46,8 +47,8 @@ type MainModel struct {
 	subscriptionID string
 
 	// クレデンシャル入力状態
-	credRequest    *ipc.CredentialRequestNotification
-	credResponseCh chan<- *ipc.CredentialResponseParams
+	credRequest    *protocol.CredentialRequestNotification
+	credResponseCh chan<- *protocol.CredentialResponseParams
 }
 
 // NewMainModel は新しい MainModel を生成する。
@@ -194,7 +195,7 @@ func (m *MainModel) loadHosts() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
 		defer cancel()
-		var result ipc.HostListResult
+		var result protocol.HostListResult
 		if err := m.client.Call(ctx, "host.list", nil, &result); err != nil {
 			return tui.HostsLoadedMsg{Err: err}
 		}
@@ -211,7 +212,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
 		defer cancel()
-		var result ipc.SessionListResult
+		var result protocol.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("セッション取得エラー: %s", err)}
 		}
@@ -256,10 +257,10 @@ func (m *MainModel) metricsTick() tea.Cmd {
 
 // --- IPC 通知ハンドリング ---
 
-func (m *MainModel) handleIPCNotification(notif *ipc.Notification) {
+func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	switch notif.Method {
 	case "event.ssh":
-		var evt ipc.SSHEventNotification
+		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
 			return
 		}
@@ -269,7 +270,7 @@ func (m *MainModel) handleIPCNotification(notif *ipc.Notification) {
 			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error))
 		}
 	case "event.forward":
-		var evt ipc.ForwardEventNotification
+		var evt protocol.ForwardEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
 			return
 		}
@@ -284,7 +285,7 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
-		params := ipc.ForwardAddParams{
+		params := protocol.ForwardAddParams{
 			Name:        msg.Name,
 			Host:        msg.Host,
 			Type:        msg.Type.String(),
@@ -293,21 +294,21 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 			RemotePort:  msg.RemotePort,
 			AutoConnect: msg.AutoConnect,
 		}
-		var result ipc.ForwardAddResult
+		var result protocol.ForwardAddResult
 		if err := m.client.Call(ctx, "forward.add", params, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール追加エラー: %s", err)}
 		}
 
 		// AutoConnect が設定されている場合はフォワードも開始
 		if msg.AutoConnect {
-			startParams := ipc.ForwardStartParams{Name: result.Name}
-			var startResult ipc.ForwardStartResult
+			startParams := protocol.ForwardStartParams{Name: result.Name}
+			var startResult protocol.ForwardStartResult
 			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
 				// 開始に失敗したルールを削除（ロールバック）
 				delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 				defer delCancel()
-				delParams := ipc.ForwardDeleteParams(result)
-				var delResult ipc.ForwardDeleteResult
+				delParams := protocol.ForwardDeleteParams(result)
+				var delResult protocol.ForwardDeleteResult
 				if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
 					return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' の開始に失敗: %s（ルール削除にも失敗: %s）", result.Name, err, delErr)}
 				}
@@ -324,8 +325,8 @@ func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
-		params := ipc.ForwardDeleteParams{Name: ruleName}
-		var result ipc.ForwardDeleteResult
+		params := protocol.ForwardDeleteParams{Name: ruleName}
+		var result protocol.ForwardDeleteResult
 		if err := m.client.Call(ctx, "forward.delete", params, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール削除エラー: %s", err)}
 		}
@@ -350,8 +351,8 @@ func (m *MainModel) startForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
-		params := ipc.ForwardStartParams{Name: ruleName}
-		var result ipc.ForwardStartResult
+		params := protocol.ForwardStartParams{Name: ruleName}
+		var result protocol.ForwardStartResult
 		if err := m.client.Call(ctx, "forward.start", params, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード開始エラー (%s): %s", ruleName, err)}
 		}
@@ -363,8 +364,8 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
-		params := ipc.ForwardStopParams{Name: ruleName}
-		var result ipc.ForwardStopResult
+		params := protocol.ForwardStopParams{Name: ruleName}
+		var result protocol.ForwardStopResult
 		if err := m.client.Call(ctx, "forward.stop", params, &result); err != nil {
 			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード停止エラー: %s", err)}
 		}
@@ -377,8 +378,8 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 // NewTUICredentialHandler は Bubble Tea プログラムにクレデンシャル要求を送信するハンドラーを返す。
 // tui_cmd.go から tea.Program 生成後に呼び出す。
 func NewTUICredentialHandler(p *tea.Program) ipc.CredentialHandler {
-	return func(req ipc.CredentialRequestNotification) (*ipc.CredentialResponseParams, error) {
-		ch := make(chan *ipc.CredentialResponseParams, 1)
+	return func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
+		ch := make(chan *protocol.CredentialResponseParams, 1)
 		p.Send(tui.CredentialRequestMsg{
 			Request:    req,
 			ResponseCh: ch,
@@ -420,7 +421,7 @@ func (m MainModel) handleCredentialSubmit(msg tui.CredentialSubmitMsg) (tea.Mode
 		m.credResponseCh <- nil
 		m.dashboard.AppendLog("認証がキャンセルされました")
 	} else {
-		resp := &ipc.CredentialResponseParams{
+		resp := &protocol.CredentialResponseParams{
 			Value: msg.Value,
 		}
 		if m.credRequest != nil {
