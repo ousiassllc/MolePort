@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	ipcclient "github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -194,7 +194,7 @@ func TestDaemon_EventRouting(t *testing.T) {
 	defer d.Stop()
 
 	// IPC クライアントを接続
-	client := ipc.NewIPCClient(SocketPath(dir))
+	client := ipcclient.NewIPCClient(SocketPath(dir))
 	if err := client.Connect(); err != nil {
 		t.Fatalf("client Connect() error: %v", err)
 	}

@@ -4,33 +4,33 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
 // EnsureDaemon はデーモンが起動中であることを確認し、接続済みの IPCClient を返す。
 // デーモンが起動していない場合はエラーを返す。
-func EnsureDaemon(configDir string) (*ipc.IPCClient, error) {
+func EnsureDaemon(configDir string) (*client.IPCClient, error) {
 	pidPath := PIDFilePath(configDir)
 	running, _ := IsRunning(pidPath)
 	if !running {
 		return nil, fmt.Errorf("daemon is not running; start it with: moleport daemon start")
 	}
 
-	client := ipc.NewIPCClient(SocketPath(configDir))
-	if err := client.Connect(); err != nil {
+	c := client.NewIPCClient(SocketPath(configDir))
+	if err := c.Connect(); err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}
 
-	return client, nil
+	return c, nil
 }
 
 // EnsureDaemonWithRetry はデーモンが起動するまでリトライし、接続済みの IPCClient を返す。
-func EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*ipc.IPCClient, error) {
+func EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*client.IPCClient, error) {
 	deadline := time.Now().Add(maxWait)
 	for {
-		client, err := EnsureDaemon(configDir)
+		c, err := EnsureDaemon(configDir)
 		if err == nil {
-			return client, nil
+			return c, nil
 		}
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("daemon not ready after %s: %w", maxWait, err)

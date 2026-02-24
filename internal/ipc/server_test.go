@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	ipcclient "github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -42,14 +43,14 @@ func startTestServer(t *testing.T, handler HandlerFunc) (*IPCServer, string) {
 	return srv, sockPath
 }
 
-func connectTestClient(t *testing.T, sockPath string) *IPCClient {
+func connectTestClient(t *testing.T, sockPath string) *ipcclient.IPCClient {
 	t.Helper()
-	client := NewIPCClient(sockPath)
-	if err := client.Connect(); err != nil {
+	c := ipcclient.NewIPCClient(sockPath)
+	if err := c.Connect(); err != nil {
 		t.Fatalf("Connect client: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
-	return client
+	t.Cleanup(func() { c.Close() })
+	return c
 }
 
 func TestServerClient_BasicCall(t *testing.T) {
@@ -216,7 +217,7 @@ func TestServerClient_BroadcastNotification(t *testing.T) {
 
 	for _, tc := range []struct {
 		name   string
-		client *IPCClient
+		client *ipcclient.IPCClient
 	}{
 		{"client1", client1},
 		{"client2", client2},
@@ -263,8 +264,8 @@ func TestServerClient_ServerStop(t *testing.T) {
 		t.Fatalf("Start server: %v", err)
 	}
 
-	client := NewIPCClient(sockPath)
-	if err := client.Connect(); err != nil {
+	c := ipcclient.NewIPCClient(sockPath)
+	if err := c.Connect(); err != nil {
 		t.Fatalf("Connect client: %v", err)
 	}
 
@@ -274,12 +275,12 @@ func TestServerClient_ServerStop(t *testing.T) {
 	}
 
 	// クライアントからの呼び出しはエラーになるべき
-	err := client.Call(testCtxWithCleanup(t), "echo", nil, nil)
+	err := c.Call(testCtxWithCleanup(t), "echo", nil, nil)
 	if err == nil {
 		t.Fatal("Call after server stop should return error")
 	}
 
-	client.Close()
+	c.Close()
 }
 
 func TestServerClient_SendNotification_UnknownClient(t *testing.T) {
@@ -297,8 +298,8 @@ func TestServerClient_SendNotification_UnknownClient(t *testing.T) {
 }
 
 func TestIPCClient_CallNotConnected(t *testing.T) {
-	client := NewIPCClient("/nonexistent.sock")
-	err := client.Call(testCtxWithCleanup(t), "echo", nil, nil)
+	c := ipcclient.NewIPCClient("/nonexistent.sock")
+	err := c.Call(testCtxWithCleanup(t), "echo", nil, nil)
 	if err == nil {
 		t.Fatal("Call on unconnected client should return error")
 	}

@@ -8,12 +8,12 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // newCLICredentialHandler はターミナルからクレデンシャルを読み取る CredentialHandler を返す。
-func newCLICredentialHandler() ipc.CredentialHandler {
+func newCLICredentialHandler() client.CredentialHandler {
 	return func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 		switch req.Type {
 		case "password", "passphrase":

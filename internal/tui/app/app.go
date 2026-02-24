@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
@@ -39,7 +39,7 @@ type subscriptionStartedMsg struct {
 // MainModel はアプリケーションのルート Bubble Tea モデル。
 type MainModel struct {
 	dashboard      pages.DashboardPage
-	client         *ipc.IPCClient
+	client         *client.IPCClient
 	keys           tui.KeyMap
 	hosts          []core.SSHHost
 	sessions       []core.ForwardSession
@@ -52,7 +52,7 @@ type MainModel struct {
 }
 
 // NewMainModel は新しい MainModel を生成する。
-func NewMainModel(client *ipc.IPCClient, version string) MainModel {
+func NewMainModel(client *client.IPCClient, version string) MainModel {
 	return MainModel{
 		dashboard: pages.NewDashboardPage(version),
 		client:    client,
@@ -377,7 +377,7 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 
 // NewTUICredentialHandler は Bubble Tea プログラムにクレデンシャル要求を送信するハンドラーを返す。
 // tui_cmd.go から tea.Program 生成後に呼び出す。
-func NewTUICredentialHandler(p *tea.Program) ipc.CredentialHandler {
+func NewTUICredentialHandler(p *tea.Program) client.CredentialHandler {
 	return func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 		ch := make(chan *protocol.CredentialResponseParams, 1)
 		p.Send(tui.CredentialRequestMsg{
