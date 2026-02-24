@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/ssh"
 	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // SocketPath はデーモンの Unix ソケットパスを返す。
@@ -69,7 +71,7 @@ func New(configDir string) (*Daemon, error) {
 	}
 
 	parser := infra.NewSSHConfigParser()
-	sshMgr := core.NewSSHManager(
+	sshMgr := ssh.NewSSHManager(
 		parser,
 		func() core.SSHConnection { return infra.NewSSHConnection() },
 		sshConfigPath,
@@ -97,7 +99,7 @@ func New(configDir string) (*Daemon, error) {
 
 	// EventBroker: server.SendNotification をクロージャで渡す
 	// server は New() 完了前に必ず設定されるため、Start() 後の呼び出しは安全
-	broker := ipc.NewEventBroker(func(clientID string, notification ipc.Notification) error {
+	broker := ipc.NewEventBroker(func(clientID string, notification protocol.Notification) error {
 		return d.server.SendNotification(clientID, notification)
 	})
 
@@ -275,7 +277,7 @@ func (d *Daemon) saveState() {
 // --- DaemonInfo インターフェースの実装 ---
 
 // Status はデーモンの現在の状態を返す。
-func (d *Daemon) Status() ipc.DaemonStatusResult {
+func (d *Daemon) Status() protocol.DaemonStatusResult {
 	sessions := d.fwdMgr.GetAllSessions()
 	activeForwards := 0
 	for _, s := range sessions {
@@ -297,7 +299,7 @@ func (d *Daemon) Status() ipc.DaemonStatusResult {
 		connectedClients = d.server.ConnectedClients()
 	}
 
-	return ipc.DaemonStatusResult{
+	return protocol.DaemonStatusResult{
 		PID:                  os.Getpid(),
 		StartedAt:            d.startedAt.Format(time.RFC3339),
 		Uptime:               time.Since(d.startedAt).Truncate(time.Second).String(),
