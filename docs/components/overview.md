@@ -336,7 +336,7 @@ case "ssh.disconnect":       return h.sshDisconnect(params)
 case "forward.list":         return h.forwardList(params)
 case "forward.add":          return h.forwardAdd(params)
 case "forward.delete":       return h.forwardDelete(params)
-case "forward.start":        return h.forwardStart(params)
+case "forward.start":        return h.forwardStart(clientID, params)  // クレデンシャルコールバック対応
 case "forward.stop":         return h.forwardStop(params)
 case "forward.stopAll":      return h.forwardStopAll()
 case "session.list":         return h.sessionList()
@@ -383,6 +383,34 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPC
 
     err := h.sshMgr.ConnectWithCallback(host, cb)
     // ...
+}
+```
+
+#### forwardStart のクレデンシャルコールバック対応
+
+`forward.start` ハンドラは、ホストが未接続の場合に `ConnectWithCallback` で事前接続する。
+これにより `forward.start` 経由でもパスワード認証等が可能になる。
+
+```go
+func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *RPCError) {
+    // ...パラメータ解析...
+
+    // ホスト未接続の場合、クレデンシャルコールバック付きで事前接続する。
+    // StartForward 内にも Connect のフォールバックがあるが、
+    // そちらはコールバックなしのため、パスワード認証が必要な場合は
+    // ここでの事前接続が必須。
+    session, err := h.fwdMgr.GetSession(p.Name)
+    if !h.sshMgr.IsConnected(session.Rule.Host) {
+        cb := h.buildCredentialCallback(clientID, session.Rule.Host)
+        if err := h.sshMgr.ConnectWithCallback(session.Rule.Host, cb); err != nil {
+            return nil, toRPCError(err, InternalError)
+        }
+    }
+
+    if err := h.fwdMgr.StartForward(p.Name); err != nil {
+        return nil, toRPCError(err, InternalError)
+    }
+    return ForwardStartResult{Name: p.Name, Status: "active"}, nil
 }
 ```
 
@@ -553,7 +581,7 @@ type SSHManager interface {
 | メソッド | 用途 | クレデンシャルが必要な場合 |
 |---------|------|------------------------|
 | `Connect` | セッション復元・auto_connect・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
-| `ConnectWithCallback` | `ssh.connect` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
+| `ConnectWithCallback` | `ssh.connect` / `forward.start` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
 
 ### ForwardManager
 
@@ -607,6 +635,9 @@ type SSHConnection interface {
     // Dial はホストへ SSH 接続を確立する。
     // cb が nil の場合はエージェント・鍵ファイルのみで認証を試みる。
     // cb が non-nil の場合はパスワード・パスフレーズ・keyboard-interactive もフォールバックとして試行する。
+    // 注意: authMethods が空の場合でも接続を試行する。Go の crypto/ssh は常に
+    // "none" 認証を最初に試行するため、Tailscale SSH のように none 認証で
+    // 動作するサーバーへの接続をサポートする。
     Dial(host SSHHost, cb CredentialCallback) (*ssh.Client, error)
     Close() error
     LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
@@ -761,3 +792,4 @@ SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
 | 1.1 | 2026-02-10 | StatusBar TEA インターフェース追加、ForwardManager 依存パス修正、キーバインド管理方針追加 | 整合性チェック |
 | 2.0 | 2026-02-11 | デーモン化対応: Daemon/IPC/CLI Layer コンポーネント追加、TUI の IPCClient 経由化 | デーモン化対応 |
 | 2.1 | 2026-02-11 | SSHManager に ConnectWithCallback/GetPendingAuthHosts 追加、SSHConnection.Dial にコールバック引数追加、buildAuthMethods のパスフレーズ/パスワード/KI 対応、Handler のクレデンシャルコールバック実装、CredentialHandler インターフェース追加 | #11 クレデンシャル入力機能追加 |
+| 2.2 | 2026-02-24 | forward.start に clientID 引数追加（クレデンシャルコールバック対応）、ConnectWithCallback の用途に forward.start を追加、SSHConnection.Dial に none 認証（Tailscale SSH）の説明追加 | #16 フォワード開始失敗時の修正 |
