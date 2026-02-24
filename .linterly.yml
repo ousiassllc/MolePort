@@ -1,0 +1,9 @@
+rules:
+  max_lines_per_file: 300
+  max_lines_per_directory: 2000
+  warning_threshold: 10
+
+count_mode: all
+language: ja
+
+default_excludes: true

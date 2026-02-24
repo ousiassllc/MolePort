@@ -1,0 +1,14 @@
+# ドキュメント
+docs/
+
+# テストカバレッジ出力
+coverage.out
+
+# 自動生成ファイル
+*.pb.go
+*_generated.go
+*.gen.go
+
+# ビルド成果物
+bin/
+moleport

@@ -10,6 +10,8 @@ pre-commit:
     golangci-lint:
       glob: "*.go"
       run: golangci-lint run ./...
+    linterly:
+      run: linterly check .
 
 pre-push:
   parallel: true
