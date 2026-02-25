@@ -20,3 +20,6 @@ pre-push:
       run: go test -race -count=1 ./...
     build:
       run: go build -o /dev/null ./cmd/moleport/
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run ./...

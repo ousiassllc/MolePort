@@ -41,7 +41,7 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read greeting response: %v", err)
 	}
-	if n < 2 || resp[0] != 0x05 || resp[1] != 0x00 {
+	if n < 2 || resp[0] != 0x05 || resp[1] != 0x00 { //nolint:gosec // bounds checked by n < 2
 		t.Fatalf("unexpected greeting response: %v", resp)
 	}
 
@@ -187,7 +187,7 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
-	if n < 2 || resp[0] != 0x05 || resp[1] != 0xFF {
+	if n < 2 || resp[0] != 0x05 || resp[1] != 0xFF { //nolint:gosec // bounds checked by n < 2
 		t.Errorf("expected no acceptable methods (0xFF), got %v", resp)
 	}
 
