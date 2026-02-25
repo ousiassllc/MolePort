@@ -1,6 +1,7 @@
 package forward
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"testing"
@@ -37,11 +38,10 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 
 	// サーバーからの応答を読む
 	resp := make([]byte, 2)
-	n, err := io.ReadFull(clientConn, resp)
-	if err != nil {
+	if _, err := io.ReadFull(clientConn, resp); err != nil {
 		t.Fatalf("read greeting response: %v", err)
 	}
-	if n < 2 || resp[0] != 0x05 || resp[1] != 0x00 { //nolint:gosec // bounds checked by n < 2
+	if !bytes.Equal(resp, []byte{0x05, 0x00}) {
 		t.Fatalf("unexpected greeting response: %v", resp)
 	}
 
@@ -54,7 +54,7 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 
 	// Success response
 	successResp := make([]byte, 10)
-	if _, err = io.ReadFull(clientConn, successResp); err != nil {
+	if _, err := io.ReadFull(clientConn, successResp); err != nil {
 		t.Fatalf("read success response: %v", err)
 	}
 	if successResp[0] != 0x05 || successResp[1] != 0x00 {
@@ -183,11 +183,10 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x02})
 
 	resp := make([]byte, 2)
-	n, err := io.ReadFull(clientConn, resp)
-	if err != nil {
+	if _, err := io.ReadFull(clientConn, resp); err != nil {
 		t.Fatalf("read response: %v", err)
 	}
-	if n < 2 || resp[0] != 0x05 || resp[1] != 0xFF { //nolint:gosec // bounds checked by n < 2
+	if !bytes.Equal(resp, []byte{0x05, 0xFF}) {
 		t.Errorf("expected no acceptable methods (0xFF), got %v", resp)
 	}
 
