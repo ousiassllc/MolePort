@@ -30,6 +30,11 @@ func (p *LogPanel) AppendOutput(text string) {
 	}
 }
 
+// OutputLen は出力バッファの行数を返す。
+func (p LogPanel) OutputLen() int {
+	return len(p.output)
+}
+
 // SetSize はパネルのサイズを設定する。
 func (p *LogPanel) SetSize(width, height int) {
 	p.width = width

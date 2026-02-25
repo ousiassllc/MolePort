@@ -208,6 +208,11 @@ func (d *DashboardPage) AppendLog(text string) {
 	d.log.AppendOutput(text)
 }
 
+// LogLineCount はログ出力の行数を返す。
+func (d DashboardPage) LogLineCount() int {
+	return d.log.OutputLen()
+}
+
 // FocusedPane は現在のフォーカスペインを返す。
 func (d DashboardPage) FocusedPane() tui.FocusPane {
 	return d.focusedPane
