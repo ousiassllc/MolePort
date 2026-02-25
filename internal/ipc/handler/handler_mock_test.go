@@ -101,6 +101,7 @@ type mockForwardManager struct {
 	stopAllErr    error
 	stopAllCalled bool
 	sessionErr    error
+	lastStartCb   core.CredentialCallback // StartForward に渡されたコールバックを記録
 }
 
 func (m *mockForwardManager) AddRule(rule core.ForwardRule) (string, error) {
@@ -135,7 +136,8 @@ func (m *mockForwardManager) GetRulesByHost(hostName string) []core.ForwardRule 
 	return result
 }
 
-func (m *mockForwardManager) StartForward(ruleName string) error {
+func (m *mockForwardManager) StartForward(ruleName string, cb core.CredentialCallback) error {
+	m.lastStartCb = cb
 	if m.startErr != nil {
 		return m.startErr
 	}

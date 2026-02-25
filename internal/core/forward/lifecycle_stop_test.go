@@ -39,8 +39,8 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
 
-	_ = fm.StartForward("fwd1")
-	_ = fm.StartForward("fwd2")
+	_ = fm.StartForward("fwd1", nil)
+	_ = fm.StartForward("fwd2", nil)
 
 	if err := fm.StopAllForwards(); err != nil {
 		t.Fatalf("StopAllForwards() error = %v", err)
@@ -67,7 +67,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	_ = fm.StartForward("web")
+	_ = fm.StartForward("web", nil)
 
 	if err := fm.DeleteRule("web"); err != nil {
 		t.Fatalf("DeleteRule() error = %v", err)
@@ -94,7 +94,7 @@ func TestForwardManager_Close(t *testing.T) {
 	events := fm.Subscribe()
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	_ = fm.StartForward("web")
+	_ = fm.StartForward("web", nil)
 
 	// drain started event
 	select {
@@ -129,7 +129,7 @@ func TestForwardManager_StartForward_ListenerError(t *testing.T) {
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 
-	err := fm.StartForward("web")
+	err := fm.StartForward("web", nil)
 	if err == nil {
 		t.Fatal("StartForward() should return error when listener fails")
 	}
@@ -149,7 +149,7 @@ func TestForwardManager_StopForward_ClosesListener(t *testing.T) {
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	_ = fm.StartForward("web")
+	_ = fm.StartForward("web", nil)
 	_ = fm.StopForward("web")
 
 	ml.mu.Lock()
