@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunStart は start サブコマンドを実行する。
@@ -19,8 +19,8 @@ func RunStart(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.ForwardStartParams{Name: name}
-	var result ipc.ForwardStartResult
+	params := protocol.ForwardStartParams{Name: name}
+	var result protocol.ForwardStartResult
 	if err := client.Call(ctx, "forward.start", params, &result); err != nil {
 		exitError("%v", err)
 	}

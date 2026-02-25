@@ -1,0 +1,77 @@
+package ssh
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	cryptossh "golang.org/x/crypto/ssh"
+
+	"github.com/ousiassllc/moleport/internal/core"
+)
+
+// defaultKeepAliveInterval は SSH 接続の KeepAlive 送信間隔。
+const defaultKeepAliveInterval = 30 * time.Second
+
+// hostConnection は個々のホストへの接続状態を保持する。
+type hostConnection struct {
+	conn   core.SSHConnection
+	client *cryptossh.Client
+	ctx    context.Context
+	cancel context.CancelFunc
+	state  core.ConnectionState
+}
+
+type sshManager struct {
+	mu           sync.RWMutex
+	parser       core.SSHConfigParser
+	connFactory  func() core.SSHConnection
+	configPath   string
+	reconnectCfg core.ReconnectConfig
+
+	hosts            []core.SSHHost
+	hostsMap         map[string]int
+	conns            map[string]*hostConnection
+	reconnectCancels map[string]context.CancelFunc // ホストごとの再接続キャンセル関数
+	subscribers      []chan core.SSHEvent
+
+	closed bool
+}
+
+// NewSSHManager は SSHManager の実装を返す。
+func NewSSHManager(
+	parser core.SSHConfigParser,
+	connFactory func() core.SSHConnection,
+	configPath string,
+	reconnectCfg core.ReconnectConfig,
+) core.SSHManager {
+	return &sshManager{
+		parser:           parser,
+		connFactory:      connFactory,
+		configPath:       configPath,
+		reconnectCfg:     reconnectCfg,
+		hostsMap:         make(map[string]int),
+		conns:            make(map[string]*hostConnection),
+		reconnectCancels: make(map[string]context.CancelFunc),
+	}
+}
+
+// emit はイベントを全サブスクライバーに非ブロッキングで送信する。
+func (m *sshManager) emit(event core.SSHEvent) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, ch := range m.subscribers {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
+
+// copyHosts はホスト一覧のコピーを返す。mu.Lock の中で呼ぶこと。
+func (m *sshManager) copyHosts() []core.SSHHost {
+	result := make([]core.SSHHost, len(m.hosts))
+	copy(result, m.hosts)
+	return result
+}

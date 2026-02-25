@@ -1,94 +1,13 @@
-package ipc
+package client
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
 	"net"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
-
-// newTestClient は net.Pipe() のクライアント側で IPCClient を初期化する。
-// テスト用にソケット接続をバイパスする。
-func newTestClient(t *testing.T, conn net.Conn) *IPCClient {
-	t.Helper()
-	c := &IPCClient{
-		conn:    conn,
-		enc:     json.NewEncoder(conn),
-		scanner: bufio.NewScanner(conn),
-		pending: make(map[int]chan *Response),
-		eventCh: make(chan *Notification, 64),
-		done:    make(chan struct{}),
-	}
-	c.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	c.connected.Store(true)
-	go c.readLoop()
-	t.Cleanup(func() { _ = c.Close() })
-	return c
-}
-
-// mockServer は net.Pipe() のサーバー側を処理する。
-// クライアントからの credential.response RPC を受信して記録する。
-type mockServer struct {
-	conn    net.Conn
-	scanner *bufio.Scanner
-	enc     *json.Encoder
-
-	mu       sync.Mutex
-	received []Request
-}
-
-func newMockServer(t *testing.T, conn net.Conn) *mockServer {
-	t.Helper()
-	s := &mockServer{
-		conn:    conn,
-		scanner: bufio.NewScanner(conn),
-		enc:     json.NewEncoder(conn),
-	}
-	s.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	return s
-}
-
-// sendNotification はクライアントに通知を送信する。
-func (s *mockServer) sendNotification(notif Notification) error {
-	return s.enc.Encode(notif)
-}
-
-// readAndRespond はクライアントからのリクエストを1件読み込み、成功レスポンスを返す。
-func (s *mockServer) readAndRespond() error {
-	if !s.scanner.Scan() {
-		return fmt.Errorf("scanner: %v", s.scanner.Err())
-	}
-	line := s.scanner.Bytes()
-
-	var req Request
-	if err := json.Unmarshal(line, &req); err != nil {
-		return fmt.Errorf("unmarshal request: %w", err)
-	}
-
-	s.mu.Lock()
-	s.received = append(s.received, req)
-	s.mu.Unlock()
-
-	result, _ := json.Marshal(CredentialResponseResult{OK: true})
-	resp := Response{
-		JSONRPC: JSONRPCVersion,
-		ID:      req.ID,
-		Result:  result,
-	}
-	return s.enc.Encode(resp)
-}
-
-// getReceived はロック付きで受信済みリクエストのコピーを返す。
-func (s *mockServer) getReceived() []Request {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cp := make([]Request, len(s.received))
-	copy(cp, s.received)
-	return cp
-}
 
 func TestIPCClient_CredentialHandler_Success(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
@@ -98,22 +17,22 @@ func TestIPCClient_CredentialHandler_Success(t *testing.T) {
 
 	// ハンドラーがパスワードを返す
 	client := newTestClient(t, clientConn)
-	client.SetCredentialHandler(func(req CredentialRequestNotification) (*CredentialResponseParams, error) {
-		return &CredentialResponseParams{
+	client.SetCredentialHandler(func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
+		return &protocol.CredentialResponseParams{
 			RequestID: req.RequestID,
 			Value:     "my-secret-password",
 		}, nil
 	})
 
 	// サーバーから credential.request 通知を送信
-	params, _ := json.Marshal(CredentialRequestNotification{
+	params, _ := json.Marshal(protocol.CredentialRequestNotification{
 		RequestID: "req-123",
 		Type:      "password",
 		Host:      "prod-server",
 		Prompt:    "Password:",
 	})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "credential.request",
 		Params:  params,
 	}
@@ -136,7 +55,7 @@ func TestIPCClient_CredentialHandler_Success(t *testing.T) {
 		t.Errorf("method = %q, want %q", req.Method, "credential.response")
 	}
 
-	var credResp CredentialResponseParams
+	var credResp protocol.CredentialResponseParams
 	if err := json.Unmarshal(req.Params, &credResp); err != nil {
 		t.Fatalf("unmarshal params: %v", err)
 	}
@@ -159,18 +78,18 @@ func TestIPCClient_CredentialHandler_Cancelled(t *testing.T) {
 
 	// ハンドラーが nil を返す（ユーザーがキャンセルした場合）
 	client := newTestClient(t, clientConn)
-	client.SetCredentialHandler(func(req CredentialRequestNotification) (*CredentialResponseParams, error) {
+	client.SetCredentialHandler(func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
 		return nil, nil
 	})
 
-	params, _ := json.Marshal(CredentialRequestNotification{
+	params, _ := json.Marshal(protocol.CredentialRequestNotification{
 		RequestID: "req-456",
 		Type:      "password",
 		Host:      "prod-server",
 		Prompt:    "Password:",
 	})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "credential.request",
 		Params:  params,
 	}
@@ -192,7 +111,7 @@ func TestIPCClient_CredentialHandler_Cancelled(t *testing.T) {
 		t.Errorf("method = %q, want %q", req.Method, "credential.response")
 	}
 
-	var credResp CredentialResponseParams
+	var credResp protocol.CredentialResponseParams
 	if err := json.Unmarshal(req.Params, &credResp); err != nil {
 		t.Fatalf("unmarshal params: %v", err)
 	}
@@ -214,14 +133,14 @@ func TestIPCClient_CredentialHandler_NoHandler(t *testing.T) {
 	client := newTestClient(t, clientConn)
 	_ = client // ハンドラー未設定
 
-	params, _ := json.Marshal(CredentialRequestNotification{
+	params, _ := json.Marshal(protocol.CredentialRequestNotification{
 		RequestID: "req-789",
 		Type:      "passphrase",
 		Host:      "staging-server",
 		Prompt:    "Enter passphrase for key:",
 	})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "credential.request",
 		Params:  params,
 	}
@@ -243,7 +162,7 @@ func TestIPCClient_CredentialHandler_NoHandler(t *testing.T) {
 		t.Errorf("method = %q, want %q", req.Method, "credential.response")
 	}
 
-	var credResp CredentialResponseParams
+	var credResp protocol.CredentialResponseParams
 	if err := json.Unmarshal(req.Params, &credResp); err != nil {
 		t.Fatalf("unmarshal params: %v", err)
 	}
@@ -262,21 +181,21 @@ func TestIPCClient_CredentialHandler_NotForwardedToEventCh(t *testing.T) {
 	server := newMockServer(t, serverConn)
 
 	client := newTestClient(t, clientConn)
-	client.SetCredentialHandler(func(req CredentialRequestNotification) (*CredentialResponseParams, error) {
-		return &CredentialResponseParams{
+	client.SetCredentialHandler(func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
+		return &protocol.CredentialResponseParams{
 			RequestID: req.RequestID,
 			Value:     "pass",
 		}, nil
 	})
 
 	// credential.request 通知を送信
-	params, _ := json.Marshal(CredentialRequestNotification{
+	params, _ := json.Marshal(protocol.CredentialRequestNotification{
 		RequestID: "req-event-test",
 		Type:      "password",
 		Host:      "test-server",
 	})
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  "credential.request",
 		Params:  params,
 	}

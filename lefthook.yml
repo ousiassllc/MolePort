@@ -10,6 +10,8 @@ pre-commit:
     golangci-lint:
       glob: "*.go"
       run: golangci-lint run ./...
+    linterly:
+      run: linterly check .
 
 pre-push:
   parallel: true
@@ -18,3 +20,6 @@ pre-push:
       run: go test -race -count=1 ./...
     build:
       run: go build -o /dev/null ./cmd/moleport/
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run ./...

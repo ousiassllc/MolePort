@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
 // ResolveConfigDir は設定ディレクトリを解決する。
@@ -38,7 +38,7 @@ func ResolveConfigDir(flagValue string) string {
 
 // connectDaemon はデーモンに接続し、IPCClient を返す。
 // 接続に失敗した場合はエラーメッセージを表示して終了する。
-func connectDaemon(configDir string) *ipc.IPCClient {
+func connectDaemon(configDir string) *client.IPCClient {
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
 		exitError("デーモンが稼働していません。moleport daemon start で起動してください。")

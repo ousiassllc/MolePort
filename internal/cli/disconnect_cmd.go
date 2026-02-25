@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDisconnect は disconnect サブコマンドを実行する。
@@ -19,8 +19,8 @@ func RunDisconnect(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.SSHDisconnectParams{Host: host}
-	var result ipc.SSHDisconnectResult
+	params := protocol.SSHDisconnectParams{Host: host}
+	var result protocol.SSHDisconnectResult
 	if err := client.Call(ctx, "ssh.disconnect", params, &result); err != nil {
 		exitError("%v", err)
 	}

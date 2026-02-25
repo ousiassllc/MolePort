@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // Subscription はクライアントのイベント購読を表す。
@@ -18,7 +19,7 @@ type Subscription struct {
 }
 
 // NotifySender はクライアントに通知を送信する関数の型。
-type NotifySender func(clientID string, notification Notification) error
+type NotifySender func(clientID string, notification protocol.Notification) error
 
 // EventBroker はクライアント単位のイベント購読を管理し、コアマネージャーからの通知を配信する。
 type EventBroker struct {
@@ -104,7 +105,7 @@ func (b *EventBroker) RemoveClient(clientID string) {
 
 // HandleSSHEvent は SSH イベントを変換し、購読者に配信する。
 func (b *EventBroker) HandleSSHEvent(evt core.SSHEvent) {
-	notif := SSHEventNotification{
+	notif := protocol.SSHEventNotification{
 		Type: sshEventTypeToString(evt.Type),
 		Host: evt.HostName,
 	}
@@ -117,7 +118,7 @@ func (b *EventBroker) HandleSSHEvent(evt core.SSHEvent) {
 
 // HandleForwardEvent はポートフォワーディングイベントを変換し、購読者に配信する。
 func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent) {
-	notif := ForwardEventNotification{
+	notif := protocol.ForwardEventNotification{
 		Type: forwardEventTypeToString(evt.Type),
 		Name: evt.RuleName,
 	}
@@ -138,8 +139,8 @@ func (b *EventBroker) distribute(eventType string, method string, payload any) {
 		return
 	}
 
-	notif := Notification{
-		JSONRPC: JSONRPCVersion,
+	notif := protocol.Notification{
+		JSONRPC: protocol.JSONRPCVersion,
 		Method:  method,
 		Params:  data,
 	}

@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunReload は reload サブコマンドを実行する。
@@ -14,7 +14,7 @@ func RunReload(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	var result ipc.HostReloadResult
+	var result protocol.HostReloadResult
 	if err := client.Call(ctx, "host.reload", nil, &result); err != nil {
 		exitError("SSH config の再読み込みに失敗しました: %v", err)
 	}

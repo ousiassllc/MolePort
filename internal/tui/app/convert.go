@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // hostInfoToSSHHost は IPC の HostInfo を core.SSHHost に変換する。
-func hostInfoToSSHHost(info ipc.HostInfo) core.SSHHost {
+func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 	return core.SSHHost{
 		Name:               info.Name,
 		HostName:           info.HostName,
@@ -20,7 +20,7 @@ func hostInfoToSSHHost(info ipc.HostInfo) core.SSHHost {
 }
 
 // sessionInfoToForwardSession は IPC の SessionInfo を core.ForwardSession に変換する。
-func sessionInfoToForwardSession(info ipc.SessionInfo) core.ForwardSession {
+func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession {
 	fwdType, _ := core.ParseForwardType(info.Type)
 	status := parseSessionStatus(info.Status)
 	var connectedAt time.Time

@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunStop は stop サブコマンドを実行する。
@@ -22,7 +22,7 @@ func RunStop(configDir string, args []string) {
 	defer cancel()
 
 	if *all {
-		var result ipc.ForwardStopAllResult
+		var result protocol.ForwardStopAllResult
 		if err := client.Call(ctx, "forward.stopAll", nil, &result); err != nil {
 			exitError("%v", err)
 		}
@@ -36,8 +36,8 @@ func RunStop(configDir string, args []string) {
 	}
 
 	name := remaining[0]
-	params := ipc.ForwardStopParams{Name: name}
-	var result ipc.ForwardStopResult
+	params := protocol.ForwardStopParams{Name: name}
+	var result protocol.ForwardStopResult
 	if err := client.Call(ctx, "forward.stop", params, &result); err != nil {
 		exitError("%v", err)
 	}

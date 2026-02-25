@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunConfig は config サブコマンドを実行する。
@@ -22,7 +22,7 @@ func RunConfig(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	var result ipc.ConfigGetResult
+	var result protocol.ConfigGetResult
 	if err := client.Call(ctx, "config.get", nil, &result); err != nil {
 		exitError("設定の取得に失敗しました: %v", err)
 	}

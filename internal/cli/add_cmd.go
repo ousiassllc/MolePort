@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/ousiassllc/moleport/internal/ipc"
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunAdd は add サブコマンドを実行する。
@@ -55,7 +55,7 @@ func RunAdd(configDir string, args []string) {
 	ctx, cancel := callCtx()
 	defer cancel()
 
-	params := ipc.ForwardAddParams{
+	params := protocol.ForwardAddParams{
 		Name:        *name,
 		Host:        *host,
 		Type:        *fwdType,
@@ -65,7 +65,7 @@ func RunAdd(configDir string, args []string) {
 		AutoConnect: *autoConnect,
 	}
 
-	var result ipc.ForwardAddResult
+	var result protocol.ForwardAddResult
 	if err := client.Call(ctx, "forward.add", params, &result); err != nil {
 		exitError("%v", err)
 	}

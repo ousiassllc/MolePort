@@ -1,4 +1,4 @@
-package ipc
+package protocol
 
 import (
 	"strings"
@@ -7,9 +7,9 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// toRPCError はコアエラーを RPCError に変換する。
+// ToRPCError はコアエラーを RPCError に変換する。
 // エラーメッセージに基づいてアプリケーション固有のエラーコードを割り当てる。
-func toRPCError(err error, defaultCode int) *RPCError {
+func ToRPCError(err error, defaultCode int) *RPCError {
 	msg := err.Error()
 
 	switch {
@@ -37,8 +37,8 @@ func toRPCError(err error, defaultCode int) *RPCError {
 	return &RPCError{Code: defaultCode, Message: msg}
 }
 
-// toHostInfo は core.SSHHost を HostInfo に変換する。
-func toHostInfo(host core.SSHHost) HostInfo {
+// ToHostInfo は core.SSHHost を HostInfo に変換する。
+func ToHostInfo(host core.SSHHost) HostInfo {
 	return HostInfo{
 		Name:               host.Name,
 		HostName:           host.HostName,
@@ -49,8 +49,8 @@ func toHostInfo(host core.SSHHost) HostInfo {
 	}
 }
 
-// toForwardInfo は core.ForwardRule を ForwardInfo に変換する。
-func toForwardInfo(rule core.ForwardRule) ForwardInfo {
+// ToForwardInfo は core.ForwardRule を ForwardInfo に変換する。
+func ToForwardInfo(rule core.ForwardRule) ForwardInfo {
 	return ForwardInfo{
 		Name:        rule.Name,
 		Host:        rule.Host,
@@ -62,8 +62,8 @@ func toForwardInfo(rule core.ForwardRule) ForwardInfo {
 	}
 }
 
-// toSessionInfo は core.ForwardSession を SessionInfo に変換する。
-func toSessionInfo(s core.ForwardSession) SessionInfo {
+// ToSessionInfo は core.ForwardSession を SessionInfo に変換する。
+func ToSessionInfo(s core.ForwardSession) SessionInfo {
 	info := SessionInfo{
 		ID:             s.ID,
 		Name:           s.Rule.Name,

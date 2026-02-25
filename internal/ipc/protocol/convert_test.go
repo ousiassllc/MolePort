@@ -1,4 +1,4 @@
-package ipc
+package protocol
 
 import (
 	"fmt"
@@ -83,7 +83,7 @@ func TestToRPCError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toRPCError(tt.err, tt.defaultCode)
+			got := ToRPCError(tt.err, tt.defaultCode)
 			if got.Code != tt.wantCode {
 				t.Errorf("Code = %d, want %d", got.Code, tt.wantCode)
 			}
@@ -142,9 +142,9 @@ func TestToHostInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toHostInfo(tt.host)
+			got := ToHostInfo(tt.host)
 			if got != tt.want {
-				t.Errorf("toHostInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToHostInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -181,9 +181,9 @@ func TestToForwardInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toForwardInfo(tt.rule)
+			got := ToForwardInfo(tt.rule)
 			if got != tt.want {
-				t.Errorf("toForwardInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToForwardInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -262,9 +262,9 @@ func TestToSessionInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toSessionInfo(tt.sess)
+			got := ToSessionInfo(tt.sess)
 			if got != tt.want {
-				t.Errorf("toSessionInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToSessionInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

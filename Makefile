@@ -6,7 +6,7 @@ VERSION := 0.1.0
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 
-.PHONY: help build run clean test test-race vet fmt lint install
+.PHONY: help build run clean test test-race vet fmt lint linterly install setup-tools
 
 help: ## ヘルプを表示
 	@echo ""
@@ -38,6 +38,13 @@ fmt: ## go fmt を実行
 
 lint: ## golangci-lint を実行
 	golangci-lint run ./...
+
+linterly: ## linterly でファイル行数チェック
+	linterly check .
+
+setup-tools: ## 開発ツールをインストール
+	go install github.com/ousiassllc/linterly/cmd/linterly@latest
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)

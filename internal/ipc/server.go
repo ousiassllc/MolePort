@@ -9,11 +9,13 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // HandlerFunc は RPC リクエストを処理するハンドラ関数の型。
 // clientID はリクエスト元のクライアント識別子。
-type HandlerFunc func(clientID string, method string, params json.RawMessage) (any, *RPCError)
+type HandlerFunc func(clientID string, method string, params json.RawMessage) (any, *protocol.RPCError)
 
 // IPCServer は Unix ドメインソケット上で JSON-RPC 2.0 通信を行うサーバー。
 type IPCServer struct {
@@ -112,7 +114,7 @@ func (s *IPCServer) ConnectedClients() int {
 }
 
 // SendNotification は指定クライアントに通知を送信する。
-func (s *IPCServer) SendNotification(clientID string, notification Notification) error {
+func (s *IPCServer) SendNotification(clientID string, notification protocol.Notification) error {
 	s.mu.RLock()
 	c, ok := s.clients[clientID]
 	s.mu.RUnlock()
@@ -123,7 +125,7 @@ func (s *IPCServer) SendNotification(clientID string, notification Notification)
 }
 
 // BroadcastNotification は全クライアントに通知を送信する。
-func (s *IPCServer) BroadcastNotification(notification Notification) {
+func (s *IPCServer) BroadcastNotification(notification protocol.Notification) {
 	s.mu.RLock()
 	clients := make([]*clientConn, 0, len(s.clients))
 	for _, c := range s.clients {
@@ -204,19 +206,19 @@ func (s *IPCServer) readLoop(c *clientConn) {
 			continue
 		}
 
-		var req Request
+		var req protocol.Request
 		if err := json.Unmarshal(line, &req); err != nil {
 			// パースエラー: ID が不明なので null で返す
-			resp := NewErrorResponse(nil, ParseError, "parse error")
+			resp := protocol.NewErrorResponse(nil, protocol.ParseError, "parse error")
 			if err := c.send(resp); err != nil {
 				return
 			}
 			continue
 		}
 
-		if req.JSONRPC != JSONRPCVersion {
+		if req.JSONRPC != protocol.JSONRPCVersion {
 			if req.ID != nil {
-				resp := NewErrorResponse(req.ID, InvalidRequest, "invalid jsonrpc version")
+				resp := protocol.NewErrorResponse(req.ID, protocol.InvalidRequest, "invalid jsonrpc version")
 				if err := c.send(resp); err != nil {
 					return
 				}
@@ -232,16 +234,16 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 		result, rpcErr := s.handler(c.id, req.Method, req.Params)
 		if rpcErr != nil {
-			resp := NewErrorResponse(req.ID, rpcErr.Code, rpcErr.Message)
+			resp := protocol.NewErrorResponse(req.ID, rpcErr.Code, rpcErr.Message)
 			if err := c.send(resp); err != nil {
 				return
 			}
 			continue
 		}
 
-		resp, err := NewResponse(req.ID, result)
+		resp, err := protocol.NewResponse(req.ID, result)
 		if err != nil {
-			resp = NewErrorResponse(req.ID, InternalError, "marshal result: "+err.Error())
+			resp = protocol.NewErrorResponse(req.ID, protocol.InternalError, "marshal result: "+err.Error())
 		}
 		if err := c.send(resp); err != nil {
 			return
