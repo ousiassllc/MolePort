@@ -15,13 +15,14 @@ import (
 // --- Mock SSHManager for ForwardManager tests ---
 
 type mockSSHManager struct {
-	mu          sync.RWMutex
-	hosts       map[string]core.SSHHost
-	connections map[string]*ssh.Client
-	sshConns    map[string]core.SSHConnection
-	connected   map[string]bool
-	connectErr  error
-	subscribers []chan core.SSHEvent
+	mu              sync.RWMutex
+	hosts           map[string]core.SSHHost
+	connections     map[string]*ssh.Client
+	sshConns        map[string]core.SSHConnection
+	connected       map[string]bool
+	connectErr      error
+	connectWithCbFn func(hostName string, cb core.CredentialCallback) error
+	subscribers     []chan core.SSHEvent
 }
 
 func newMockSSHManager() *mockSSHManager {
@@ -57,6 +58,9 @@ func (m *mockSSHManager) Connect(hostName string) error {
 }
 
 func (m *mockSSHManager) ConnectWithCallback(hostName string, cb core.CredentialCallback) error {
+	if m.connectWithCbFn != nil {
+		return m.connectWithCbFn(hostName, cb)
+	}
 	return m.Connect(hostName)
 }
 

@@ -44,7 +44,7 @@ func (d *Daemon) restoreState() {
 	}
 
 	for _, rule := range state.ActiveForwards {
-		if err := d.fwdMgr.StartForward(rule.Name); err != nil {
+		if err := d.fwdMgr.StartForward(rule.Name, nil); err != nil {
 			slog.Warn("failed to restore forward", "rule", rule.Name, "error", err)
 		}
 	}

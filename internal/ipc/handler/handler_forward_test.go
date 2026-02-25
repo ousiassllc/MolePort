@@ -222,22 +222,14 @@ func TestHandler_ForwardDelete_SavesConfig(t *testing.T) {
 	}
 }
 
-func TestHandler_ForwardStart_PreConnectsWithCallback(t *testing.T) {
-	h, sshMgr, fwdMgr, _ := newTestHandler()
+// TestHandler_ForwardStart_PassesCallbackToStartForward は、
+// handler がクレデンシャルコールバックを StartForward に渡すことを検証する。
+// これにより、StartForward 内で SSH 接続が必要な場合にパスワード認証がサポートされる。
+// Issue #20 の回帰テスト。
+func TestHandler_ForwardStart_PassesCallbackToStartForward(t *testing.T) {
+	h, _, fwdMgr, _ := newTestHandler()
 	sender := &mockNotificationSender{}
 	h.SetSender(sender)
-
-	// ホストは未接続
-	sshMgr.connected = map[string]bool{"prod": false}
-
-	// ConnectWithCallback が呼ばれたことを記録
-	var cbWasNonNil bool
-	sshMgr.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
-		cbWasNonNil = cb != nil
-		// 接続成功をシミュレート
-		sshMgr.connected[hostName] = true
-		return nil
-	}
 
 	// セッション情報にルールを追加（GetSession で Host を取得するため）
 	fwdMgr.sessions = append(fwdMgr.sessions, core.ForwardSession{
@@ -251,7 +243,7 @@ func TestHandler_ForwardStart_PreConnectsWithCallback(t *testing.T) {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
 
-	if !cbWasNonNil {
-		t.Error("forwardStart should call ConnectWithCallback with non-nil callback when sender is set")
+	if fwdMgr.lastStartCb == nil {
+		t.Error("forwardStart should pass non-nil CredentialCallback to StartForward")
 	}
 }

@@ -11,7 +11,8 @@ import (
 )
 
 // StartForward はフォワーディングセッションを開始する。
-func (m *forwardManager) StartForward(ruleName string) error {
+// cb が非 nil の場合、SSH 接続にクレデンシャルコールバックを使用する。
+func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallback) error {
 	m.mu.Lock()
 	rule, exists := m.rules[ruleName]
 	if !exists {
@@ -25,9 +26,9 @@ func (m *forwardManager) StartForward(ruleName string) error {
 	}
 	m.mu.Unlock()
 
-	// SSH 接続を確認（必要に応じて接続）
+	// SSH 接続を確認（必要に応じてコールバック付きで接続）
 	if !m.sshManager.IsConnected(rule.Host) {
-		if err := m.sshManager.Connect(rule.Host); err != nil {
+		if err := m.sshManager.ConnectWithCallback(rule.Host, cb); err != nil {
 			return fmt.Errorf("failed to connect to host %s: %w", rule.Host, err)
 		}
 	}

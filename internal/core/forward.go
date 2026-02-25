@@ -17,7 +17,8 @@ type ForwardManager interface {
 
 	// StartForward は指定ルールのポートフォワーディングを開始する。
 	// 必要に応じて SSH 接続を確立し、リスナーを作成して accept ループを起動する。
-	StartForward(ruleName string) error
+	// cb が非 nil の場合、SSH 接続にクレデンシャルコールバックを使用する。
+	StartForward(ruleName string, cb CredentialCallback) error
 
 	// StopForward は指定ルールのフォワーディングセッションを停止する。
 	// アクティブでない場合はエラーなしで何もしない。
