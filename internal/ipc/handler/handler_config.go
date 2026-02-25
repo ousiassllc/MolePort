@@ -16,8 +16,8 @@ func (h *Handler) configGet() (any, *protocol.RPCError) {
 		Reconnect: protocol.ReconnectInfo{
 			Enabled:      cfg.Reconnect.Enabled,
 			MaxRetries:   cfg.Reconnect.MaxRetries,
-			InitialDelay: cfg.Reconnect.InitialDelay.Duration.String(),
-			MaxDelay:     cfg.Reconnect.MaxDelay.Duration.String(),
+			InitialDelay: cfg.Reconnect.InitialDelay.String(),
+			MaxDelay:     cfg.Reconnect.MaxDelay.String(),
 		},
 		Session: protocol.SessionCfgInfo{
 			AutoRestore: cfg.Session.AutoRestore,

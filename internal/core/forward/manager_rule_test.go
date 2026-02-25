@@ -76,15 +76,15 @@ func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	fm.StartForward("web")
+	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
+	_ = fm.StartForward("web")
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	for i := 0; i < 2; i++ {
 		go func() {
 			defer wg.Done()
-			fm.DeleteRule("web")
+			_ = fm.DeleteRule("web")
 		}()
 	}
 	wg.Wait()

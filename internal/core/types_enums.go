@@ -128,7 +128,7 @@ type Duration struct {
 
 // MarshalYAML は Duration を文字列としてシリアライズする。
 func (d Duration) MarshalYAML() (any, error) {
-	return d.Duration.String(), nil
+	return d.String(), nil
 }
 
 // UnmarshalYAML は文字列から Duration をデシリアライズする。

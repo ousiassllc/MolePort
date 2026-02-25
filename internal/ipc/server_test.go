@@ -38,7 +38,7 @@ func startTestServer(t *testing.T, handler HandlerFunc) (*IPCServer, string) {
 	if err := srv.Start(context.Background()); err != nil {
 		t.Fatalf("Start server: %v", err)
 	}
-	t.Cleanup(func() { srv.Stop() })
+	t.Cleanup(func() { _ = srv.Stop() })
 	return srv, sockPath
 }
 
@@ -48,7 +48,7 @@ func connectTestClient(t *testing.T, sockPath string) *ipcclient.IPCClient {
 	if err := c.Connect(); err != nil {
 		t.Fatalf("Connect client: %v", err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 
@@ -129,10 +129,10 @@ func TestServerClient_ConnectedClients(t *testing.T) {
 	client2 := connectTestClient(t, sockPath)
 	waitFor(t, func() bool { return srv.ConnectedClients() == 2 })
 
-	client1.Close()
+	_ = client1.Close()
 	waitFor(t, func() bool { return srv.ConnectedClients() == 1 })
 
-	client2.Close()
+	_ = client2.Close()
 	waitFor(t, func() bool { return srv.ConnectedClients() == 0 })
 }
 

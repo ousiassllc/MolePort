@@ -149,7 +149,7 @@ func (m *sshManager) Disconnect(hostName string) error {
 		hc.cancel()
 	}
 	if hc.conn != nil {
-		hc.conn.Close()
+		_ = hc.conn.Close()
 	}
 	hc.state = core.Disconnected
 	delete(m.conns, hostName)
@@ -225,7 +225,7 @@ func (m *sshManager) Close() {
 			hc.cancel()
 		}
 		if hc.conn != nil {
-			hc.conn.Close()
+			_ = hc.conn.Close()
 		}
 		hc.state = core.Disconnected
 		if i, ok := m.hostsMap[name]; ok {

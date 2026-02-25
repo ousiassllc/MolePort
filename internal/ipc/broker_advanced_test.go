@@ -106,7 +106,7 @@ func TestEventBroker_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			clientID := "client-" + string(rune('A'+n))
+			clientID := "client-" + string(rune('A'+n)) //nolint:gosec // n is always 0-9
 
 			subID := broker.Subscribe(clientID, []string{"ssh", "forward"})
 			ops.Add(1)

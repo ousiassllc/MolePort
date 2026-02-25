@@ -39,8 +39,8 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
 
-	fm.StartForward("fwd1")
-	fm.StartForward("fwd2")
+	_ = fm.StartForward("fwd1")
+	_ = fm.StartForward("fwd2")
 
 	if err := fm.StopAllForwards(); err != nil {
 		t.Fatalf("StopAllForwards() error = %v", err)
@@ -67,7 +67,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	fm.StartForward("web")
+	_ = fm.StartForward("web")
 
 	if err := fm.DeleteRule("web"); err != nil {
 		t.Fatalf("DeleteRule() error = %v", err)
@@ -94,7 +94,7 @@ func TestForwardManager_Close(t *testing.T) {
 	events := fm.Subscribe()
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	fm.StartForward("web")
+	_ = fm.StartForward("web")
 
 	// drain started event
 	select {
@@ -125,7 +125,7 @@ func TestForwardManager_StartForward_ListenerError(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(core.ForwardRule{
+	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 
@@ -148,9 +148,9 @@ func TestForwardManager_StopForward_ClosesListener(t *testing.T) {
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)
 
-	fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	fm.StartForward("web")
-	fm.StopForward("web")
+	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
+	_ = fm.StartForward("web")
+	_ = fm.StopForward("web")
 
 	ml.mu.Lock()
 	closed := ml.closed

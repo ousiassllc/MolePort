@@ -13,8 +13,8 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 	// SOCKS5 の段階的読み取りが正しく動作することを検証する。
 	// クライアント側・サーバー側を net.Pipe で接続し、SOCKS5 ネゴシエーションを行う。
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
 	mockDialer := &mockSOCKS5Dialer{
@@ -33,27 +33,28 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 	go fm.handleSOCKS5(af, serverConn, mockDialer)
 
 	// Greeting: VER=5, NMETHODS=1, METHODS=[0x00]
-	clientConn.Write([]byte{0x05, 0x01, 0x00})
+	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
 
 	// サーバーからの応答を読む
 	resp := make([]byte, 2)
-	if _, err := io.ReadFull(clientConn, resp); err != nil {
+	n, err := io.ReadFull(clientConn, resp)
+	if err != nil {
 		t.Fatalf("read greeting response: %v", err)
 	}
-	if resp[0] != 0x05 || resp[1] != 0x00 {
+	if n < 2 || resp[0] != 0x05 || resp[1] != 0x00 {
 		t.Fatalf("unexpected greeting response: %v", resp)
 	}
 
 	// Request: CONNECT to example.com:80 (domain type)
 	domain := "example.com"
-	req := []byte{0x05, 0x01, 0x00, 0x03, byte(len(domain))}
+	req := []byte{0x05, 0x01, 0x00, 0x03, byte(len(domain))} //nolint:gosec // domain length is always < 256
 	req = append(req, []byte(domain)...)
 	req = append(req, 0x00, 0x50) // port 80
-	clientConn.Write(req)
+	_, _ = clientConn.Write(req)
 
 	// Success response
 	successResp := make([]byte, 10)
-	if _, err := io.ReadFull(clientConn, successResp); err != nil {
+	if _, err = io.ReadFull(clientConn, successResp); err != nil {
 		t.Fatalf("read success response: %v", err)
 	}
 	if successResp[0] != 0x05 || successResp[1] != 0x00 {
@@ -73,8 +74,8 @@ func TestHandleSOCKS5_StagedReads(t *testing.T) {
 
 func TestHandleSOCKS5_IPv4(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
 	mockDialer := &mockSOCKS5Dialer{
@@ -92,16 +93,16 @@ func TestHandleSOCKS5_IPv4(t *testing.T) {
 	go fm.handleSOCKS5(af, serverConn, mockDialer)
 
 	// Greeting
-	clientConn.Write([]byte{0x05, 0x01, 0x00})
+	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
 	resp := make([]byte, 2)
-	io.ReadFull(clientConn, resp)
+	_, _ = io.ReadFull(clientConn, resp)
 
 	// Request: CONNECT to 192.168.1.1:8080 (IPv4)
 	req := []byte{0x05, 0x01, 0x00, 0x01, 192, 168, 1, 1, 0x1F, 0x90} // port 8080
-	clientConn.Write(req)
+	_, _ = clientConn.Write(req)
 
 	successResp := make([]byte, 10)
-	io.ReadFull(clientConn, successResp)
+	_, _ = io.ReadFull(clientConn, successResp)
 
 	select {
 	case addr := <-dialedAddr:
@@ -115,8 +116,8 @@ func TestHandleSOCKS5_IPv4(t *testing.T) {
 
 func TestHandleSOCKS5_IPv6(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
 	mockDialer := &mockSOCKS5Dialer{
@@ -134,19 +135,19 @@ func TestHandleSOCKS5_IPv6(t *testing.T) {
 	go fm.handleSOCKS5(af, serverConn, mockDialer)
 
 	// Greeting
-	clientConn.Write([]byte{0x05, 0x01, 0x00})
+	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
 	resp := make([]byte, 2)
-	io.ReadFull(clientConn, resp)
+	_, _ = io.ReadFull(clientConn, resp)
 
 	// Request: CONNECT to [::1]:443 (IPv6)
 	req := []byte{0x05, 0x01, 0x00, 0x04}
 	ipv6 := net.ParseIP("::1").To16()
 	req = append(req, ipv6...)
 	req = append(req, 0x01, 0xBB) // port 443
-	clientConn.Write(req)
+	_, _ = clientConn.Write(req)
 
 	successResp := make([]byte, 10)
-	io.ReadFull(clientConn, successResp)
+	_, _ = io.ReadFull(clientConn, successResp)
 
 	select {
 	case addr := <-dialedAddr:
@@ -163,8 +164,8 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	// クライアントが 0x00 (no auth) を含まないメソッドリストを送った場合、
 	// サーバーは 0xFF (no acceptable methods) を返すことを検証する。
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
 
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm).(*forwardManager)
@@ -179,13 +180,14 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	}()
 
 	// Greeting: VER=5, NMETHODS=1, METHODS=[0x02] (username/password only)
-	clientConn.Write([]byte{0x05, 0x01, 0x02})
+	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x02})
 
 	resp := make([]byte, 2)
-	if _, err := io.ReadFull(clientConn, resp); err != nil {
+	n, err := io.ReadFull(clientConn, resp)
+	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
-	if resp[0] != 0x05 || resp[1] != 0xFF {
+	if n < 2 || resp[0] != 0x05 || resp[1] != 0xFF {
 		t.Errorf("expected no acceptable methods (0xFF), got %v", resp)
 	}
 
@@ -199,8 +201,8 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 	// TCP ストリームで段階的に（1バイトずつ）送信しても正しく処理されることを確認する。
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
 	mockDialer := &mockSOCKS5Dialer{
@@ -223,25 +225,25 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 
 	// 1バイトずつ送信: Greeting
 	for _, b := range []byte{0x05, 0x01, 0x00} {
-		clientConn.Write([]byte{b})
+		_, _ = clientConn.Write([]byte{b})
 		time.Sleep(time.Millisecond)
 	}
 
 	resp := make([]byte, 2)
-	io.ReadFull(clientConn, resp)
+	_, _ = io.ReadFull(clientConn, resp)
 
 	// 1バイトずつ送信: Request (domain "a.b" port 80)
 	domain := "a.b"
-	req := []byte{0x05, 0x01, 0x00, 0x03, byte(len(domain))}
+	req := []byte{0x05, 0x01, 0x00, 0x03, byte(len(domain))} //nolint:gosec // domain length is always < 256
 	req = append(req, []byte(domain)...)
 	req = append(req, 0x00, 0x50)
 	for _, b := range req {
-		clientConn.Write([]byte{b})
+		_, _ = clientConn.Write([]byte{b})
 		time.Sleep(time.Millisecond)
 	}
 
 	successResp := make([]byte, 10)
-	io.ReadFull(clientConn, successResp)
+	_, _ = io.ReadFull(clientConn, successResp)
 
 	select {
 	case addr := <-dialedAddr:

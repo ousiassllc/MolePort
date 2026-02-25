@@ -33,7 +33,7 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 
 		// AutoConnect が設定されている場合はフォワードも開始
 		if msg.AutoConnect {
-			startParams := protocol.ForwardStartParams{Name: result.Name}
+			startParams := protocol.ForwardStartParams(result)
 			var startResult protocol.ForwardStartResult
 			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
 				// 開始に失敗したルールを削除（ロールバック）

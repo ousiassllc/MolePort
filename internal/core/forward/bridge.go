@@ -63,7 +63,7 @@ func (m *forwardManager) bridge(af *activeForward, rule core.ForwardRule, conn n
 		slog.Warn("bridge dial failed", "rule", rule.Name, "error", err)
 		return
 	}
-	defer remote.Close()
+	defer func() { _ = remote.Close() }()
 
 	m.copyBidirectional(af, conn, remote)
 }
@@ -89,7 +89,7 @@ func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClien
 		_, _ = conn.Write([]byte{core.Socks5Version, core.Socks5ReplyConnectionRefused, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return
 	}
-	defer remote.Close()
+	defer func() { _ = remote.Close() }()
 
 	// Success response
 	if _, err := conn.Write([]byte{core.Socks5Version, core.Socks5ReplySuccess, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {

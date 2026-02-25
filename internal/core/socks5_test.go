@@ -113,7 +113,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 			name: "domain CONNECT",
 			clientData: func() []byte {
 				domain := "example.com"
-				req := []byte{Socks5Version, Socks5CmdConnect, 0x00, Socks5AddrDomain, byte(len(domain))}
+				req := []byte{Socks5Version, Socks5CmdConnect, 0x00, Socks5AddrDomain, byte(len(domain))} //nolint:gosec // domain length is always < 256
 				req = append(req, []byte(domain)...)
 				req = append(req, portBytes(443)...)
 				return req

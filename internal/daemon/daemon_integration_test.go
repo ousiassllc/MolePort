@@ -22,14 +22,14 @@ func TestDaemon_EventRouting(t *testing.T) {
 	if err := d.Start(ctx); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	// IPC クライアントを接続
 	client := ipcclient.NewIPCClient(SocketPath(dir))
 	if err := client.Connect(); err != nil {
 		t.Fatalf("client Connect() error: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// イベント購読
 	callCtx, callCancel := context.WithTimeout(ctx, 5*time.Second)
@@ -70,13 +70,13 @@ func TestEnsureDaemon_Running(t *testing.T) {
 	if err := d.Start(ctx); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
-	defer d.Stop()
+	defer func() { _ = d.Stop() }()
 
 	client, err := EnsureDaemon(dir)
 	if err != nil {
 		t.Fatalf("EnsureDaemon() error: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if !client.IsConnected() {
 		t.Error("client is not connected")

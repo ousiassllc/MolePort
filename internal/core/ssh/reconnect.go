@@ -29,7 +29,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 
 	// 接続をクリーンアップ
 	hc.cancel()
-	hc.conn.Close()
+	_ = hc.conn.Close()
 	hc.state = core.Disconnected
 
 	if i, ok := m.hostsMap[hostName]; ok {

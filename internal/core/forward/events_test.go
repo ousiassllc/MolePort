@@ -54,7 +54,7 @@ func TestForwardManager_GetAllSessions(t *testing.T) {
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
 
-	fm.StartForward("fwd1")
+	_ = fm.StartForward("fwd1")
 
 	sessions := fm.GetAllSessions()
 	if len(sessions) != 2 {
@@ -86,8 +86,8 @@ func TestForwardManager_Subscribe_MultipleSubscribers(t *testing.T) {
 	ch1 := fm.Subscribe()
 	ch2 := fm.Subscribe()
 
-	fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	fm.StartForward("web")
+	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
+	_ = fm.StartForward("web")
 
 	for _, ch := range []<-chan core.ForwardEvent{ch1, ch2} {
 		select {

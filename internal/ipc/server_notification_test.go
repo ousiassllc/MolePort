@@ -28,7 +28,7 @@ func TestServerClient_Notification(t *testing.T) {
 	if err := srv.Start(context.Background()); err != nil {
 		t.Fatalf("Start server: %v", err)
 	}
-	t.Cleanup(func() { srv.Stop() })
+	t.Cleanup(func() { _ = srv.Stop() })
 
 	client := connectTestClient(t, sockPath)
 
@@ -121,12 +121,12 @@ func TestServerClient_ClientDisconnect(t *testing.T) {
 	if err := srv.Start(context.Background()); err != nil {
 		t.Fatalf("Start server: %v", err)
 	}
-	t.Cleanup(func() { srv.Stop() })
+	t.Cleanup(func() { _ = srv.Stop() })
 
 	client := connectTestClient(t, sockPath)
 	waitFor(t, func() bool { return srv.ConnectedClients() == 1 })
 
-	client.Close()
+	_ = client.Close()
 	waitFor(t, func() bool { return srv.ConnectedClients() == 0 })
 
 	// コールバックが呼ばれたことを確認
@@ -156,7 +156,7 @@ func TestServerClient_ServerStop(t *testing.T) {
 		t.Fatal("Call after server stop should return error")
 	}
 
-	c.Close()
+	_ = c.Close()
 }
 
 func TestServerClient_SendNotification_UnknownClient(t *testing.T) {

@@ -136,7 +136,7 @@ func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession
 		return nil
 	}
 
-	af.listener.Close()
+	_ = af.listener.Close()
 	af.cancel()
 	af.session.Status = core.Stopped
 	af.session.BytesSent = af.sent.Load()
@@ -148,7 +148,7 @@ func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession
 
 // Close は全フォワーディングを停止し、サブスクライバーチャネルを閉じる。
 func (m *forwardManager) Close() {
-	m.StopAllForwards()
+	_ = m.StopAllForwards()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
