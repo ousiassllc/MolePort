@@ -149,6 +149,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.LogOutputMsg:
 		m.dashboard.AppendLog(msg.Text)
+		return m, nil
 
 	case tui.ForwardToggleMsg:
 		cmds = append(cmds, m.toggleForward(msg.RuleName))

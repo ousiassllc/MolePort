@@ -6,6 +6,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
+	"github.com/ousiassllc/moleport/internal/tui"
 )
 
 func TestHostInfoToSSHHost(t *testing.T) {
@@ -155,6 +156,19 @@ func TestParseConnectionState(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("parseConnectionState(%q) = %v, want %v", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestLogOutputMsgNotDuplicated(t *testing.T) {
+	m := NewMainModel(nil, "test")
+	m.dashboard.SetSize(80, 24)
+
+	msg := tui.LogOutputMsg{Text: "テストメッセージ"}
+	result, _ := m.Update(msg)
+	updated := result.(MainModel)
+
+	if got := updated.dashboard.LogLineCount(); got != 1 {
+		t.Errorf("LogLineCount() = %d, want 1 (log message was duplicated)", got)
 	}
 }
 
