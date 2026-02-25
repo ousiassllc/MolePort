@@ -63,6 +63,7 @@ func (p *sshConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
 				User:               getConfigValue(cfg, alias, "User", currentUser),
 				IdentityFile:       expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
 				ProxyJump:          parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
+				ProxyCommand:       getConfigValue(cfg, alias, "ProxyCommand", ""),
 				State:              core.Disconnected,
 				ActiveForwardCount: 0,
 			}
@@ -129,4 +130,47 @@ func parseProxyJump(val string) []string {
 		return nil
 	}
 	return result
+}
+
+// ExpandProxyCommand は ProxyCommand 文字列内の SSH トークンを展開する。
+// サポートするトークン:
+//
+//	%h → リモートホスト名
+//	%p → ポート番号
+//	%r → リモートユーザー名
+//	%% → リテラルの %
+//
+// 上記以外のトークン（%n, %d 等）は未展開のまま保持される。
+// ProxyCommand が設定されている場合は ProxyJump より優先される（OpenSSH の挙動に準拠）。
+func ExpandProxyCommand(command, host string, port int, user string) string {
+	if command == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.Grow(len(command))
+
+	for i := 0; i < len(command); i++ {
+		if command[i] == '%' && i+1 < len(command) {
+			switch command[i+1] {
+			case 'h':
+				b.WriteString(host)
+				i++
+			case 'p':
+				b.WriteString(strconv.Itoa(port))
+				i++
+			case 'r':
+				b.WriteString(user)
+				i++
+			case '%':
+				b.WriteByte('%')
+				i++
+			default:
+				b.WriteByte(command[i])
+			}
+		} else {
+			b.WriteByte(command[i])
+		}
+	}
+	return b.String()
 }

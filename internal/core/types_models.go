@@ -10,6 +10,7 @@ type SSHHost struct {
 	User               string
 	IdentityFile       string
 	ProxyJump          []string
+	ProxyCommand       string
 	State              ConnectionState
 	ActiveForwardCount int
 }
