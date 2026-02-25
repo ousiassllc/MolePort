@@ -27,7 +27,7 @@ func (h *Handler) daemonShutdown(params json.RawMessage) (any, *protocol.RPCErro
 	}
 
 	if err := h.daemon.Shutdown(p.Purge); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 	return protocol.DaemonShutdownResult{OK: true}, nil
 }

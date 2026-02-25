@@ -28,7 +28,7 @@ func (h *Handler) forwardList(params json.RawMessage) (any, *protocol.RPCError) 
 		Forwards: make([]protocol.ForwardInfo, len(rules)),
 	}
 	for i, rule := range rules {
-		result.Forwards[i] = toForwardInfo(rule)
+		result.Forwards[i] = protocol.ToForwardInfo(rule)
 	}
 	return result, nil
 }
@@ -56,7 +56,7 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *protocol.RPCError) {
 
 	name, err := h.fwdMgr.AddRule(rule)
 	if err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	h.saveForwardRulesToConfig()
@@ -70,7 +70,7 @@ func (h *Handler) forwardDelete(params json.RawMessage) (any, *protocol.RPCError
 	}
 
 	if err := h.fwdMgr.DeleteRule(p.Name); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	h.saveForwardRulesToConfig()
@@ -90,17 +90,17 @@ func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *p
 	// ここでの事前接続が必須。
 	session, err := h.fwdMgr.GetSession(p.Name)
 	if err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 	if !h.sshMgr.IsConnected(session.Rule.Host) {
 		cb := h.buildCredentialCallback(clientID, session.Rule.Host)
 		if err := h.sshMgr.ConnectWithCallback(session.Rule.Host, cb); err != nil {
-			return nil, toRPCError(err, protocol.InternalError)
+			return nil, protocol.ToRPCError(err, protocol.InternalError)
 		}
 	}
 
 	if err := h.fwdMgr.StartForward(p.Name); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.ForwardStartResult{
@@ -116,7 +116,7 @@ func (h *Handler) forwardStop(params json.RawMessage) (any, *protocol.RPCError) 
 	}
 
 	if err := h.fwdMgr.StopForward(p.Name); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.ForwardStopResult{
@@ -135,7 +135,7 @@ func (h *Handler) forwardStopAll() (any, *protocol.RPCError) {
 	}
 
 	if err := h.fwdMgr.StopAllForwards(); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.ForwardStopAllResult{Stopped: active}, nil

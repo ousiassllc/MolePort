@@ -1,4 +1,4 @@
-package handler
+package protocol
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 func TestToRPCError(t *testing.T) {
@@ -20,71 +19,71 @@ func TestToRPCError(t *testing.T) {
 		{
 			name:        "host not found",
 			err:         fmt.Errorf("host not found"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.HostNotFound,
+			defaultCode: InternalError,
+			wantCode:    HostNotFound,
 			wantMsg:     "host not found",
 		},
 		{
 			name:        "rule not found",
 			err:         fmt.Errorf("rule not found"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.RuleNotFound,
+			defaultCode: InternalError,
+			wantCode:    RuleNotFound,
 			wantMsg:     "rule not found",
 		},
 		{
 			name:        "already exists",
 			err:         fmt.Errorf("rule already exists"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.RuleAlreadyExists,
+			defaultCode: InternalError,
+			wantCode:    RuleAlreadyExists,
 			wantMsg:     "rule already exists",
 		},
 		{
 			name:        "already active",
 			err:         fmt.Errorf("connection already active"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.AlreadyConnected,
+			defaultCode: InternalError,
+			wantCode:    AlreadyConnected,
 			wantMsg:     "connection already active",
 		},
 		{
 			name:        "not connected",
 			err:         fmt.Errorf("host is not connected"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.NotConnected,
+			defaultCode: InternalError,
+			wantCode:    NotConnected,
 			wantMsg:     "host is not connected",
 		},
 		{
 			name:        "already connected",
 			err:         fmt.Errorf("host already connected"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.AlreadyConnected,
+			defaultCode: InternalError,
+			wantCode:    AlreadyConnected,
 			wantMsg:     "host already connected",
 		},
 		{
 			name:        "credential timeout",
 			err:         fmt.Errorf("credential timeout"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.CredentialTimeout,
+			defaultCode: InternalError,
+			wantCode:    CredentialTimeout,
 			wantMsg:     "credential timeout",
 		},
 		{
 			name:        "credential cancelled",
 			err:         fmt.Errorf("credential cancelled"),
-			defaultCode: protocol.InternalError,
-			wantCode:    protocol.CredentialCancelled,
+			defaultCode: InternalError,
+			wantCode:    CredentialCancelled,
 			wantMsg:     "credential cancelled",
 		},
 		{
 			name:        "generic error uses defaultCode",
 			err:         fmt.Errorf("something unexpected happened"),
-			defaultCode: protocol.InvalidParams,
-			wantCode:    protocol.InvalidParams,
+			defaultCode: InvalidParams,
+			wantCode:    InvalidParams,
 			wantMsg:     "something unexpected happened",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toRPCError(tt.err, tt.defaultCode)
+			got := ToRPCError(tt.err, tt.defaultCode)
 			if got.Code != tt.wantCode {
 				t.Errorf("Code = %d, want %d", got.Code, tt.wantCode)
 			}
@@ -99,7 +98,7 @@ func TestToHostInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		host core.SSHHost
-		want protocol.HostInfo
+		want HostInfo
 	}{
 		{
 			name: "connected host",
@@ -111,7 +110,7 @@ func TestToHostInfo(t *testing.T) {
 				State:              core.Connected,
 				ActiveForwardCount: 3,
 			},
-			want: protocol.HostInfo{
+			want: HostInfo{
 				Name:               "prod",
 				HostName:           "192.168.1.1",
 				Port:               22,
@@ -130,7 +129,7 @@ func TestToHostInfo(t *testing.T) {
 				State:              core.Disconnected,
 				ActiveForwardCount: 0,
 			},
-			want: protocol.HostInfo{
+			want: HostInfo{
 				Name:               "staging",
 				HostName:           "10.0.0.1",
 				Port:               2222,
@@ -143,9 +142,9 @@ func TestToHostInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toHostInfo(tt.host)
+			got := ToHostInfo(tt.host)
 			if got != tt.want {
-				t.Errorf("toHostInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToHostInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -155,7 +154,7 @@ func TestToForwardInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		rule core.ForwardRule
-		want protocol.ForwardInfo
+		want ForwardInfo
 	}{
 		{
 			name: "local forward rule",
@@ -168,7 +167,7 @@ func TestToForwardInfo(t *testing.T) {
 				RemotePort:  80,
 				AutoConnect: true,
 			},
-			want: protocol.ForwardInfo{
+			want: ForwardInfo{
 				Name:        "web",
 				Host:        "prod",
 				Type:        "local",
@@ -182,9 +181,9 @@ func TestToForwardInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toForwardInfo(tt.rule)
+			got := ToForwardInfo(tt.rule)
 			if got != tt.want {
-				t.Errorf("toForwardInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToForwardInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -196,7 +195,7 @@ func TestToSessionInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		sess core.ForwardSession
-		want protocol.SessionInfo
+		want SessionInfo
 	}{
 		{
 			name: "non-zero ConnectedAt formatted as RFC3339",
@@ -217,7 +216,7 @@ func TestToSessionInfo(t *testing.T) {
 				ReconnectCount: 1,
 				LastError:      "connection reset",
 			},
-			want: protocol.SessionInfo{
+			want: SessionInfo{
 				ID:             "prod-local-8080",
 				Name:           "web",
 				Host:           "prod",
@@ -248,7 +247,7 @@ func TestToSessionInfo(t *testing.T) {
 				Status:      core.Stopped,
 				ConnectedAt: time.Time{},
 			},
-			want: protocol.SessionInfo{
+			want: SessionInfo{
 				ID:         "staging-local-3000",
 				Name:       "api",
 				Host:       "staging",
@@ -263,9 +262,9 @@ func TestToSessionInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toSessionInfo(tt.sess)
+			got := ToSessionInfo(tt.sess)
 			if got != tt.want {
-				t.Errorf("toSessionInfo() = %+v, want %+v", got, tt.want)
+				t.Errorf("ToSessionInfo() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

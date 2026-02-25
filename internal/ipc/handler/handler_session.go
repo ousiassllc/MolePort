@@ -13,7 +13,7 @@ func (h *Handler) sessionList() (any, *protocol.RPCError) {
 		Sessions: make([]protocol.SessionInfo, len(sessions)),
 	}
 	for i, s := range sessions {
-		result.Sessions[i] = toSessionInfo(s)
+		result.Sessions[i] = protocol.ToSessionInfo(s)
 	}
 	return result, nil
 }
@@ -26,9 +26,9 @@ func (h *Handler) sessionGet(params json.RawMessage) (any, *protocol.RPCError) {
 
 	session, err := h.fwdMgr.GetSession(p.Name)
 	if err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
-	info := toSessionInfo(*session)
+	info := protocol.ToSessionInfo(*session)
 	return info, nil
 }

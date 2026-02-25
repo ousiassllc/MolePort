@@ -69,7 +69,7 @@ func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError)
 			}
 		}
 	}); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.ConfigUpdateResult{OK: true}, nil

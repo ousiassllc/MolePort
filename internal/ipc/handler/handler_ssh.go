@@ -19,7 +19,7 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 	cb := h.buildCredentialCallback(clientID, p.Host)
 
 	if err := h.sshMgr.ConnectWithCallback(p.Host, cb); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.SSHConnectResult{
@@ -123,7 +123,7 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 	}
 
 	if err := h.sshMgr.Disconnect(p.Host); err != nil {
-		return nil, toRPCError(err, protocol.InternalError)
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	return protocol.SSHDisconnectResult{
