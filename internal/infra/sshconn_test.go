@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,5 +158,67 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 	// 10 秒タイムアウト + 余裕で 15 秒以内に返ること
 	if elapsed > 15*time.Second {
 		t.Errorf("Dial took too long: %v (expected < 15s)", elapsed)
+	}
+}
+
+// TestSSHConnection_DialWithProxyCommand は ProxyCommand 経由で接続した場合、
+// TCP ダイヤルエラー ("failed to dial") ではなく SSH ハンドシェイクエラー
+// ("failed to establish SSH connection") が返ることを検証する。
+func TestSSHConnection_DialWithProxyCommand(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	host := core.SSHHost{
+		Name:         "proxy-test",
+		HostName:     "10.255.255.1",
+		Port:         22,
+		User:         "testuser",
+		ProxyCommand: "cat",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, err := conn.Dial(host, nil)
+	if err == nil {
+		t.Fatal("Dial should return error")
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "failed to dial") {
+		t.Errorf("expected SSH handshake error, got TCP dial error: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "failed to establish SSH connection") {
+		t.Errorf("expected 'failed to establish SSH connection' in error, got: %s", errMsg)
+	}
+}
+
+// TestSSHConnection_DialWithProxyCommandPriority は ProxyCommand と ProxyJump の
+// 両方が設定されている場合、ProxyCommand が優先されることを検証する。
+func TestSSHConnection_DialWithProxyCommandPriority(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	host := core.SSHHost{
+		Name:         "priority-test",
+		HostName:     "10.255.255.1",
+		Port:         22,
+		User:         "testuser",
+		ProxyCommand: "cat",
+		ProxyJump:    []string{"jumphost"},
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, err := conn.Dial(host, nil)
+	if err == nil {
+		t.Fatal("Dial should return error")
+	}
+
+	// ProxyCommand が優先されるため、TCP ダイヤルエラーは出ない
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "failed to dial") {
+		t.Errorf("ProxyCommand should take priority over ProxyJump, got TCP dial error: %s", errMsg)
 	}
 }

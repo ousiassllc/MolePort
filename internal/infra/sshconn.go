@@ -88,30 +88,41 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		handshakeTimeout = 120 * time.Second
 	}
 
-	// TCP 接続（タイムアウト付き）
-	tcpConn, err := net.DialTimeout("tcp", addr, dialTimeout)
-	if err != nil {
-		closeAgent()
-		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
+	// 接続（ProxyCommand の有無で分岐）
+	// ProxyCommand が設定されている場合は ProxyJump より優先する（OpenSSH の挙動に準拠）。
+	var conn net.Conn
+	if host.ProxyCommand != "" {
+		expandedCmd := ExpandProxyCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
+		conn, err = dialViaProxyCommand(expandedCmd)
+		if err != nil {
+			closeAgent()
+			return nil, fmt.Errorf("failed to connect via ProxyCommand: %w", err)
+		}
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, dialTimeout)
+		if err != nil {
+			closeAgent()
+			return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
+		}
 	}
 
 	// TCP + SSH ハンドシェイク全体にデッドラインを設定
-	if err := tcpConn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
-		_ = tcpConn.Close()
+	if err := conn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		_ = conn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to set deadline: %w", err)
 	}
 
 	// SSH ハンドシェイク（デッドラインが適用される）
-	sshConn, chans, reqs, err := ssh.NewClientConn(tcpConn, addr, config)
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
-		_ = tcpConn.Close()
+		_ = conn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to establish SSH connection to %s: %w", addr, err)
 	}
 
 	// ハンドシェイク完了後、デッドラインをクリア
-	if err := tcpConn.SetDeadline(time.Time{}); err != nil {
+	if err := conn.SetDeadline(time.Time{}); err != nil {
 		_ = sshConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to clear deadline: %w", err)
