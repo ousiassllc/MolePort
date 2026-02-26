@@ -116,13 +116,13 @@ type LogConfig struct {
 }
 
 type ForwardRule struct {
-    Name        string `yaml:"name"`
-    Host        string `yaml:"host"`
-    Type        string `yaml:"type"`         // "local" | "remote" | "dynamic"
-    LocalPort   int    `yaml:"local_port"`
-    RemoteHost  string `yaml:"remote_host"`  // dynamic の場合は不要
-    RemotePort  int    `yaml:"remote_port"`  // dynamic の場合は不要
-    AutoConnect bool   `yaml:"auto_connect"`
+    Name        string      `yaml:"name"`
+    Host        string      `yaml:"host"`
+    Type        ForwardType `yaml:"type"`                // ForwardType は YAML 上は文字列としてシリアライズされる
+    LocalPort   int         `yaml:"local_port"`
+    RemoteHost  string      `yaml:"remote_host,omitempty"` // dynamic の場合は不要
+    RemotePort  int         `yaml:"remote_port,omitempty"` // dynamic の場合は不要
+    AutoConnect bool        `yaml:"auto_connect"`
 }
 ```
 
@@ -226,14 +226,6 @@ classDiagram
         +context.CancelFunc Cancel
     }
 
-    class DaemonState {
-        +int PID
-        +time.Time StartedAt
-        +int ConnectedClients
-        +int ActiveSSHConnections
-        +int ActiveForwards
-    }
-
     class ConnectionState {
         <<enumeration>>
         Disconnected
@@ -302,17 +294,7 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | ReconnectCount | int | 再接続回数 |
 | LastError | string | 最後のエラーメッセージ |
 
-### DaemonState（新規）
-
-デーモンプロセスの状態情報。`daemon.status` メソッドで返却される。
-
-| フィールド | 型 | 説明 |
-|-----------|------|------|
-| PID | int | デーモンプロセスの PID |
-| StartedAt | time.Time | デーモン起動時刻 |
-| ConnectedClients | int | 接続中のクライアント数 |
-| ActiveSSHConnections | int | アクティブな SSH 接続数 |
-| ActiveForwards | int | アクティブなポートフォワーディング数 |
+> **Note**: デーモンの状態情報は core パッケージの内部データモデルではなく、IPC プロトコル層の `DaemonStatusResult`（「デーモン管理」セクション参照）として定義されている。
 
 ### 内部データモデルの Go 型定義
 
@@ -375,14 +357,6 @@ type ForwardSession struct {
     LastError      string        // 最後のエラーメッセージ
 }
 
-// デーモン状態
-type DaemonState struct {
-    PID                  int       // デーモンプロセスの PID
-    StartedAt            time.Time // 起動時刻
-    ConnectedClients     int       // 接続中クライアント数
-    ActiveSSHConnections int       // アクティブ SSH 接続数
-    ActiveForwards       int       // アクティブ転送数
-}
 ```
 
 **ForwardRule.Name の一意性**: ルール名はグローバルユニーク（全ホスト横断で一意）とする。`ForwardManager` がルール名のみで操作するため。省略時は `<host>-<type>-<localport>` 形式で自動生成される。
@@ -799,3 +773,4 @@ type CredentialResponseResult struct {
 | 2.0 | 2026-02-11 | デーモン化対応: DaemonState 追加、PID ファイル定義、IPC メッセージ型定義（全メソッド）追加 | デーモン化対応 |
 | 2.1 | 2026-02-11 | PendingAuth 状態追加、クレデンシャル要求/応答型定義追加、エラーコード 1008/1009 追加、SSH イベントに pending_auth 追加 | #11 クレデンシャル入力機能追加 |
 | 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
+| 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
