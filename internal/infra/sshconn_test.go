@@ -222,3 +222,55 @@ func TestSSHConnection_DialWithProxyCommandPriority(t *testing.T) {
 		t.Errorf("ProxyCommand should take priority over ProxyJump, got TCP dial error: %s", errMsg)
 	}
 }
+
+// TestSSHConnection_DialStrictHostKeyCheckingNo は StrictHostKeyChecking=no のホストで
+// Dial が knownhosts エラーにならないことを検証する回帰テスト。
+// known_hosts にエントリがなくても接続試行が knownhosts 起因で失敗しないことを確認する。
+func TestSSHConnection_DialStrictHostKeyCheckingNo(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	// TCP accept するがデータを送らないサーバー
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			defer func() { _ = conn.Close() }()
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+
+	host := core.SSHHost{
+		Name:                  "strict-no-test",
+		HostName:              "127.0.0.1",
+		Port:                  addr.Port,
+		User:                  "testuser",
+		StrictHostKeyChecking: "no",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, dialErr := conn.Dial(host, nil)
+	if dialErr == nil {
+		t.Fatal("Dial should return error (handshake fails with dummy server)")
+	}
+
+	// knownhosts 起因のエラーではないこと
+	errMsg := dialErr.Error()
+	if strings.Contains(errMsg, "knownhosts") || strings.Contains(errMsg, "known_hosts") {
+		t.Errorf("StrictHostKeyChecking=no should skip host key verification, got: %s", errMsg)
+	}
+	if strings.Contains(errMsg, "host key") {
+		t.Errorf("StrictHostKeyChecking=no should skip host key verification, got: %s", errMsg)
+	}
+}

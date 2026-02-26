@@ -245,6 +245,39 @@ func TestSSHConfigParser_EmptyConfig(t *testing.T) {
 	}
 }
 
+func TestSSHConfigParser_StrictHostKeyChecking(t *testing.T) {
+	path := writeSSHConfig(t, `
+Host tshost
+    HostName 100.64.0.1
+    StrictHostKeyChecking no
+
+Host normalhost
+    HostName 10.0.0.1
+`)
+
+	parser := NewSSHConfigParser()
+	hosts, err := parser.Parse(path)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(hosts) != 2 {
+		t.Fatalf("len(hosts) = %d, want 2", len(hosts))
+	}
+
+	byName := make(map[string]core.SSHHost)
+	for _, h := range hosts {
+		byName[h.Name] = h
+	}
+
+	if v := byName["tshost"].StrictHostKeyChecking; v != "no" {
+		t.Errorf("tshost.StrictHostKeyChecking = %q, want %q", v, "no")
+	}
+	if v := byName["normalhost"].StrictHostKeyChecking; v != "" {
+		t.Errorf("normalhost.StrictHostKeyChecking = %q, want %q", v, "")
+	}
+}
+
 func TestSSHConfigParser_NoProxyJump(t *testing.T) {
 	path := writeSSHConfig(t, `
 Host noproxy
