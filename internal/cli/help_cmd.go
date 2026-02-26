@@ -11,6 +11,7 @@ Commands:
   daemon start       デーモンをバックグラウンドで起動
   daemon stop [--purge]  デーモンを停止（--purge: 状態クリア）
   daemon status      デーモンの稼働状態を表示
+  daemon kill        デーモンを強制終了（応答しない場合）
   connect <host>     SSH ホストに接続
   disconnect <host>  SSH ホストを切断
   add [flags]        転送ルールを追加

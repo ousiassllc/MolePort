@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,6 +60,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	// authMethods が空でも早期リターンしない。
 	// Go の crypto/ssh は常に "none" 認証を最初に試行するため、
 	// Tailscale SSH のように none 認証で動作するサーバーへの接続が可能。
+	if len(authMethods) == 0 {
+		slog.Debug("no explicit auth methods configured, relying on none auth", "host", host.Name)
+	}
 
 	closeAgent := func() {
 		if agentCloser != nil {
@@ -66,7 +70,7 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		}
 	}
 
-	hostKeyCallback, err := buildHostKeyCallback()
+	hostKeyCallback, err := buildHostKeyCallback(host.StrictHostKeyChecking)
 	if err != nil {
 		closeAgent()
 		return nil, fmt.Errorf("failed to build host key callback: %w", err)
@@ -88,30 +92,41 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		handshakeTimeout = 120 * time.Second
 	}
 
-	// TCP 接続（タイムアウト付き）
-	tcpConn, err := net.DialTimeout("tcp", addr, dialTimeout)
-	if err != nil {
-		closeAgent()
-		return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
+	// 接続（ProxyCommand の有無で分岐）
+	// ProxyCommand が設定されている場合は ProxyJump より優先する（OpenSSH の挙動に準拠）。
+	var conn net.Conn
+	if host.ProxyCommand != "" {
+		expandedCmd := ExpandProxyCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
+		conn, err = dialViaProxyCommand(expandedCmd)
+		if err != nil {
+			closeAgent()
+			return nil, fmt.Errorf("failed to connect via ProxyCommand: %w", err)
+		}
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, dialTimeout)
+		if err != nil {
+			closeAgent()
+			return nil, fmt.Errorf("failed to dial %s: %w", addr, err)
+		}
 	}
 
 	// TCP + SSH ハンドシェイク全体にデッドラインを設定
-	if err := tcpConn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
-		_ = tcpConn.Close()
+	if err := conn.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		_ = conn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to set deadline: %w", err)
 	}
 
 	// SSH ハンドシェイク（デッドラインが適用される）
-	sshConn, chans, reqs, err := ssh.NewClientConn(tcpConn, addr, config)
+	sshConn, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
-		_ = tcpConn.Close()
+		_ = conn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to establish SSH connection to %s: %w", addr, err)
 	}
 
 	// ハンドシェイク完了後、デッドラインをクリア
-	if err := tcpConn.SetDeadline(time.Time{}); err != nil {
+	if err := conn.SetDeadline(time.Time{}); err != nil {
 		_ = sshConn.Close()
 		closeAgent()
 		return nil, fmt.Errorf("failed to clear deadline: %w", err)
@@ -127,7 +142,11 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	return client, nil
 }
 
-func buildHostKeyCallback() (ssh.HostKeyCallback, error) {
+func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, error) {
+	if strings.EqualFold(strictHostKeyChecking, "no") {
+		return ssh.InsecureIgnoreHostKey(), nil //nolint:gosec // SSH config の StrictHostKeyChecking=no を尊重
+	}
+
 	knownHostsPath := filepath.Join(homeDir(), ".ssh", "known_hosts")
 	callback, err := knownhosts.New(knownHostsPath)
 	if err != nil {

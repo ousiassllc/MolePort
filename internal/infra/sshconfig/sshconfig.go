@@ -1,4 +1,4 @@
-package infra
+package sshconfig
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	ssh_config "github.com/kevinburke/ssh_config"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/infra"
 )
 
 // SSHConfigParser は SSH config ファイルを解析しホスト定義を抽出する。
@@ -27,11 +28,11 @@ func NewSSHConfigParser() SSHConfigParser {
 }
 
 func (p *sshConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
-	f, err := os.Open(configPath)
+	f, err := os.Open(configPath) //nolint:gosec // configPath は SSH config のパスでユーザー指定値
 	if err != nil {
 		return nil, fmt.Errorf("failed to open ssh config: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // 読み取り専用のため Close エラーは無視
 
 	cfg, err := ssh_config.Decode(f)
 	if err != nil {
@@ -57,14 +58,16 @@ func (p *sshConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
 			seen[alias] = true
 
 			sshHost := core.SSHHost{
-				Name:               alias,
-				HostName:           getConfigValue(cfg, alias, "HostName", alias),
-				Port:               getConfigPort(cfg, alias),
-				User:               getConfigValue(cfg, alias, "User", currentUser),
-				IdentityFile:       expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
-				ProxyJump:          parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
-				State:              core.Disconnected,
-				ActiveForwardCount: 0,
+				Name:                  alias,
+				HostName:              getConfigValue(cfg, alias, "HostName", alias),
+				Port:                  getConfigPort(cfg, alias),
+				User:                  getConfigValue(cfg, alias, "User", currentUser),
+				IdentityFile:          expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
+				ProxyJump:             parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
+				ProxyCommand:          getConfigValue(cfg, alias, "ProxyCommand", ""),
+				StrictHostKeyChecking: getConfigValue(cfg, alias, "StrictHostKeyChecking", ""),
+				State:                 core.Disconnected,
+				ActiveForwardCount:    0,
 			}
 
 			hosts = append(hosts, sshHost)
@@ -106,7 +109,7 @@ func expandIdentityFile(path string) string {
 	if path == "" {
 		return ""
 	}
-	expanded, err := ExpandTilde(path)
+	expanded, err := infra.ExpandTilde(path)
 	if err != nil {
 		return path
 	}

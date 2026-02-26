@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,5 +158,119 @@ func TestSSHConnection_DialTimeoutOnHangingHandshake(t *testing.T) {
 	// 10 秒タイムアウト + 余裕で 15 秒以内に返ること
 	if elapsed > 15*time.Second {
 		t.Errorf("Dial took too long: %v (expected < 15s)", elapsed)
+	}
+}
+
+// TestSSHConnection_DialWithProxyCommand は ProxyCommand 経由で接続した場合、
+// TCP ダイヤルエラー ("failed to dial") ではなく SSH ハンドシェイクエラー
+// ("failed to establish SSH connection") が返ることを検証する。
+func TestSSHConnection_DialWithProxyCommand(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	host := core.SSHHost{
+		Name:         "proxy-test",
+		HostName:     "10.255.255.1",
+		Port:         22,
+		User:         "testuser",
+		ProxyCommand: "cat",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, err := conn.Dial(host, nil)
+	if err == nil {
+		t.Fatal("Dial should return error")
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "failed to dial") {
+		t.Errorf("expected SSH handshake error, got TCP dial error: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "failed to establish SSH connection") {
+		t.Errorf("expected 'failed to establish SSH connection' in error, got: %s", errMsg)
+	}
+}
+
+// TestSSHConnection_DialWithProxyCommandPriority は ProxyCommand と ProxyJump の
+// 両方が設定されている場合、ProxyCommand が優先されることを検証する。
+func TestSSHConnection_DialWithProxyCommandPriority(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	host := core.SSHHost{
+		Name:         "priority-test",
+		HostName:     "10.255.255.1",
+		Port:         22,
+		User:         "testuser",
+		ProxyCommand: "cat",
+		ProxyJump:    []string{"jumphost"},
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, err := conn.Dial(host, nil)
+	if err == nil {
+		t.Fatal("Dial should return error")
+	}
+
+	// ProxyCommand が優先されるため、TCP ダイヤルエラーは出ない
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "failed to dial") {
+		t.Errorf("ProxyCommand should take priority over ProxyJump, got TCP dial error: %s", errMsg)
+	}
+}
+
+// TestSSHConnection_DialStrictHostKeyCheckingNo は StrictHostKeyChecking=no のホストで
+// Dial が knownhosts エラーにならないことを検証する回帰テスト。
+// known_hosts にエントリがなくても接続試行が knownhosts 起因で失敗しないことを確認する。
+func TestSSHConnection_DialStrictHostKeyCheckingNo(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "")
+	t.Setenv("HOME", t.TempDir())
+
+	// TCP accept するがデータを送らないサーバー
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			defer func() { _ = conn.Close() }()
+		}
+	}()
+
+	addr := ln.Addr().(*net.TCPAddr)
+
+	host := core.SSHHost{
+		Name:                  "strict-no-test",
+		HostName:              "127.0.0.1",
+		Port:                  addr.Port,
+		User:                  "testuser",
+		StrictHostKeyChecking: "no",
+	}
+
+	conn := NewSSHConnection()
+	defer func() { _ = conn.Close() }()
+
+	_, dialErr := conn.Dial(host, nil)
+	if dialErr == nil {
+		t.Fatal("Dial should return error (handshake fails with dummy server)")
+	}
+
+	// knownhosts 起因のエラーではないこと
+	errMsg := dialErr.Error()
+	if strings.Contains(errMsg, "knownhosts") || strings.Contains(errMsg, "known_hosts") {
+		t.Errorf("StrictHostKeyChecking=no should skip host key verification, got: %s", errMsg)
+	}
+	if strings.Contains(errMsg, "host key") {
+		t.Errorf("StrictHostKeyChecking=no should skip host key verification, got: %s", errMsg)
 	}
 }

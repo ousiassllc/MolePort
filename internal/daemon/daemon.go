@@ -15,6 +15,8 @@ import (
 	"github.com/ousiassllc/moleport/internal/core/forward"
 	"github.com/ousiassllc/moleport/internal/core/ssh"
 	"github.com/ousiassllc/moleport/internal/infra"
+	"github.com/ousiassllc/moleport/internal/infra/sshconfig"
+	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc"
 	ipchandler "github.com/ousiassllc/moleport/internal/ipc/handler"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -58,7 +60,7 @@ func New(configDir string) (*Daemon, error) {
 		return nil, fmt.Errorf("create config dir: %w", err)
 	}
 
-	store := infra.NewYAMLStore()
+	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
@@ -72,7 +74,7 @@ func New(configDir string) (*Daemon, error) {
 		sshConfigPath = expanded
 	}
 
-	parser := infra.NewSSHConfigParser()
+	parser := sshconfig.NewSSHConfigParser()
 	sshMgr := ssh.NewSSHManager(
 		parser,
 		func() core.SSHConnection { return infra.NewSSHConnection() },

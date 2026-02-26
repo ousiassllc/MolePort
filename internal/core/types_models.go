@@ -4,14 +4,16 @@ import "time"
 
 // SSHHost は SSH config から読み込んだホスト情報と実行時の接続状態を保持する。
 type SSHHost struct {
-	Name               string
-	HostName           string
-	Port               int
-	User               string
-	IdentityFile       string
-	ProxyJump          []string
-	State              ConnectionState
-	ActiveForwardCount int
+	Name                  string
+	HostName              string
+	Port                  int
+	User                  string
+	IdentityFile          string
+	ProxyJump             []string
+	ProxyCommand          string
+	StrictHostKeyChecking string
+	State                 ConnectionState
+	ActiveForwardCount    int
 }
 
 // ForwardRule はポートフォワーディングのルール定義。

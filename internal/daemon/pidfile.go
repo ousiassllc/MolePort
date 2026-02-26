@@ -63,6 +63,33 @@ func (p *PIDFile) Release() error {
 	return err
 }
 
+// KillProcess は PID ファイルから PID を読み取り、SIGKILL で強制終了し、PID ファイルを削除する。
+// PID ファイルが存在しない場合やプロセスが既に終了している場合もエラーを返す。
+func KillProcess(pidPath string) error {
+	data, err := os.ReadFile(pidPath) //nolint:gosec // pidPath は内部で生成された PID ファイルパス
+	if err != nil {
+		return fmt.Errorf("PID ファイルの読み取りに失敗: %w", err)
+	}
+
+	pidStr := strings.TrimSpace(string(data))
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 0 {
+		_ = os.Remove(pidPath)
+		return fmt.Errorf("PID ファイルの内容が不正です: %q", pidStr)
+	}
+
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+		_ = os.Remove(pidPath)
+		return fmt.Errorf("プロセス %d の強制終了に失敗: %w", pid, err)
+	}
+
+	if err := os.Remove(pidPath); err != nil {
+		return fmt.Errorf("PID ファイルの削除に失敗: %w", err)
+	}
+
+	return nil
+}
+
 // IsRunning は PID ファイルを読み取り、対応するプロセスが実行中かを返す。
 // ファイルが存在しない、内容が不正、またはプロセスが存在しない場合は (false, 0) を返す。
 // 注意: Kill(pid, 0) はプロセスの存在のみを確認する。PID 再利用により偽陽性の可能性があるが、

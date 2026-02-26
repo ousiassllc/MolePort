@@ -12,13 +12,14 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/infra"
+	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDaemon は daemon サブコマンドをルーティングする。
 func RunDaemon(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("サブコマンドを指定してください: start, stop, status")
+		exitError("サブコマンドを指定してください: start, stop, status, kill")
 	}
 
 	switch args[0] {
@@ -28,6 +29,8 @@ func RunDaemon(configDir string, args []string) {
 		runDaemonStop(configDir, args[1:])
 	case "status":
 		runDaemonStatus(configDir)
+	case "kill":
+		runDaemonKill(configDir)
 	default:
 		exitError("不明なサブコマンド: daemon %s", args[0])
 	}
@@ -83,6 +86,21 @@ func runDaemonStop(configDir string, args []string) {
 	} else {
 		fmt.Println("デーモンを停止しました")
 	}
+}
+
+func runDaemonKill(configDir string) {
+	pidPath := daemon.PIDFilePath(configDir)
+	running, pid := daemon.IsRunning(pidPath)
+	if !running {
+		fmt.Println("デーモンは稼働していません")
+		return
+	}
+
+	if err := daemon.KillProcess(pidPath); err != nil {
+		exitError("デーモンの強制終了に失敗しました: %v", err)
+	}
+
+	fmt.Printf("デーモンを強制終了しました (PID: %d)\n", pid)
 }
 
 func runDaemonStatus(configDir string) {
@@ -145,7 +163,7 @@ func RunDaemonMode(configDir string) {
 // 設定ファイルの log.file と log.level を参照する。
 // ログファイルの作成に失敗した場合はエラーを返す。
 func setupDaemonLogging(configDir string) error {
-	store := infra.NewYAMLStore()
+	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
