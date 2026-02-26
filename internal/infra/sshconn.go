@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,7 +70,7 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		}
 	}
 
-	hostKeyCallback, err := buildHostKeyCallback()
+	hostKeyCallback, err := buildHostKeyCallback(host.StrictHostKeyChecking)
 	if err != nil {
 		closeAgent()
 		return nil, fmt.Errorf("failed to build host key callback: %w", err)
@@ -141,7 +142,11 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	return client, nil
 }
 
-func buildHostKeyCallback() (ssh.HostKeyCallback, error) {
+func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, error) {
+	if strings.EqualFold(strictHostKeyChecking, "no") {
+		return ssh.InsecureIgnoreHostKey(), nil //nolint:gosec // SSH config の StrictHostKeyChecking=no を尊重
+	}
+
 	knownHostsPath := filepath.Join(homeDir(), ".ssh", "known_hosts")
 	callback, err := knownhosts.New(knownHostsPath)
 	if err != nil {
