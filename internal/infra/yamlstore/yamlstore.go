@@ -1,4 +1,4 @@
-package infra
+package yamlstore
 
 import (
 	"errors"
@@ -31,7 +31,7 @@ func NewYAMLStore() YAMLStore {
 }
 
 func (s *yamlStore) Read(path string, dest interface{}) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path はアプリケーション内部で管理されるファイルパス
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil

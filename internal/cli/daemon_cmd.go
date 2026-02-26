@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/infra"
+	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -162,7 +163,7 @@ func RunDaemonMode(configDir string) {
 // 設定ファイルの log.file と log.level を参照する。
 // ログファイルの作成に失敗した場合はエラーを返す。
 func setupDaemonLogging(configDir string) error {
-	store := infra.NewYAMLStore()
+	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
