@@ -1,34 +1,29 @@
 # MolePort
 
-daemon+client アーキテクチャの SSH ポートフォワーディングマネージャ。
+SSH port forwarding manager with a daemon+client architecture.
 
-`~/.ssh/config` からホスト情報を読み込み、CLI または TUI からポート転送の設定・接続・切断を操作できます。
+Reads host information from `~/.ssh/config` and lets you configure, connect, and disconnect port forwarding via CLI or TUI.
 
-```
-┌──────────────┐     Unix Socket (JSON-RPC 2.0)     ┌──────────────┐
-│  CLI / TUI   │ ◄──────────────────────────────────► │   Daemon     │
-│  (Client)    │                                      │              │
-└──────────────┘                                      │  SSHManager  │
-                                                      │  FwdManager  │
-                                                      │  ConfigMgr   │
-                                                      └──────────────┘
+```mermaid
+graph LR
+    A["CLI / TUI<br/>(Client)"] <-->|"Unix Socket<br/>(JSON-RPC 2.0)"| B["Daemon<br/><br/>SSHManager<br/>FwdManager<br/>ConfigMgr"]
 ```
 
-## 機能
+## Features
 
-- **SSH config 連携** --- `~/.ssh/config`（Include 対応）からホストを自動読み込み
-- **3種類の転送** --- Local (-L) / Remote (-R) / Dynamic SOCKS5 (-D)
-- **リアルタイム監視** --- 接続状態、稼働時間、転送データ量を表示
-- **自動再接続** --- 指数バックオフで自動リトライ
-- **セッション復元** --- 前回のアクティブ転送を起動時に自動復元
-- **daemon+client** --- バックグラウンドデーモンが SSH 接続を管理、CLI/TUI はクライアントとして操作
+- **SSH config integration** --- Automatically reads hosts from `~/.ssh/config` (supports Include directives)
+- **3 forwarding types** --- Local (-L) / Remote (-R) / Dynamic SOCKS5 (-D)
+- **Real-time monitoring** --- Displays connection status, uptime, and transferred data volume
+- **Auto-reconnect** --- Automatic retry with exponential backoff
+- **Session restore** --- Automatically restores previous active forwarding on startup
+- **Daemon+client** --- Background daemon manages SSH connections; CLI/TUI operates as a client
 
-## 必要環境
+## Requirements
 
 - Go 1.25+
 - Linux / macOS
 
-## インストール
+## Installation
 
 ```bash
 git clone https://github.com/ousiassllc/MolePort.git
@@ -36,91 +31,93 @@ cd MolePort
 make install
 ```
 
-`make install` は `go install` でバイナリを `$(go env GOPATH)/bin` にインストールします。
-PATH に含まれていない場合はシェル設定に追加してください:
+`make install` runs `go install` to place the binary in `$(go env GOPATH)/bin`.
+If that directory is not in your PATH, add it to your shell configuration:
 
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-ビルドのみ（`./bin/moleport` に出力）の場合:
+To build only (outputs to `./bin/moleport`):
 
 ```bash
 make build
 ```
 
-## クイックスタート
+## Quick Start
 
 ```bash
-# 1. デーモンを起動
+# 1. Start the daemon
 moleport daemon start
 
-# 2. SSH ホストに接続
+# 2. Connect to an SSH host
 moleport connect prod-server
 
-# 3. 転送ルールを追加
+# 3. Add a forwarding rule
 moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80
 
-# 4. フォワーディングを開始
+# 4. Start forwarding
 moleport start web
 
-# 5. TUI ダッシュボードで監視
+# 5. Monitor with the TUI dashboard
 moleport tui
 ```
 
-## CLI コマンド
+## CLI Commands
 
-サブコマンドなしで `moleport` を実行すると TUI ダッシュボードが起動します（`moleport tui` と同等）。
+Running `moleport` without a subcommand launches the TUI dashboard (equivalent to `moleport tui`).
 
-| コマンド | 説明 |
-|---------|------|
-| `moleport daemon start` | デーモンをバックグラウンドで起動 |
-| `moleport daemon stop [--purge]` | デーモンを停止（`--purge`: 状態クリア） |
-| `moleport daemon status` | デーモンの稼働状態を表示 |
-| `moleport connect <host>` | SSH ホストに接続 |
-| `moleport disconnect <host>` | SSH ホストを切断 |
-| `moleport add [flags]` | 転送ルールを追加 |
-| `moleport delete <name>` | 転送ルールを削除 |
-| `moleport start <name>` | フォワーディングを開始 |
-| `moleport stop <name> / --all` | フォワーディングを停止（`--all`: 全停止） |
-| `moleport list [--json]` | ホスト・転送ルールの一覧 |
-| `moleport status [name]` | 接続状態のサマリー |
-| `moleport config [--json]` | 設定を表示 |
-| `moleport reload` | SSH config を再読み込み |
-| `moleport tui` | TUI ダッシュボードを起動 |
-| `moleport version` | バージョン情報を表示 |
-| `moleport help` | ヘルプを表示 |
+| Command | Description |
+|---------|-------------|
+| `moleport daemon start` | Start the daemon in the background |
+| `moleport daemon stop [--purge]` | Stop the daemon (`--purge`: clear state) |
+| `moleport daemon status` | Show daemon status |
+| `moleport daemon kill` | Force terminate an unresponsive daemon |
+| `moleport connect <host>` | Connect to an SSH host |
+| `moleport disconnect <host>` | Disconnect from an SSH host |
+| `moleport add [flags]` | Add a forwarding rule |
+| `moleport delete <name>` | Delete a forwarding rule |
+| `moleport start <name>` | Start forwarding |
+| `moleport stop <name> / --all` | Stop forwarding (`--all`: stop all) |
+| `moleport list [--json]` | List hosts and forwarding rules |
+| `moleport status [name]` | Show connection status summary |
+| `moleport config [--json]` | Show configuration |
+| `moleport reload` | Reload SSH config |
+| `moleport tui` | Launch the TUI dashboard |
+| `moleport version` | Show version information |
+| `moleport help` | Show help |
 
-## TUI キーバインド
+## TUI Key Bindings
 
-| キー | 動作 |
-|------|------|
-| `↑`/`k` `↓`/`j` | 項目を選択 |
-| `Enter` | 転送の接続/切断トグル |
-| `Tab` | ペイン切り替え |
-| `d` | 選択中の転送を切断 |
-| `x` | 選択中の転送を削除 |
-| `/` | コマンド入力にフォーカス |
-| `?` | ヘルプ表示 |
-| `Esc` | キャンセル |
-| `q` / `Ctrl+C` | 終了 |
+| Key | Action |
+|-----|--------|
+| `↑`/`k` `↓`/`j` | Select item |
+| `Enter` | Toggle connect/disconnect |
+| `Tab` | Switch pane |
+| `d` | Disconnect selected forwarding |
+| `x` | Delete selected forwarding |
+| `/` | Focus command input |
+| `?` | Show help |
+| `Esc` | Cancel |
+| `q` / `Ctrl+C` | Quit |
 
-## アーキテクチャ
+## Architecture
 
+```mermaid
+graph TD
+    Client["CLI / TUI (Client)"]
+    Client <-->|"Unix Socket (JSON-RPC 2.0)"| Daemon
+    subgraph Daemon
+        IPC["IPC Server<br/>(EventBroker + Handler)"]
+        Core["Core Layer<br/>SSHManager / ForwardManager / ConfigManager"]
+        Infra["Infrastructure Layer<br/>SSHConnection / SSHConfigParser / YAMLStore"]
+        IPC --> Core --> Infra
+    end
 ```
-CLI / TUI (Client)
-  ↕  Unix Socket (JSON-RPC 2.0)
-Daemon
-  ├── IPC Server (EventBroker + Handler)
-  ├── Core Layer
-  │     SSHManager / ForwardManager / ConfigManager
-  └── Infrastructure Layer
-        SSHConnection / SSHConfigParser / YAMLStore
-```
 
-## 設定
+## Configuration
 
-設定ファイル: `~/.config/moleport/config.yaml`
+Config file: `~/.config/moleport/config.yaml`
 
 ```yaml
 ssh_config_path: "~/.ssh/config"
@@ -139,11 +136,11 @@ log:
   file: "~/.config/moleport/moleport.log"
 ```
 
-## ホスト鍵検証
+## Host Key Verification
 
-MolePort は `~/.ssh/known_hosts` を使ってホスト鍵を検証します。Tailscale SSH のようにホスト鍵が変わりうる環境では `knownhosts: key mismatch` で接続に失敗することがあります。
+MolePort verifies host keys using `~/.ssh/known_hosts`. In environments where host keys may change (e.g., Tailscale SSH), connections can fail with `knownhosts: key mismatch`.
 
-SSH config で `StrictHostKeyChecking no` を設定すると、MolePort はそのホストへのホスト鍵検証をスキップします。
+Setting `StrictHostKeyChecking no` in your SSH config tells MolePort to skip host key verification for that host.
 
 ```
 # ~/.ssh/config
@@ -152,48 +149,48 @@ Host tailscale-host
     StrictHostKeyChecking no
 ```
 
-複数ホストをまとめて設定することもできます:
+You can also configure multiple hosts at once:
 
 ```
 Host ts-host1 ts-host2 ts-host3
     StrictHostKeyChecking no
 ```
 
-> **注意**: `StrictHostKeyChecking no` はホスト鍵の検証を完全に無効化します。信頼できるネットワーク内のホストにのみ使用してください。
+> **Warning**: `StrictHostKeyChecking no` completely disables host key verification. Use it only for hosts on trusted networks.
 
-## 開発
+## Development
 
 ```bash
-make help       # 利用可能なターゲットを表示
-make build      # ビルド
-make run        # ビルドして実行
-make test       # テスト実行
-make test-race  # race detector 付きテスト
-make vet        # go vet
-make fmt        # go fmt
-make lint       # golangci-lint を実行
-make clean      # ビルド成果物を削除
+make help       # Show available targets
+make build      # Build
+make run        # Build and run
+make test       # Run tests
+make test-race  # Run tests with race detector
+make vet        # Run go vet
+make fmt        # Run go fmt
+make lint       # Run golangci-lint
+make clean      # Remove build artifacts
 ```
 
 ### Git Hooks (lefthook)
 
-[lefthook](https://github.com/evilmartians/lefthook) でコミット・プッシュ時に自動チェックを実行します。
+[lefthook](https://github.com/evilmartians/lefthook) runs automated checks on commit and push.
 
-| フック | チェック内容 |
-|--------|-------------|
-| pre-commit | `gofmt` によるフォーマット確認、`go vet`、`golangci-lint` |
-| pre-push | `go test -race` (race detector 付きテスト)、`go build`（ビルドチェック） |
+| Hook | Checks |
+|------|--------|
+| pre-commit | `gofmt` formatting, `go vet`, `golangci-lint` |
+| pre-push | `go test -race` (tests with race detector), `go build` (build check) |
 
-セットアップ:
+Setup:
 
 ```bash
-# lefthook をインストール（未導入の場合）
+# Install lefthook (if not already installed)
 go install github.com/evilmartians/lefthook@latest
 
-# Git hooks を有効化
+# Enable Git hooks
 lefthook install
 ```
 
-## ライセンス
+## License
 
 MIT
