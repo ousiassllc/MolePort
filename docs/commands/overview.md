@@ -17,6 +17,7 @@ moleport <subcommand> [options] [arguments]
 | `daemon start` | — | デーモンをバックグラウンドで起動 |
 | `daemon stop` | `[--purge]` | デーモンを停止 |
 | `daemon status` | — | デーモンの稼働状態を表示 |
+| `daemon kill` | — | デーモンを強制終了（応答しない場合） |
 | `connect` | `<host>` | SSH ホストに接続 |
 | `disconnect` | `<host>` | SSH ホストを切断 |
 | `add` | `--host, --local-port, ...` | 転送ルールをフラグ指定で追加 |
@@ -115,6 +116,35 @@ MolePort Daemon:
   Forwards:   3 active
 
 $ moleport daemon status
+デーモンは稼働していません
+```
+
+---
+
+### daemon kill
+
+応答しないデーモンを強制終了する。IPC 経由の停止（`daemon stop`）が応答しない場合に使用する。
+
+```
+moleport daemon kill
+```
+
+**動作**:
+1. PID ファイルからデーモンの PID を読み取る
+2. SIGKILL でプロセスを強制終了する
+3. PID ファイルを削除する
+
+**注意**:
+- IPC 通信は行わず、直接プロセスを kill する
+- グレースフルな切断や状態保存は行われない。通常は `daemon stop` を使用すること
+
+**出力例**:
+
+```
+$ moleport daemon kill
+デーモンを強制終了しました (PID: 12345)
+
+$ moleport daemon kill
 デーモンは稼働していません
 ```
 
@@ -491,6 +521,7 @@ Commands:
   daemon start       デーモンをバックグラウンドで起動
   daemon stop [--purge]  デーモンを停止（--purge: 状態クリア）
   daemon status      デーモンの稼働状態を表示
+  daemon kill        デーモンを強制終了（応答しない場合）
   connect <host>     SSH ホストに接続
   disconnect <host>  SSH ホストを切断
   add [flags]        転送ルールを追加
@@ -592,7 +623,9 @@ $ moleport connect prod-server
 エラー: デーモンが稼働していません。moleport daemon start で起動してください。
 ```
 
-`daemon start` と `help` と `version` 以外の全サブコマンドでこのエラーを返す。
+`daemon start`、`daemon kill`、`help`、`version` 以外の全サブコマンドでこのエラーを返す。
+
+- `daemon kill` は IPC を使わず PID ファイルベースで動作するため、デーモン未稼働時は独自のメッセージ（「デーモンは稼働していません」）を表示する
 
 ## 改訂履歴
 
@@ -601,3 +634,4 @@ $ moleport connect prod-server
 | 1.0 | 2026-02-10 | 初版作成 | — |
 | 2.0 | 2026-02-11 | TUI 内コマンドから CLI サブコマンド体系に全面改訂。daemon/connect/disconnect/add/delete/start/stop/list/status/config/reload/tui/help/version を定義 | デーモン化対応 |
 | 2.1 | 2026-02-11 | connect コマンドにパスワード/パスフレーズ/KI 認証の出力例追加、status/list に pending_auth 表示追加、TUI クレデンシャル入力ダイアログ仕様追加 | #11 クレデンシャル入力機能追加 |
+| 2.2 | 2026-02-27 | `daemon kill` サブコマンドの仕様を追加 | #25 ドキュメント乖離修正 |
