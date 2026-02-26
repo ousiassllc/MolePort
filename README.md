@@ -139,6 +139,28 @@ log:
   file: "~/.config/moleport/moleport.log"
 ```
 
+## ホスト鍵検証
+
+MolePort は `~/.ssh/known_hosts` を使ってホスト鍵を検証します。Tailscale SSH のようにホスト鍵が変わりうる環境では `knownhosts: key mismatch` で接続に失敗することがあります。
+
+SSH config で `StrictHostKeyChecking no` を設定すると、MolePort はそのホストへのホスト鍵検証をスキップします。
+
+```
+# ~/.ssh/config
+Host tailscale-host
+    HostName 100.64.x.x
+    StrictHostKeyChecking no
+```
+
+複数ホストをまとめて設定することもできます:
+
+```
+Host ts-host1 ts-host2 ts-host3
+    StrictHostKeyChecking no
+```
+
+> **注意**: `StrictHostKeyChecking no` はホスト鍵の検証を完全に無効化します。信頼できるネットワーク内のホストにのみ使用してください。
+
 ## 開発
 
 ```bash

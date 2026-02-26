@@ -210,6 +210,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 | F-20 | keyboard-interactive 認証 | 2FA/OTP 等の keyboard-interactive 認証にクライアント経由で対応（複数チャレンジ対応） | 必須 |
 | F-21 | クレデンシャル保留状態 | セッション復元・auto_connect 時にクレデンシャル要求が必要なホストを `pending_auth` 状態で保留 | 必須 |
 | F-22 | none 認証サポート | Tailscale SSH 等の none 認証で動作するサーバーへの接続をサポート（authMethods が空でも接続を試行） | 必須 |
+| F-23 | StrictHostKeyChecking 対応 | SSH config の `StrictHostKeyChecking no` を尊重し、該当ホストへのホスト鍵検証をスキップする（Tailscale SSH 等のホスト鍵が変わりうる環境向け） | 必須 |
 
 ## CLI サブコマンド体系
 
@@ -358,3 +359,4 @@ moleport daemon stop
 | 2.0 | 2026-02-11 | デーモン化対応: CLI サブコマンド体系追加、ユースケースをデーモン/クライアント構成に改訂 | デーモン化対応 |
 | 2.1 | 2026-02-11 | UC-13/UC-14 追加、F-18〜F-21 追加: SSH 認証時のクレデンシャル入力機能 | #11 クレデンシャル入力機能追加 |
 | 2.2 | 2026-02-24 | UC-13 トリガーに forward.start を追加、F-22（none 認証サポート）追加 | #16 フォワード開始失敗時の修正 |
+| 2.3 | 2026-02-26 | F-23（StrictHostKeyChecking 対応）追加 | #23 StrictHostKeyChecking 対応 |

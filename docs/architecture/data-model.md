@@ -191,6 +191,8 @@ classDiagram
         +string User
         +string IdentityFile
         +[]string ProxyJump
+        +string ProxyCommand
+        +string StrictHostKeyChecking
         +ConnectionState State
         +int ActiveForwardCount
     }
@@ -280,6 +282,8 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | User | string | 接続ユーザー名 |
 | IdentityFile | string | 秘密鍵のパス |
 | ProxyJump | []string | 踏み台サーバー |
+| ProxyCommand | string | プロキシコマンド |
+| StrictHostKeyChecking | string | ホスト鍵検証の設定（`"no"` の場合は検証をスキップ） |
 | State | ConnectionState | 現在の接続状態 |
 | ActiveForwardCount | int | アクティブな転送数 |
 
@@ -347,14 +351,16 @@ const (
 
 // SSH ホスト情報
 type SSHHost struct {
-    Name              string          // SSH config のホスト名（エイリアス）
-    HostName          string          // 実際のホストアドレス
-    Port              int             // SSH ポート（デフォルト: 22）
-    User              string          // 接続ユーザー名
-    IdentityFile      string          // 秘密鍵のパス
-    ProxyJump         []string        // 踏み台サーバー
-    State             ConnectionState // 現在の接続状態
-    ActiveForwardCount int            // アクティブな転送数
+    Name                  string          // SSH config のホスト名（エイリアス）
+    HostName              string          // 実際のホストアドレス
+    Port                  int             // SSH ポート（デフォルト: 22）
+    User                  string          // 接続ユーザー名
+    IdentityFile          string          // 秘密鍵のパス
+    ProxyJump             []string        // 踏み台サーバー
+    ProxyCommand          string          // プロキシコマンド
+    StrictHostKeyChecking string          // ホスト鍵検証（"no" で検証スキップ）
+    State                 ConnectionState // 現在の接続状態
+    ActiveForwardCount    int             // アクティブな転送数
 }
 
 // 転送セッション（実行時状態 + メトリクス）
@@ -792,3 +798,4 @@ type CredentialResponseResult struct {
 | 1.1 | 2026-02-10 | 内部データモデルの Go 型定義を追加、ForwardRule.Name の一意性スコープを明確化 | 整合性チェック |
 | 2.0 | 2026-02-11 | デーモン化対応: DaemonState 追加、PID ファイル定義、IPC メッセージ型定義（全メソッド）追加 | デーモン化対応 |
 | 2.1 | 2026-02-11 | PendingAuth 状態追加、クレデンシャル要求/応答型定義追加、エラーコード 1008/1009 追加、SSH イベントに pending_auth 追加 | #11 クレデンシャル入力機能追加 |
+| 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
