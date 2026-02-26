@@ -59,6 +59,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	// authMethods が空でも早期リターンしない。
 	// Go の crypto/ssh は常に "none" 認証を最初に試行するため、
 	// Tailscale SSH のように none 認証で動作するサーバーへの接続が可能。
+	if len(authMethods) == 0 {
+		slog.Debug("no explicit auth methods configured, relying on none auth", "host", host.Name)
+	}
 
 	closeAgent := func() {
 		if agentCloser != nil {
