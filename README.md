@@ -1,5 +1,7 @@
 # MolePort
 
+[日本語](README_ja.md)
+
 SSH port forwarding manager with a daemon+client architecture.
 
 Reads host information from `~/.ssh/config` and lets you configure, connect, and disconnect port forwarding via CLI or TUI.
