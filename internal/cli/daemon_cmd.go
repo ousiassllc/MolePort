@@ -18,7 +18,7 @@ import (
 // RunDaemon は daemon サブコマンドをルーティングする。
 func RunDaemon(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("サブコマンドを指定してください: start, stop, status")
+		exitError("サブコマンドを指定してください: start, stop, status, kill")
 	}
 
 	switch args[0] {
@@ -28,6 +28,8 @@ func RunDaemon(configDir string, args []string) {
 		runDaemonStop(configDir, args[1:])
 	case "status":
 		runDaemonStatus(configDir)
+	case "kill":
+		runDaemonKill(configDir)
 	default:
 		exitError("不明なサブコマンド: daemon %s", args[0])
 	}
@@ -83,6 +85,21 @@ func runDaemonStop(configDir string, args []string) {
 	} else {
 		fmt.Println("デーモンを停止しました")
 	}
+}
+
+func runDaemonKill(configDir string) {
+	pidPath := daemon.PIDFilePath(configDir)
+	running, pid := daemon.IsRunning(pidPath)
+	if !running {
+		fmt.Println("デーモンは稼働していません")
+		return
+	}
+
+	if err := daemon.KillProcess(pidPath); err != nil {
+		exitError("デーモンの強制終了に失敗しました: %v", err)
+	}
+
+	fmt.Printf("デーモンを強制終了しました (PID: %d)\n", pid)
 }
 
 func runDaemonStatus(configDir string) {

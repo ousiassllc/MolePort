@@ -129,6 +129,52 @@ func TestPIDFile_FileContent_MatchesPID(t *testing.T) {
 	}
 }
 
+func TestKillProcess_NoFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nonexistent.pid")
+
+	err := KillProcess(path)
+	if err == nil {
+		t.Fatal("KillProcess should return error for nonexistent PID file")
+	}
+}
+
+func TestKillProcess_StalePID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stale.pid")
+
+	// 存在しないはずの大きな PID を書き込む
+	if err := os.WriteFile(path, []byte("999999999\n"), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	err := KillProcess(path)
+	if err == nil {
+		t.Fatal("KillProcess should return error for non-existent process")
+	}
+
+	// PID ファイルが削除されていることを確認
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("PID file should be removed after KillProcess on stale PID")
+	}
+}
+
+func TestKillProcess_InvalidContent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid.pid")
+
+	if err := os.WriteFile(path, []byte("not-a-number\n"), 0600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	err := KillProcess(path)
+	if err == nil {
+		t.Fatal("KillProcess should return error for invalid PID content")
+	}
+
+	// PID ファイルが削除されていることを確認
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("PID file should be removed after KillProcess on invalid content")
+	}
+}
+
 func TestIsRunning_NoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nonexistent.pid")
 
