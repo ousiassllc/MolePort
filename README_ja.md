@@ -178,8 +178,8 @@ make clean      # ビルド成果物を削除
 
 | フック | チェック内容 |
 |--------|-------------|
-| pre-commit | `gofmt` によるフォーマット確認、`go vet`、`golangci-lint` |
-| pre-push | `go test -race` (race detector 付きテスト)、`go build`（ビルドチェック） |
+| pre-commit | `gofmt` によるフォーマット確認、`go vet`、`golangci-lint`、`linterly` |
+| pre-push | `go test -race` (race detector 付きテスト)、`go build`（ビルドチェック）、`golangci-lint` |
 
 セットアップ:
 
