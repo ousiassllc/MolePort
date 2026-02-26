@@ -57,15 +57,16 @@ func (p *sshConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
 			seen[alias] = true
 
 			sshHost := core.SSHHost{
-				Name:               alias,
-				HostName:           getConfigValue(cfg, alias, "HostName", alias),
-				Port:               getConfigPort(cfg, alias),
-				User:               getConfigValue(cfg, alias, "User", currentUser),
-				IdentityFile:       expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
-				ProxyJump:          parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
-				ProxyCommand:       getConfigValue(cfg, alias, "ProxyCommand", ""),
-				State:              core.Disconnected,
-				ActiveForwardCount: 0,
+				Name:                  alias,
+				HostName:              getConfigValue(cfg, alias, "HostName", alias),
+				Port:                  getConfigPort(cfg, alias),
+				User:                  getConfigValue(cfg, alias, "User", currentUser),
+				IdentityFile:          expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
+				ProxyJump:             parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
+				ProxyCommand:          getConfigValue(cfg, alias, "ProxyCommand", ""),
+				StrictHostKeyChecking: getConfigValue(cfg, alias, "StrictHostKeyChecking", ""),
+				State:                 core.Disconnected,
+				ActiveForwardCount:    0,
 			}
 
 			hosts = append(hosts, sshHost)
