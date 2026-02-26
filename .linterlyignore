@@ -4,9 +4,6 @@ docs/
 # テストカバレッジ出力
 coverage.out
 
-# テストファイル
-*_test.go
-
 # 自動生成ファイル
 *.pb.go
 *_generated.go
