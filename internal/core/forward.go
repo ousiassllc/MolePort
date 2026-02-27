@@ -34,6 +34,15 @@ type ForwardManager interface {
 	// GetAllSessions は全ルールのセッション情報を追加順に返す。
 	GetAllSessions() []ForwardSession
 
+	// MarkReconnecting は当該ホストのアクティブセッションを SessionReconnecting 状態にする。
+	MarkReconnecting(hostName string)
+
+	// RestoreForwards は SSH 再接続後に SessionReconnecting 状態の全フォワードを復元する。
+	RestoreForwards(hostName string) []ForwardRestoreResult
+
+	// FailReconnecting は再接続失敗時に SessionReconnecting 状態のフォワードを Error 状態にする。
+	FailReconnecting(hostName string)
+
 	// Subscribe はフォワーディングイベントを受信するチャネルを返す。
 	Subscribe() <-chan ForwardEvent
 

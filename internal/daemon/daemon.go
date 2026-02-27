@@ -80,6 +80,7 @@ func New(configDir string) (*Daemon, error) {
 		func() core.SSHConnection { return infra.NewSSHConnection() },
 		sshConfigPath,
 		cfg.Reconnect,
+		cfg.Hosts,
 	)
 	fwdMgr := forward.NewForwardManager(sshMgr)
 

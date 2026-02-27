@@ -1,12 +1,84 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
+
+func TestSSHManager_KeepAliveInterval(t *testing.T) {
+	hosts := testHosts()
+
+	t.Run("uses configured interval", func(t *testing.T) {
+		intervalCh := make(chan time.Duration, 1)
+		sm := NewSSHManager(
+			&mockSSHConfigParser{hosts: hosts},
+			func() core.SSHConnection {
+				mock := &mockSSHConnection{client: nil, isAlive: true}
+				mock.keepAliveF = func(_ context.Context, interval time.Duration) {
+					intervalCh <- interval
+				}
+				return mock
+			},
+			"/fake/ssh/config",
+			core.ReconnectConfig{
+				Enabled:           false,
+				KeepAliveInterval: core.Duration{Duration: 45 * time.Second},
+			},
+			nil,
+		)
+		if _, err := sm.LoadHosts(); err != nil {
+			t.Fatalf("LoadHosts() error = %v", err)
+		}
+		if err := sm.Connect("server1"); err != nil {
+			t.Fatalf("Connect() error = %v", err)
+		}
+		select {
+		case got := <-intervalCh:
+			if got != 45*time.Second {
+				t.Errorf("KeepAlive interval = %v, want 45s", got)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for KeepAlive interval")
+		}
+		sm.Close()
+	})
+
+	t.Run("falls back to default", func(t *testing.T) {
+		intervalCh := make(chan time.Duration, 1)
+		sm := NewSSHManager(
+			&mockSSHConfigParser{hosts: hosts},
+			func() core.SSHConnection {
+				mock := &mockSSHConnection{client: nil, isAlive: true}
+				mock.keepAliveF = func(_ context.Context, interval time.Duration) {
+					intervalCh <- interval
+				}
+				return mock
+			},
+			"/fake/ssh/config",
+			core.ReconnectConfig{Enabled: false},
+			nil,
+		)
+		if _, err := sm.LoadHosts(); err != nil {
+			t.Fatalf("LoadHosts() error = %v", err)
+		}
+		if err := sm.Connect("server1"); err != nil {
+			t.Fatalf("Connect() error = %v", err)
+		}
+		select {
+		case got := <-intervalCh:
+			if got != 30*time.Second {
+				t.Errorf("KeepAlive interval = %v, want 30s (default)", got)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting for KeepAlive interval")
+		}
+		sm.Close()
+	})
+}
 
 func TestSSHManager_Connect_Disconnect(t *testing.T) {
 	hosts := testHosts()

@@ -7,18 +7,33 @@ type ConfigGetParams struct{}
 
 // ConfigGetResult は config.get リクエストの結果。
 type ConfigGetResult struct {
-	SSHConfigPath string         `json:"ssh_config_path"`
-	Reconnect     ReconnectInfo  `json:"reconnect"`
-	Session       SessionCfgInfo `json:"session"`
-	Log           LogInfo        `json:"log"`
+	SSHConfigPath string                    `json:"ssh_config_path"`
+	Reconnect     ReconnectInfo             `json:"reconnect"`
+	Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
+	Session       SessionCfgInfo            `json:"session"`
+	Log           LogInfo                   `json:"log"`
+}
+
+// HostConfigInfo はホスト別設定の情報を表す。
+type HostConfigInfo struct {
+	Reconnect *ReconnectOverrideInfo `json:"reconnect,omitempty"`
+}
+
+// ReconnectOverrideInfo はホスト別の再接続設定オーバーライド情報を表す。
+type ReconnectOverrideInfo struct {
+	Enabled      *bool   `json:"enabled,omitempty"`
+	MaxRetries   *int    `json:"max_retries,omitempty"`
+	InitialDelay *string `json:"initial_delay,omitempty"`
+	MaxDelay     *string `json:"max_delay,omitempty"`
 }
 
 // ReconnectInfo は再接続設定の情報を表す。
 type ReconnectInfo struct {
-	Enabled      bool   `json:"enabled"`
-	MaxRetries   int    `json:"max_retries"`
-	InitialDelay string `json:"initial_delay"`
-	MaxDelay     string `json:"max_delay"`
+	Enabled           bool   `json:"enabled"`
+	MaxRetries        int    `json:"max_retries"`
+	InitialDelay      string `json:"initial_delay"`
+	MaxDelay          string `json:"max_delay"`
+	KeepAliveInterval string `json:"keepalive_interval"`
 }
 
 // SessionCfgInfo はセッション設定の情報を表す。
@@ -35,19 +50,27 @@ type LogInfo struct {
 // ConfigUpdateParams は config.update リクエストのパラメータ（部分更新）。
 // 各フィールドはポインタ型で、nil なら変更なしを意味する。
 type ConfigUpdateParams struct {
-	SSHConfigPath *string               `json:"ssh_config_path,omitempty"`
-	Reconnect     *ReconnectUpdateInfo  `json:"reconnect,omitempty"`
-	Session       *SessionCfgUpdateInfo `json:"session,omitempty"`
-	Log           *LogUpdateInfo        `json:"log,omitempty"`
+	SSHConfigPath *string                          `json:"ssh_config_path,omitempty"`
+	Reconnect     *ReconnectUpdateInfo             `json:"reconnect,omitempty"`
+	Hosts         map[string]*HostConfigUpdateInfo `json:"hosts,omitempty"`
+	Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
+	Log           *LogUpdateInfo                   `json:"log,omitempty"`
+}
+
+// HostConfigUpdateInfo はホスト別設定の部分更新パラメータ。
+// ReconnectUpdateInfo を共有型として再利用する。KeepAliveInterval はホスト別では無視される。
+type HostConfigUpdateInfo struct {
+	Reconnect *ReconnectUpdateInfo `json:"reconnect,omitempty"`
 }
 
 // ReconnectUpdateInfo は再接続設定の部分更新パラメータ。
 // nil フィールドは変更なしを意味する。
 type ReconnectUpdateInfo struct {
-	Enabled      *bool   `json:"enabled,omitempty"`
-	MaxRetries   *int    `json:"max_retries,omitempty"`
-	InitialDelay *string `json:"initial_delay,omitempty"`
-	MaxDelay     *string `json:"max_delay,omitempty"`
+	Enabled           *bool   `json:"enabled,omitempty"`
+	MaxRetries        *int    `json:"max_retries,omitempty"`
+	InitialDelay      *string `json:"initial_delay,omitempty"`
+	MaxDelay          *string `json:"max_delay,omitempty"`
+	KeepAliveInterval *string `json:"keepalive_interval,omitempty"`
 }
 
 // SessionCfgUpdateInfo はセッション設定の部分更新パラメータ。

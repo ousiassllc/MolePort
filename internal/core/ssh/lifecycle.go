@@ -117,7 +117,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	// KeepAlive goroutine
 	// Connected イベント emit 後に起動して、イベント順序を保証する
 	go func() {
-		conn.KeepAlive(ctx, defaultKeepAliveInterval)
+		conn.KeepAlive(ctx, m.keepAliveInterval())
 		// KeepAlive が終了した場合（コンテキストキャンセル以外）、切断を検出
 		select {
 		case <-ctx.Done():

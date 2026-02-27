@@ -1,10 +1,7 @@
 package forward
 
 import (
-	"context"
-	"net"
 	"testing"
-	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
@@ -41,14 +38,7 @@ func TestForwardManager_GetSession_Inactive(t *testing.T) {
 
 func TestForwardManager_GetAllSessions(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
@@ -73,14 +63,7 @@ func TestForwardManager_GetAllSessions(t *testing.T) {
 
 func TestForwardManager_Subscribe_MultipleSubscribers(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	ch1 := fm.Subscribe()
@@ -90,13 +73,9 @@ func TestForwardManager_Subscribe_MultipleSubscribers(t *testing.T) {
 	_ = fm.StartForward("web", nil)
 
 	for _, ch := range []<-chan core.ForwardEvent{ch1, ch2} {
-		select {
-		case ev := <-ch:
-			if ev.Type != core.ForwardEventStarted {
-				t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
-			}
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for event")
+		ev := drainEvent(t, ch)
+		if ev.Type != core.ForwardEventStarted {
+			t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
 		}
 	}
 

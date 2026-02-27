@@ -111,5 +111,5 @@ func newTestSSHManager(hosts []core.SSHHost, connFactory func() core.SSHConnecti
 		MaxRetries:   3,
 		InitialDelay: core.Duration{Duration: 10 * time.Millisecond},
 		MaxDelay:     core.Duration{Duration: 50 * time.Millisecond},
-	})
+	}, nil)
 }

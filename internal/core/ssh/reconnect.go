@@ -2,13 +2,51 @@ package ssh
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
+
+// resolveReconnectConfig はグローバル設定にホスト別オーバーライドをマージして返す。
+func resolveReconnectConfig(global core.ReconnectConfig, override *core.ReconnectOverride) core.ReconnectConfig {
+	if override == nil {
+		return global
+	}
+	result := global
+	if override.Enabled != nil {
+		result.Enabled = *override.Enabled
+	}
+	if override.MaxRetries != nil {
+		result.MaxRetries = *override.MaxRetries
+	}
+	if override.InitialDelay != nil {
+		result.InitialDelay = *override.InitialDelay
+	}
+	if override.MaxDelay != nil {
+		result.MaxDelay = *override.MaxDelay
+	}
+	return result
+}
+
+// backoffWithJitter は指数バックオフにジッター（0-10%）を加えた遅延を計算する。
+func backoffWithJitter(current, maxDelay time.Duration) time.Duration {
+	base := time.Duration(math.Min(float64(current)*2, float64(maxDelay)))
+	// 0-10% のジッターを crypto/rand で生成
+	maxJitter := int64(float64(base) * 0.1)
+	if maxJitter <= 0 {
+		return base
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(maxJitter))
+	if err != nil {
+		return base
+	}
+	return base + time.Duration(n.Int64())
+}
 
 // handleDisconnect は切断検出時の自動再接続を処理する。
 func (m *sshManager) handleDisconnect(hostName string) {
@@ -37,6 +75,9 @@ func (m *sshManager) handleDisconnect(hostName string) {
 	}
 
 	reconnectCfg := m.reconnectCfg
+	if hostCfg, ok := m.hostConfigs[hostName]; ok {
+		reconnectCfg = resolveReconnectConfig(reconnectCfg, hostCfg.Reconnect)
+	}
 	var host core.SSHHost
 	if idx, ok := m.hostsMap[hostName]; ok {
 		host = m.hosts[idx]
@@ -95,8 +136,8 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		client, err := conn.Dial(host, nil)
 		if err != nil {
 			slog.Warn("reconnect failed", "host", hostName, "attempt", attempt+1, "error", err)
-			// 指数バックオフ
-			delay = time.Duration(math.Min(float64(delay)*2, float64(maxDelay)))
+			// 指数バックオフ + ジッター
+			delay = backoffWithJitter(delay, maxDelay)
 			continue
 		}
 
@@ -121,7 +162,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		slog.Info("SSH reconnected", "host", hostName)
 
 		go func() {
-			conn.KeepAlive(ctx, defaultKeepAliveInterval)
+			conn.KeepAlive(ctx, m.keepAliveInterval())
 			select {
 			case <-ctx.Done():
 				return

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
@@ -26,14 +25,7 @@ func TestForwardManager_StopForward_NotActive(t *testing.T) {
 
 func TestForwardManager_StopAllForwards(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
@@ -56,14 +48,7 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 
 func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
@@ -81,14 +66,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 
 func TestForwardManager_Close(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	events := fm.Subscribe()
@@ -96,29 +74,17 @@ func TestForwardManager_Close(t *testing.T) {
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
 
-	// drain started event
-	select {
-	case <-events:
-	case <-time.After(time.Second):
-	}
-
+	drainEvent(t, events) // drain started event
 	fm.Close()
-
-	// チャネルが閉じられていること（StopAllForwards の stopped イベントを先にドレインする）
-	for {
-		_, ok := <-events
-		if !ok {
-			break
-		}
+	for range events { // drain until channel closed
 	}
 }
 
 func TestForwardManager_StartForward_ListenerError(t *testing.T) {
 	sm := newMockSSHManager()
 	mockConn := &mockSSHConnection{
-		client:  nil,
 		isAlive: true,
-		localForwardF: func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error) {
+		localForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) {
 			return nil, fmt.Errorf("address already in use")
 		},
 	}
@@ -139,11 +105,8 @@ func TestForwardManager_StopForward_ClosesListener(t *testing.T) {
 	sm := newMockSSHManager()
 	ml := newMockListener()
 	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return ml, nil
-		},
+		isAlive:         true,
+		dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return ml, nil },
 	}
 	sm.setConnected("server1", mockConn)
 	fm := NewForwardManager(sm)

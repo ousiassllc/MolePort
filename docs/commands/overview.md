@@ -445,10 +445,19 @@ $ moleport config
 MolePort Config:
   SSH Config:     ~/.ssh/config
   Reconnect:
-    Enabled:      true
-    Max Retries:  10
-    Initial Delay: 1s
-    Max Delay:    60s
+    Enabled:          true
+    Max Retries:      10
+    Initial Delay:    1s
+    Max Delay:        60s
+    KeepAlive:        30s
+  Hosts:
+    prod-server:
+      Reconnect:
+        Max Retries:  20
+        Max Delay:    120s
+    staging:
+      Reconnect:
+        Enabled:      false
   Session:
     Auto Restore: true
   Log:
@@ -635,3 +644,4 @@ $ moleport connect prod-server
 | 2.0 | 2026-02-11 | TUI 内コマンドから CLI サブコマンド体系に全面改訂。daemon/connect/disconnect/add/delete/start/stop/list/status/config/reload/tui/help/version を定義 | デーモン化対応 |
 | 2.1 | 2026-02-11 | connect コマンドにパスワード/パスフレーズ/KI 認証の出力例追加、status/list に pending_auth 表示追加、TUI クレデンシャル入力ダイアログ仕様追加 | #11 クレデンシャル入力機能追加 |
 | 2.2 | 2026-02-27 | `daemon kill` サブコマンドの仕様を追加 | #25 ドキュメント乖離修正 |
+| 2.3 | 2026-02-27 | config コマンド出力例に KeepAlive 間隔と hosts セクション（ホスト別再接続ポリシー）を追加 | #27 自動再接続機能の改善・拡張 |

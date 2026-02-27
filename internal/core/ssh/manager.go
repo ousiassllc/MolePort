@@ -10,8 +10,16 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// defaultKeepAliveInterval は SSH 接続の KeepAlive 送信間隔。
+// defaultKeepAliveInterval は KeepAliveInterval が未設定時のフォールバック値。
 const defaultKeepAliveInterval = 30 * time.Second
+
+// keepAliveInterval は設定された KeepAlive 間隔を返す。未設定の場合はデフォルト値を返す。
+func (m *sshManager) keepAliveInterval() time.Duration {
+	if d := m.reconnectCfg.KeepAliveInterval.Duration; d > 0 {
+		return d
+	}
+	return defaultKeepAliveInterval
+}
 
 // hostConnection は個々のホストへの接続状態を保持する。
 type hostConnection struct {
@@ -28,6 +36,7 @@ type sshManager struct {
 	connFactory  func() core.SSHConnection
 	configPath   string
 	reconnectCfg core.ReconnectConfig
+	hostConfigs  map[string]core.HostConfig
 
 	hosts            []core.SSHHost
 	hostsMap         map[string]int
@@ -44,12 +53,17 @@ func NewSSHManager(
 	connFactory func() core.SSHConnection,
 	configPath string,
 	reconnectCfg core.ReconnectConfig,
+	hostConfigs map[string]core.HostConfig,
 ) core.SSHManager {
+	if hostConfigs == nil {
+		hostConfigs = make(map[string]core.HostConfig)
+	}
 	return &sshManager{
 		parser:           parser,
 		connFactory:      connFactory,
 		configPath:       configPath,
 		reconnectCfg:     reconnectCfg,
+		hostConfigs:      hostConfigs,
 		hostsMap:         make(map[string]int),
 		conns:            make(map[string]*hostConnection),
 		reconnectCancels: make(map[string]context.CancelFunc),

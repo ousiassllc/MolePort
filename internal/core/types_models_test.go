@@ -25,6 +25,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Reconnect.MaxDelay.Duration != 60*time.Second {
 		t.Errorf("Reconnect.MaxDelay = %v, want 60s", cfg.Reconnect.MaxDelay.Duration)
 	}
+	if cfg.Reconnect.KeepAliveInterval.Duration != 30*time.Second {
+		t.Errorf("Reconnect.KeepAliveInterval = %v, want 30s", cfg.Reconnect.KeepAliveInterval.Duration)
+	}
+	if cfg.Hosts != nil {
+		t.Errorf("Hosts should be nil, got %v", cfg.Hosts)
+	}
 	if !cfg.Session.AutoRestore {
 		t.Error("Session.AutoRestore should be true")
 	}
@@ -104,5 +110,65 @@ func TestConfig_YAMLRoundtrip(t *testing.T) {
 	}
 	if got.Forwards[1].RemotePort != 0 {
 		t.Errorf("Forwards[1].RemotePort = %d, want 0", got.Forwards[1].RemotePort)
+	}
+}
+
+func TestConfig_YAMLRoundtrip_WithHosts(t *testing.T) {
+	enabled := true
+	maxRetries := 3
+	original := Config{
+		SSHConfigPath: "~/.ssh/config",
+		Reconnect: ReconnectConfig{
+			Enabled:           true,
+			MaxRetries:        10,
+			InitialDelay:      Duration{Duration: 1 * time.Second},
+			MaxDelay:          Duration{Duration: 60 * time.Second},
+			KeepAliveInterval: Duration{Duration: 30 * time.Second},
+		},
+		Hosts: map[string]HostConfig{
+			"prod": {
+				Reconnect: &ReconnectOverride{
+					Enabled:    &enabled,
+					MaxRetries: &maxRetries,
+					MaxDelay:   &Duration{Duration: 120 * time.Second},
+				},
+			},
+		},
+		Session: SessionConfig{AutoRestore: true},
+		Log:     LogConfig{Level: "info", File: "/tmp/test.log"},
+	}
+
+	data, err := yaml.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal Config: %v", err)
+	}
+
+	var got Config
+	if err := yaml.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal Config: %v", err)
+	}
+
+	if got.Reconnect.KeepAliveInterval.Duration != 30*time.Second {
+		t.Errorf("Reconnect.KeepAliveInterval = %v, want 30s", got.Reconnect.KeepAliveInterval.Duration)
+	}
+
+	hc, ok := got.Hosts["prod"]
+	if !ok {
+		t.Fatal("Hosts[\"prod\"] not found")
+	}
+	if hc.Reconnect == nil {
+		t.Fatal("Hosts[\"prod\"].Reconnect is nil")
+	}
+	if hc.Reconnect.Enabled == nil || *hc.Reconnect.Enabled != true {
+		t.Errorf("Hosts[\"prod\"].Reconnect.Enabled = %v, want true", hc.Reconnect.Enabled)
+	}
+	if hc.Reconnect.MaxRetries == nil || *hc.Reconnect.MaxRetries != 3 {
+		t.Errorf("Hosts[\"prod\"].Reconnect.MaxRetries = %v, want 3", hc.Reconnect.MaxRetries)
+	}
+	if hc.Reconnect.InitialDelay != nil {
+		t.Errorf("Hosts[\"prod\"].Reconnect.InitialDelay should be nil, got %v", hc.Reconnect.InitialDelay)
+	}
+	if hc.Reconnect.MaxDelay == nil || hc.Reconnect.MaxDelay.Duration != 120*time.Second {
+		t.Errorf("Hosts[\"prod\"].Reconnect.MaxDelay = %v, want 2m0s", hc.Reconnect.MaxDelay)
 	}
 }

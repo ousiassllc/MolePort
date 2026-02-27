@@ -525,7 +525,16 @@ SSH config を再読み込みし、ホスト一覧を更新する。
       "enabled": true,
       "max_retries": 10,
       "initial_delay": "1s",
-      "max_delay": "60s"
+      "max_delay": "60s",
+      "keepalive_interval": "30s"
+    },
+    "hosts": {
+      "prod-server": {
+        "reconnect": {
+          "max_retries": 20,
+          "max_delay": "120s"
+        }
+      }
     },
     "session": {
       "auto_restore": true
@@ -553,7 +562,15 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "method": "config.update",
   "params": {
     "reconnect": {
-      "max_retries": 20
+      "max_retries": 20,
+      "keepalive_interval": "15s"
+    },
+    "hosts": {
+      "staging": {
+        "reconnect": {
+          "enabled": false
+        }
+      }
     }
   }
 }
@@ -676,7 +693,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 | タイプ | 説明 |
 |-------|------|
 | `ssh` | SSH 接続状態の変化（接続/切断/再接続/エラー） |
-| `forward` | ポートフォワーディングの状態変化（開始/停止/エラー） |
+| `forward` | ポートフォワーディングの状態変化（開始/停止/再接続中/復元/エラー） |
 | `metrics` | メトリクスの定期更新（1秒間隔） |
 
 ---
@@ -915,10 +932,13 @@ SSH 接続状態の変化。
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| type | string | `"started"` / `"stopped"` / `"error"` |
+| type | string | `"started"` / `"stopped"` / `"reconnecting"` / `"restored"` / `"error"` |
 | name | string | ルール名 |
 | host | string | ホスト名 |
 | error | string | エラーメッセージ（エラー時のみ） |
+
+- `reconnecting`: SSH 接続断検知によりフォワードが再接続待ち状態になった
+- `restored`: SSH 再接続後にフォワードが自動復元された
 
 ### event.metrics
 
@@ -975,3 +995,4 @@ SSH 接続状態の変化。
 | 1.0 | 2026-02-11 | 初版作成 | デーモン化対応 |
 | 1.1 | 2026-02-11 | credential.request/response 仕様追加、エラーコード 1008/1009 追加、event.ssh に pending_auth 追加 | #11 クレデンシャル入力機能追加 |
 | 1.2 | 2026-02-24 | forward.start の説明にクレデンシャルコールバック対応を追記 | #16 フォワード開始失敗時の修正 |
+| 1.3 | 2026-02-27 | config.get/update に keepalive_interval と hosts セクション追加、event.forward に reconnecting/restored タイプ追加 | #27 自動再接続機能の改善・拡張 |
