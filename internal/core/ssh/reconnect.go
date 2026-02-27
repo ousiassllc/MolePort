@@ -2,13 +2,30 @@ package ssh
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
+
+// backoffWithJitter は指数バックオフにジッター（0-10%）を加えた遅延を計算する。
+func backoffWithJitter(current, maxDelay time.Duration) time.Duration {
+	base := time.Duration(math.Min(float64(current)*2, float64(maxDelay)))
+	// 0-10% のジッターを crypto/rand で生成
+	maxJitter := int64(float64(base) * 0.1)
+	if maxJitter <= 0 {
+		return base
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(maxJitter))
+	if err != nil {
+		return base
+	}
+	return base + time.Duration(n.Int64())
+}
 
 // handleDisconnect は切断検出時の自動再接続を処理する。
 func (m *sshManager) handleDisconnect(hostName string) {
@@ -95,8 +112,8 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		client, err := conn.Dial(host, nil)
 		if err != nil {
 			slog.Warn("reconnect failed", "host", hostName, "attempt", attempt+1, "error", err)
-			// 指数バックオフ
-			delay = time.Duration(math.Min(float64(delay)*2, float64(maxDelay)))
+			// 指数バックオフ + ジッター
+			delay = backoffWithJitter(delay, maxDelay)
 			continue
 		}
 
