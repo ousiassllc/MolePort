@@ -418,26 +418,22 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *RPC
 
 #### forwardStart のクレデンシャルコールバック対応
 
-`forward.start` ハンドラは、ホストが未接続の場合に `ConnectWithCallback` で事前接続する。
+`forward.start` ハンドラは、クレデンシャルコールバックを `StartForward` に渡し、StartForward 内部で SSH 接続を処理する。
 これにより `forward.start` 経由でもパスワード認証等が可能になる。
 
 ```go
 func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *RPCError) {
     // ...パラメータ解析...
 
-    // ホスト未接続の場合、クレデンシャルコールバック付きで事前接続する。
-    // StartForward 内にも Connect のフォールバックがあるが、
-    // そちらはコールバックなしのため、パスワード認証が必要な場合は
-    // ここでの事前接続が必須。
+    // クレデンシャルコールバックを StartForward に渡す。
+    // StartForward 内で SSH 未接続時にコールバック付きで接続するため、
+    // パスワード認証や keyboard-interactive 認証もサポートされる。
     session, err := h.fwdMgr.GetSession(p.Name)
-    if !h.sshMgr.IsConnected(session.Rule.Host) {
-        cb := h.buildCredentialCallback(clientID, session.Rule.Host)
-        if err := h.sshMgr.ConnectWithCallback(session.Rule.Host, cb); err != nil {
-            return nil, toRPCError(err, InternalError)
-        }
+    if err != nil {
+        return nil, toRPCError(err, InternalError)
     }
-
-    if err := h.fwdMgr.StartForward(p.Name); err != nil {
+    cb := h.buildCredentialCallback(clientID, session.Rule.Host)
+    if err := h.fwdMgr.StartForward(p.Name, cb); err != nil {
         return nil, toRPCError(err, InternalError)
     }
     return ForwardStartResult{Name: p.Name, Status: "active"}, nil
@@ -641,7 +637,7 @@ type ForwardManager interface {
     DeleteRule(name string) error
     GetRules() []ForwardRule
     GetRulesByHost(hostName string) []ForwardRule
-    StartForward(ruleName string) error
+    StartForward(ruleName string, cb CredentialCallback) error
     StopForward(ruleName string) error
     StopAllForwards() error
     GetSession(ruleName string) (*ForwardSession, error)

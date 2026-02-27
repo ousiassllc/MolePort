@@ -180,8 +180,8 @@ make clean      # Remove build artifacts
 
 | Hook | Checks |
 |------|--------|
-| pre-commit | `gofmt` formatting, `go vet`, `golangci-lint` |
-| pre-push | `go test -race` (tests with race detector), `go build` (build check) |
+| pre-commit | `gofmt` formatting, `go vet`, `golangci-lint`, `linterly` |
+| pre-push | `go test -race` (tests with race detector), `go build` (build check), `golangci-lint` |
 
 Setup:
 
