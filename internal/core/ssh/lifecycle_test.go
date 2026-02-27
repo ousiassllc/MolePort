@@ -28,6 +28,7 @@ func TestSSHManager_KeepAliveInterval(t *testing.T) {
 				Enabled:           false,
 				KeepAliveInterval: core.Duration{Duration: 45 * time.Second},
 			},
+			nil,
 		)
 		if _, err := sm.LoadHosts(); err != nil {
 			t.Fatalf("LoadHosts() error = %v", err)
@@ -55,6 +56,7 @@ func TestSSHManager_KeepAliveInterval(t *testing.T) {
 			},
 			"/fake/ssh/config",
 			core.ReconnectConfig{Enabled: false},
+			nil,
 		)
 		if _, err := sm.LoadHosts(); err != nil {
 			t.Fatalf("LoadHosts() error = %v", err)

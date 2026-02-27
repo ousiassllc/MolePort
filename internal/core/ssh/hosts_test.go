@@ -28,7 +28,7 @@ func TestSSHManager_LoadHosts(t *testing.T) {
 
 func TestSSHManager_LoadHosts_ParseError(t *testing.T) {
 	parser := &mockSSHConfigParser{err: fmt.Errorf("parse error")}
-	sm := NewSSHManager(parser, nil, "/fake/ssh/config", core.ReconnectConfig{})
+	sm := NewSSHManager(parser, nil, "/fake/ssh/config", core.ReconnectConfig{}, nil)
 
 	_, err := sm.LoadHosts()
 	if err == nil {

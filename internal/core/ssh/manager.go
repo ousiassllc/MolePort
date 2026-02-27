@@ -36,6 +36,7 @@ type sshManager struct {
 	connFactory  func() core.SSHConnection
 	configPath   string
 	reconnectCfg core.ReconnectConfig
+	hostConfigs  map[string]core.HostConfig
 
 	hosts            []core.SSHHost
 	hostsMap         map[string]int
@@ -52,12 +53,17 @@ func NewSSHManager(
 	connFactory func() core.SSHConnection,
 	configPath string,
 	reconnectCfg core.ReconnectConfig,
+	hostConfigs map[string]core.HostConfig,
 ) core.SSHManager {
+	if hostConfigs == nil {
+		hostConfigs = make(map[string]core.HostConfig)
+	}
 	return &sshManager{
 		parser:           parser,
 		connFactory:      connFactory,
 		configPath:       configPath,
 		reconnectCfg:     reconnectCfg,
+		hostConfigs:      hostConfigs,
 		hostsMap:         make(map[string]int),
 		conns:            make(map[string]*hostConnection),
 		reconnectCancels: make(map[string]context.CancelFunc),

@@ -12,6 +12,27 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// resolveReconnectConfig はグローバル設定にホスト別オーバーライドをマージして返す。
+func resolveReconnectConfig(global core.ReconnectConfig, override *core.ReconnectOverride) core.ReconnectConfig {
+	if override == nil {
+		return global
+	}
+	result := global
+	if override.Enabled != nil {
+		result.Enabled = *override.Enabled
+	}
+	if override.MaxRetries != nil {
+		result.MaxRetries = *override.MaxRetries
+	}
+	if override.InitialDelay != nil {
+		result.InitialDelay = *override.InitialDelay
+	}
+	if override.MaxDelay != nil {
+		result.MaxDelay = *override.MaxDelay
+	}
+	return result
+}
+
 // backoffWithJitter は指数バックオフにジッター（0-10%）を加えた遅延を計算する。
 func backoffWithJitter(current, maxDelay time.Duration) time.Duration {
 	base := time.Duration(math.Min(float64(current)*2, float64(maxDelay)))
@@ -54,6 +75,9 @@ func (m *sshManager) handleDisconnect(hostName string) {
 	}
 
 	reconnectCfg := m.reconnectCfg
+	if hostCfg, ok := m.hostConfigs[hostName]; ok {
+		reconnectCfg = resolveReconnectConfig(reconnectCfg, hostCfg.Reconnect)
+	}
 	var host core.SSHHost
 	if idx, ok := m.hostsMap[hostName]; ok {
 		host = m.hosts[idx]

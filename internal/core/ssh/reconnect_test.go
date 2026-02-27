@@ -84,6 +84,7 @@ func TestSSHManager_HandleDisconnect_WithReconnect(t *testing.T) {
 			InitialDelay: core.Duration{Duration: 10 * time.Millisecond},
 			MaxDelay:     core.Duration{Duration: 50 * time.Millisecond},
 		},
+		nil,
 	)
 
 	if _, err := sm.LoadHosts(); err != nil {
@@ -152,6 +153,7 @@ func TestSSHManager_Disconnect_StopsReconnect(t *testing.T) {
 			InitialDelay: core.Duration{Duration: 10 * time.Millisecond},
 			MaxDelay:     core.Duration{Duration: 50 * time.Millisecond},
 		},
+		nil,
 	)
 
 	if _, err := sm.LoadHosts(); err != nil {
