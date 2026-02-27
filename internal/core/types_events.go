@@ -45,6 +45,8 @@ const (
 	ForwardEventStopped
 	ForwardEventError
 	ForwardEventMetricsUpdated
+	ForwardEventReconnecting // SSH 接続断によりフォワードが再接続待ち
+	ForwardEventRestored     // SSH 再接続後にフォワードが自動復元
 )
 
 func (t ForwardEventType) String() string {
@@ -57,6 +59,10 @@ func (t ForwardEventType) String() string {
 		return "Error"
 	case ForwardEventMetricsUpdated:
 		return "MetricsUpdated"
+	case ForwardEventReconnecting:
+		return "Reconnecting"
+	case ForwardEventRestored:
+		return "Restored"
 	default:
 		return fmt.Sprintf("ForwardEventType(%d)", int(t))
 	}

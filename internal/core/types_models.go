@@ -41,19 +41,35 @@ type ForwardSession struct {
 
 // Config はアプリケーション設定。
 type Config struct {
-	SSHConfigPath string          `yaml:"ssh_config_path"`
-	Reconnect     ReconnectConfig `yaml:"reconnect"`
-	Session       SessionConfig   `yaml:"session"`
-	Log           LogConfig       `yaml:"log"`
-	Forwards      []ForwardRule   `yaml:"forwards"`
+	SSHConfigPath string                `yaml:"ssh_config_path"`
+	Reconnect     ReconnectConfig       `yaml:"reconnect"`
+	Hosts         map[string]HostConfig `yaml:"hosts,omitempty"`
+	Session       SessionConfig         `yaml:"session"`
+	Log           LogConfig             `yaml:"log"`
+	Forwards      []ForwardRule         `yaml:"forwards"`
 }
 
 // ReconnectConfig は自動再接続の設定。
 type ReconnectConfig struct {
-	Enabled      bool     `yaml:"enabled"`
-	MaxRetries   int      `yaml:"max_retries"`
-	InitialDelay Duration `yaml:"initial_delay"`
-	MaxDelay     Duration `yaml:"max_delay"`
+	Enabled           bool     `yaml:"enabled"`
+	MaxRetries        int      `yaml:"max_retries"`
+	InitialDelay      Duration `yaml:"initial_delay"`
+	MaxDelay          Duration `yaml:"max_delay"`
+	KeepAliveInterval Duration `yaml:"keepalive_interval"`
+}
+
+// ReconnectOverride はホスト別の再接続設定オーバーライド。
+// 指定されたフィールドのみグローバル設定を上書きする。
+type ReconnectOverride struct {
+	Enabled      *bool     `yaml:"enabled,omitempty"`
+	MaxRetries   *int      `yaml:"max_retries,omitempty"`
+	InitialDelay *Duration `yaml:"initial_delay,omitempty"`
+	MaxDelay     *Duration `yaml:"max_delay,omitempty"`
+}
+
+// HostConfig はホスト別のオーバーライド設定。
+type HostConfig struct {
+	Reconnect *ReconnectOverride `yaml:"reconnect,omitempty"`
 }
 
 // SessionConfig はセッション復元の設定。
@@ -79,10 +95,11 @@ func DefaultConfig() Config {
 	return Config{
 		SSHConfigPath: "~/.ssh/config",
 		Reconnect: ReconnectConfig{
-			Enabled:      true,
-			MaxRetries:   10,
-			InitialDelay: Duration{Duration: 1 * time.Second},
-			MaxDelay:     Duration{Duration: 60 * time.Second},
+			Enabled:           true,
+			MaxRetries:        10,
+			InitialDelay:      Duration{Duration: 1 * time.Second},
+			MaxDelay:          Duration{Duration: 60 * time.Second},
+			KeepAliveInterval: Duration{Duration: 30 * time.Second},
 		},
 		Session: SessionConfig{
 			AutoRestore: true,

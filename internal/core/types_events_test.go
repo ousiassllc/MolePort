@@ -30,6 +30,8 @@ func TestForwardEventType_String(t *testing.T) {
 		{ForwardEventStopped, "Stopped"},
 		{ForwardEventError, "Error"},
 		{ForwardEventMetricsUpdated, "MetricsUpdated"},
+		{ForwardEventReconnecting, "Reconnecting"},
+		{ForwardEventRestored, "Restored"},
 		{ForwardEventType(99), "ForwardEventType(99)"},
 	}
 	for _, tt := range tests {

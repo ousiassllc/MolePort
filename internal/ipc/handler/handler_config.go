@@ -11,13 +11,14 @@ import (
 func (h *Handler) configGet() (any, *protocol.RPCError) {
 	cfg := h.cfgMgr.GetConfig()
 
-	return protocol.ConfigGetResult{
+	result := protocol.ConfigGetResult{
 		SSHConfigPath: cfg.SSHConfigPath,
 		Reconnect: protocol.ReconnectInfo{
-			Enabled:      cfg.Reconnect.Enabled,
-			MaxRetries:   cfg.Reconnect.MaxRetries,
-			InitialDelay: cfg.Reconnect.InitialDelay.String(),
-			MaxDelay:     cfg.Reconnect.MaxDelay.String(),
+			Enabled:           cfg.Reconnect.Enabled,
+			MaxRetries:        cfg.Reconnect.MaxRetries,
+			InitialDelay:      cfg.Reconnect.InitialDelay.String(),
+			MaxDelay:          cfg.Reconnect.MaxDelay.String(),
+			KeepAliveInterval: cfg.Reconnect.KeepAliveInterval.String(),
 		},
 		Session: protocol.SessionCfgInfo{
 			AutoRestore: cfg.Session.AutoRestore,
@@ -26,7 +27,32 @@ func (h *Handler) configGet() (any, *protocol.RPCError) {
 			Level: cfg.Log.Level,
 			File:  cfg.Log.File,
 		},
-	}, nil
+	}
+
+	if len(cfg.Hosts) > 0 {
+		result.Hosts = make(map[string]protocol.HostConfigInfo, len(cfg.Hosts))
+		for name, hc := range cfg.Hosts {
+			info := protocol.HostConfigInfo{}
+			if hc.Reconnect != nil {
+				override := &protocol.ReconnectOverrideInfo{
+					Enabled:    hc.Reconnect.Enabled,
+					MaxRetries: hc.Reconnect.MaxRetries,
+				}
+				if hc.Reconnect.InitialDelay != nil {
+					s := hc.Reconnect.InitialDelay.String()
+					override.InitialDelay = &s
+				}
+				if hc.Reconnect.MaxDelay != nil {
+					s := hc.Reconnect.MaxDelay.String()
+					override.MaxDelay = &s
+				}
+				info.Reconnect = override
+			}
+			result.Hosts[name] = info
+		}
+	}
+
+	return result, nil
 }
 
 func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError) {
@@ -55,6 +81,45 @@ func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError)
 				if d, err := time.ParseDuration(*p.Reconnect.MaxDelay); err == nil {
 					cfg.Reconnect.MaxDelay = core.Duration{Duration: d}
 				}
+			}
+			if p.Reconnect.KeepAliveInterval != nil {
+				if d, err := time.ParseDuration(*p.Reconnect.KeepAliveInterval); err == nil {
+					cfg.Reconnect.KeepAliveInterval = core.Duration{Duration: d}
+				}
+			}
+		}
+		if p.Hosts != nil {
+			if cfg.Hosts == nil {
+				cfg.Hosts = make(map[string]core.HostConfig)
+			}
+			for name, update := range p.Hosts {
+				if update == nil {
+					delete(cfg.Hosts, name)
+					continue
+				}
+				hc := cfg.Hosts[name]
+				if update.Reconnect != nil {
+					if hc.Reconnect == nil {
+						hc.Reconnect = &core.ReconnectOverride{}
+					}
+					if update.Reconnect.Enabled != nil {
+						hc.Reconnect.Enabled = update.Reconnect.Enabled
+					}
+					if update.Reconnect.MaxRetries != nil {
+						hc.Reconnect.MaxRetries = update.Reconnect.MaxRetries
+					}
+					if update.Reconnect.InitialDelay != nil {
+						if d, err := time.ParseDuration(*update.Reconnect.InitialDelay); err == nil {
+							hc.Reconnect.InitialDelay = &core.Duration{Duration: d}
+						}
+					}
+					if update.Reconnect.MaxDelay != nil {
+						if d, err := time.ParseDuration(*update.Reconnect.MaxDelay); err == nil {
+							hc.Reconnect.MaxDelay = &core.Duration{Duration: d}
+						}
+					}
+				}
+				cfg.Hosts[name] = hc
 			}
 		}
 		if p.Session != nil && p.Session.AutoRestore != nil {
