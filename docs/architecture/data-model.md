@@ -49,10 +49,21 @@ ssh_config_path: "~/.ssh/config"
 
 # 再接続設定
 reconnect:
-  enabled: true          # 自動再接続の有効/無効
-  max_retries: 10        # 最大リトライ回数（0 = 無制限）
-  initial_delay: "1s"    # 初回リトライ待機時間
-  max_delay: "60s"       # 最大リトライ待機時間
+  enabled: true              # 自動再接続の有効/無効
+  max_retries: 10            # 最大リトライ回数（0 = 無制限）
+  initial_delay: "1s"        # 初回リトライ待機時間
+  max_delay: "60s"           # 最大リトライ待機時間
+  keepalive_interval: "30s"  # KeepAlive 送信間隔
+
+# ホスト別オーバーライド（省略可）
+hosts:
+  prod-server:
+    reconnect:
+      max_retries: 20        # このホストのみ最大 20 回リトライ
+      max_delay: "120s"
+  staging:
+    reconnect:
+      enabled: false          # このホストは自動再接続しない
 
 # セッション復元
 session:
@@ -92,18 +103,34 @@ forwards:
 
 ```go
 type Config struct {
-    SSHConfigPath string          `yaml:"ssh_config_path"`
-    Reconnect     ReconnectConfig `yaml:"reconnect"`
-    Session       SessionConfig   `yaml:"session"`
-    Log           LogConfig       `yaml:"log"`
-    Forwards      []ForwardRule   `yaml:"forwards"`
+    SSHConfigPath string                    `yaml:"ssh_config_path"`
+    Reconnect     ReconnectConfig           `yaml:"reconnect"`
+    Hosts         map[string]HostConfig     `yaml:"hosts,omitempty"` // ホスト別オーバーライド
+    Session       SessionConfig             `yaml:"session"`
+    Log           LogConfig                 `yaml:"log"`
+    Forwards      []ForwardRule             `yaml:"forwards"`
 }
 
 type ReconnectConfig struct {
-    Enabled      bool     `yaml:"enabled"`
-    MaxRetries   int      `yaml:"max_retries"`
-    InitialDelay Duration `yaml:"initial_delay"` // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
-    MaxDelay     Duration `yaml:"max_delay"`     // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
+    Enabled           bool     `yaml:"enabled"`
+    MaxRetries        int      `yaml:"max_retries"`
+    InitialDelay      Duration `yaml:"initial_delay"`      // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
+    MaxDelay          Duration `yaml:"max_delay"`           // core.Duration（time.Duration の YAML シリアライズ対応ラッパー）
+    KeepAliveInterval Duration `yaml:"keepalive_interval"` // KeepAlive 送信間隔（デフォルト: 30s）
+}
+
+// HostConfig はホスト別のオーバーライド設定。nil フィールドはグローバル設定を継承する。
+type HostConfig struct {
+    Reconnect *ReconnectOverride `yaml:"reconnect,omitempty"`
+}
+
+// ReconnectOverride はホスト別の再接続設定オーバーライド。
+// 指定されたフィールドのみグローバル設定を上書きする。
+type ReconnectOverride struct {
+    Enabled      *bool     `yaml:"enabled,omitempty"`
+    MaxRetries   *int      `yaml:"max_retries,omitempty"`
+    InitialDelay *Duration `yaml:"initial_delay,omitempty"`
+    MaxDelay     *Duration `yaml:"max_delay,omitempty"`
 }
 
 type SessionConfig struct {
@@ -291,7 +318,7 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | ConnectedAt | time.Time | 接続開始時刻 |
 | BytesSent | int64 | 送信バイト数 |
 | BytesReceived | int64 | 受信バイト数 |
-| ReconnectCount | int | 再接続回数 |
+| ReconnectCount | int | 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント） |
 | LastError | string | 最後のエラーメッセージ |
 
 > **Note**: デーモンの状態情報は core パッケージの内部データモデルではなく、IPC プロトコル層の `DaemonStatusResult`（「デーモン管理」セクション参照）として定義されている。
@@ -353,7 +380,7 @@ type ForwardSession struct {
     ConnectedAt    time.Time     // 接続開始時刻
     BytesSent      int64         // 送信バイト数
     BytesReceived  int64         // 受信バイト数
-    ReconnectCount int           // 再接続回数
+    ReconnectCount int           // 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント）
     LastError      string        // 最後のエラーメッセージ
 }
 
@@ -377,6 +404,7 @@ stateDiagram-v2
     Connected --> Reconnecting : 接続断検知
     Reconnecting --> Connected : 再接続成功
     Reconnecting --> Error : 最大リトライ超過
+    Reconnecting --> PendingAuth : 認証失敗（パスワード認証のみ）
     PendingAuth --> Connecting : Connect()（ユーザー手動）
     PendingAuth --> Disconnected : Dismiss()
     Error --> Connecting : Connect() (手動)
@@ -584,16 +612,27 @@ type SessionGetResult = SessionInfo
 // config.get
 type ConfigGetParams struct{}
 type ConfigGetResult struct {
-    SSHConfigPath string          `json:"ssh_config_path"`
-    Reconnect     ReconnectInfo   `json:"reconnect"`
-    Session       SessionCfgInfo  `json:"session"`
-    Log           LogInfo         `json:"log"`
+    SSHConfigPath string                    `json:"ssh_config_path"`
+    Reconnect     ReconnectInfo             `json:"reconnect"`
+    Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
+    Session       SessionCfgInfo            `json:"session"`
+    Log           LogInfo                   `json:"log"`
+}
+type HostConfigInfo struct {
+    Reconnect *ReconnectOverrideInfo `json:"reconnect,omitempty"`
+}
+type ReconnectOverrideInfo struct {
+    Enabled      *bool   `json:"enabled,omitempty"`
+    MaxRetries   *int    `json:"max_retries,omitempty"`
+    InitialDelay *string `json:"initial_delay,omitempty"`
+    MaxDelay     *string `json:"max_delay,omitempty"`
 }
 type ReconnectInfo struct {
-    Enabled      bool   `json:"enabled"`
-    MaxRetries   int    `json:"max_retries"`
-    InitialDelay string `json:"initial_delay"`
-    MaxDelay     string `json:"max_delay"`
+    Enabled           bool   `json:"enabled"`
+    MaxRetries        int    `json:"max_retries"`
+    InitialDelay      string `json:"initial_delay"`
+    MaxDelay          string `json:"max_delay"`
+    KeepAliveInterval string `json:"keepalive_interval"`
 }
 type SessionCfgInfo struct {
     AutoRestore bool `json:"auto_restore"`
@@ -605,10 +644,14 @@ type LogInfo struct {
 
 // config.update（部分更新: 指定したフィールドのみ変更）
 type ConfigUpdateParams struct {
-    SSHConfigPath *string               `json:"ssh_config_path,omitempty"`
-    Reconnect     *ReconnectUpdateInfo  `json:"reconnect,omitempty"`
-    Session       *SessionCfgUpdateInfo `json:"session,omitempty"`
-    Log           *LogUpdateInfo        `json:"log,omitempty"`
+    SSHConfigPath *string                          `json:"ssh_config_path,omitempty"`
+    Reconnect     *ReconnectUpdateInfo             `json:"reconnect,omitempty"`
+    Hosts         map[string]*HostConfigUpdateInfo  `json:"hosts,omitempty"`
+    Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
+    Log           *LogUpdateInfo                   `json:"log,omitempty"`
+}
+type HostConfigUpdateInfo struct {
+    Reconnect *ReconnectUpdateInfo `json:"reconnect,omitempty"`
 }
 type ConfigUpdateResult struct {
     OK bool `json:"ok"`
@@ -616,10 +659,11 @@ type ConfigUpdateResult struct {
 
 // 再接続設定の部分更新パラメータ（nil フィールドは変更なし）
 type ReconnectUpdateInfo struct {
-    Enabled      *bool   `json:"enabled,omitempty"`
-    MaxRetries   *int    `json:"max_retries,omitempty"`
-    InitialDelay *string `json:"initial_delay,omitempty"`
-    MaxDelay     *string `json:"max_delay,omitempty"`
+    Enabled           *bool   `json:"enabled,omitempty"`
+    MaxRetries        *int    `json:"max_retries,omitempty"`
+    InitialDelay      *string `json:"initial_delay,omitempty"`
+    MaxDelay          *string `json:"max_delay,omitempty"`
+    KeepAliveInterval *string `json:"keepalive_interval,omitempty"`
 }
 
 // セッション設定の部分更新パラメータ
@@ -687,7 +731,7 @@ type SSHEventNotification struct {
 
 // event.forward（デーモン → クライアント通知）
 type ForwardEventNotification struct {
-    Type  string `json:"type"`  // "started" | "stopped" | "error"
+    Type  string `json:"type"`  // "started" | "stopped" | "reconnecting" | "restored" | "error"
     Name  string `json:"name"`
     Host  string `json:"host"`
     Error string `json:"error,omitempty"`
@@ -774,3 +818,4 @@ type CredentialResponseResult struct {
 | 2.1 | 2026-02-11 | PendingAuth 状態追加、クレデンシャル要求/応答型定義追加、エラーコード 1008/1009 追加、SSH イベントに pending_auth 追加 | #11 クレデンシャル入力機能追加 |
 | 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
 | 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
+| 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
