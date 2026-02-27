@@ -138,7 +138,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		slog.Info("SSH reconnected", "host", hostName)
 
 		go func() {
-			conn.KeepAlive(ctx, defaultKeepAliveInterval)
+			conn.KeepAlive(ctx, m.keepAliveInterval())
 			select {
 			case <-ctx.Done():
 				return

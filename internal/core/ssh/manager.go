@@ -10,8 +10,16 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// defaultKeepAliveInterval は SSH 接続の KeepAlive 送信間隔。
+// defaultKeepAliveInterval は KeepAliveInterval が未設定時のフォールバック値。
 const defaultKeepAliveInterval = 30 * time.Second
+
+// keepAliveInterval は設定された KeepAlive 間隔を返す。未設定の場合はデフォルト値を返す。
+func (m *sshManager) keepAliveInterval() time.Duration {
+	if d := m.reconnectCfg.KeepAliveInterval.Duration; d > 0 {
+		return d
+	}
+	return defaultKeepAliveInterval
+}
 
 // hostConnection は個々のホストへの接続状態を保持する。
 type hostConnection struct {
