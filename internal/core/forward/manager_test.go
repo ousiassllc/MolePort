@@ -86,70 +86,31 @@ func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
 	}
 }
 
-func TestForwardManager_AddRule_EmptyHost(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	_, err := fm.AddRule(core.ForwardRule{
-		Name:       "test",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemoteHost: "localhost",
-		RemotePort: 80,
-	})
-	if err == nil {
-		t.Fatal("AddRule() should return error for empty host")
-	}
-}
-
-func TestForwardManager_AddRule_InvalidPort(t *testing.T) {
+func TestForwardManager_AddRule_Validation(t *testing.T) {
 	sm := newMockSSHManager()
 	fm := NewForwardManager(sm)
 
 	tests := []struct {
-		name      string
-		localPort int
-		wantErr   bool
+		name    string
+		rule    core.ForwardRule
+		wantErr bool
 	}{
-		{"zero port", 0, true},
-		{"negative port", -1, true},
-		{"too large", 65536, true},
-		{"valid min", 1, false},
-		{"valid max", 65535, false},
-		{"valid mid", 8080, false},
+		{"empty host", core.ForwardRule{Name: "t1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80}, true},
+		{"zero local port", core.ForwardRule{Name: "t2", Host: "server1", Type: core.Local, LocalPort: 0, RemoteHost: "localhost", RemotePort: 80}, true},
+		{"negative local port", core.ForwardRule{Name: "t3", Host: "server1", Type: core.Local, LocalPort: -1, RemoteHost: "localhost", RemotePort: 80}, true},
+		{"too large local port", core.ForwardRule{Name: "t4", Host: "server1", Type: core.Local, LocalPort: 65536, RemoteHost: "localhost", RemotePort: 80}, true},
+		{"valid min local port", core.ForwardRule{Name: "t5", Host: "server1", Type: core.Local, LocalPort: 1, RemoteHost: "localhost", RemotePort: 80}, false},
+		{"valid max local port", core.ForwardRule{Name: "t6", Host: "server1", Type: core.Local, LocalPort: 65535, RemoteHost: "localhost", RemotePort: 80}, false},
+		{"valid mid local port", core.ForwardRule{Name: "t7", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80}, false},
+		{"invalid remote port", core.ForwardRule{Name: "t8", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 0}, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := fm.AddRule(core.ForwardRule{
-				Name:       "test-" + tt.name,
-				Host:       "server1",
-				Type:       core.Local,
-				LocalPort:  tt.localPort,
-				RemoteHost: "localhost",
-				RemotePort: 80,
-			})
+			_, err := fm.AddRule(tt.rule)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AddRule() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-func TestForwardManager_AddRule_InvalidRemotePort(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	_, err := fm.AddRule(core.ForwardRule{
-		Name:       "test",
-		Host:       "server1",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemoteHost: "localhost",
-		RemotePort: 0,
-	})
-	if err == nil {
-		t.Fatal("AddRule() should return error for invalid remote port")
 	}
 }
 

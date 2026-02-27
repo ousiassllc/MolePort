@@ -1,8 +1,6 @@
 package forward
 
 import (
-	"context"
-	"net"
 	"sync"
 	"testing"
 
@@ -64,16 +62,8 @@ func TestForwardManager_GetRulesByHost_Empty(t *testing.T) {
 }
 
 func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
-	// 同じルールに対する並行 DeleteRule が安全に動作することを確認する。
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})

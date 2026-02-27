@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"testing"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
-
-// --- Mock SSHManager for ForwardManager tests ---
 
 type mockSSHManager struct {
 	mu              sync.RWMutex
@@ -112,7 +111,6 @@ func (m *mockSSHManager) Close() {
 	}
 }
 
-// setConnected はホストを接続済みに設定し、mock SSHConnection を登録する。
 func (m *mockSSHManager) setConnected(hostName string, sshConn core.SSHConnection) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -121,8 +119,6 @@ func (m *mockSSHManager) setConnected(hostName string, sshConn core.SSHConnectio
 }
 
 var _ core.SSHManager = (*mockSSHManager)(nil)
-
-// --- Mock SSHConnection ---
 
 type mockSSHConnection struct {
 	mu         sync.Mutex
@@ -181,13 +177,26 @@ func (m *mockSSHConnection) KeepAlive(ctx context.Context, interval time.Duratio
 		m.keepAliveF(ctx, interval)
 		return
 	}
-	// デフォルト: コンテキストがキャンセルされるまでブロック
 	<-ctx.Done()
 }
 
 var _ core.SSHConnection = (*mockSSHConnection)(nil)
 
-// --- Mock SOCKS5 dialer ---
+func newMockDynamicDefaultConn() *mockSSHConnection {
+	return &mockSSHConnection{isAlive: true, dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return newMockListener(), nil }}
+}
+
+func newMockLocalDefaultConn() *mockSSHConnection {
+	return &mockSSHConnection{isAlive: true, localForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil }}
+}
+
+func newMockLocalAndDynamicDefaultConn() *mockSSHConnection {
+	return &mockSSHConnection{
+		isAlive:         true,
+		localForwardF:   func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil },
+		dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return newMockListener(), nil },
+	}
+}
 
 type mockSOCKS5Dialer struct {
 	dialF func(n, addr string) (net.Conn, error)
@@ -199,8 +208,6 @@ func (d *mockSOCKS5Dialer) Dial(n, addr string) (net.Conn, error) {
 	}
 	return nil, fmt.Errorf("not implemented")
 }
-
-// --- Mock Listener ---
 
 type mockListener struct {
 	mu     sync.Mutex
@@ -234,4 +241,28 @@ func (l *mockListener) Close() error {
 
 func (l *mockListener) Addr() net.Addr {
 	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0}
+}
+
+// drainEvent はイベントチャネルから1件受信する。タイムアウトでテスト失敗。
+func drainEvent(t *testing.T, ch <-chan core.ForwardEvent) core.ForwardEvent {
+	t.Helper()
+	select {
+	case ev := <-ch:
+		return ev
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for event")
+		return core.ForwardEvent{}
+	}
+}
+
+// assertSessionStatus はセッションのステータスを検証する。
+func assertSessionStatus(t *testing.T, fm core.ForwardManager, name string, want core.SessionStatus) {
+	t.Helper()
+	session, err := fm.GetSession(name)
+	if err != nil {
+		t.Fatalf("GetSession(%q) error = %v", name, err)
+	}
+	if session.Status != want {
+		t.Errorf("session %q status = %v, want %v", name, session.Status, want)
+	}
 }

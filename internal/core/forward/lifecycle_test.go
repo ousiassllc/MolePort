@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
@@ -42,13 +41,7 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 // パスワード認証が必要なホストへの接続が失敗していた。
 func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		localForwardF: func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
+	mockConn := newMockLocalDefaultConn()
 
 	// Connect（コールバックなし）は認証エラーを返す
 	sm.connectErr = fmt.Errorf("authentication required: no authentication methods available")
@@ -88,14 +81,7 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 
 func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		localForwardF: func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
+	sm.setConnected("server1", newMockLocalDefaultConn())
 	fm := NewForwardManager(sm)
 
 	_, _ = fm.AddRule(core.ForwardRule{
@@ -108,121 +94,67 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		t.Fatalf("StartForward() error = %v", err)
 	}
 
-	// Started イベントを確認
-	select {
-	case ev := <-events:
-		if ev.Type != core.ForwardEventStarted {
-			t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
-		}
-		if ev.RuleName != "web" {
-			t.Errorf("event rule = %q, want %q", ev.RuleName, "web")
-		}
-		if ev.Session == nil {
-			t.Fatal("event session should not be nil")
-		}
-		if ev.Session.Status != core.Active {
-			t.Errorf("session status = %v, want %v", ev.Session.Status, core.Active)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for started event")
+	ev := drainEvent(t, events)
+	if ev.Type != core.ForwardEventStarted {
+		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
 	}
+	if ev.RuleName != "web" {
+		t.Errorf("event rule = %q, want %q", ev.RuleName, "web")
+	}
+	if ev.Session == nil {
+		t.Fatal("event session should not be nil")
+	}
+	if ev.Session.Status != core.Active {
+		t.Errorf("session status = %v, want %v", ev.Session.Status, core.Active)
+	}
+	assertSessionStatus(t, fm, "web", core.Active)
 
-	// セッション確認
-	session, err := fm.GetSession("web")
-	if err != nil {
-		t.Fatalf("GetSession() error = %v", err)
-	}
-	if session.Status != core.Active {
-		t.Errorf("session status = %v, want %v", session.Status, core.Active)
-	}
-
-	// 二重起動はエラー
-	err = fm.StartForward("web", nil)
-	if err == nil {
+	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error for already active forward")
 	}
-
-	// 停止
 	if err := fm.StopForward("web"); err != nil {
 		t.Fatalf("StopForward() error = %v", err)
 	}
-
-	select {
-	case ev := <-events:
-		if ev.Type != core.ForwardEventStopped {
-			t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStopped)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timeout waiting for stopped event")
+	ev = drainEvent(t, events)
+	if ev.Type != core.ForwardEventStopped {
+		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStopped)
 	}
-
-	session, err = fm.GetSession("web")
-	if err != nil {
-		t.Fatalf("GetSession() error = %v", err)
-	}
-	if session.Status != core.Stopped {
-		t.Errorf("session status = %v, want %v", session.Status, core.Stopped)
-	}
+	assertSessionStatus(t, fm, "web", core.Stopped)
 }
 
-func TestForwardManager_StartForward_Remote(t *testing.T) {
-	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		remoteForwardF: func(ctx context.Context, remotePort int, localAddr string) (net.Listener, error) {
-			return newMockListener(), nil
+func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
+	tests := []struct {
+		name     string
+		rule     core.ForwardRule
+		mockConn *mockSSHConnection
+	}{
+		{
+			name: "Remote",
+			rule: core.ForwardRule{
+				Name: "remote-web", Host: "server1", Type: core.Remote, LocalPort: 3000, RemoteHost: "0.0.0.0", RemotePort: 80,
+			},
+			mockConn: &mockSSHConnection{
+				isAlive:        true,
+				remoteForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil },
+			},
+		},
+		{
+			name:     "Dynamic",
+			rule:     core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080},
+			mockConn: newMockDynamicDefaultConn(),
 		},
 	}
-	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
-
-	_, _ = fm.AddRule(core.ForwardRule{
-		Name: "remote-web", Host: "server1", Type: core.Remote, LocalPort: 3000, RemoteHost: "0.0.0.0", RemotePort: 80,
-	})
-
-	if err := fm.StartForward("remote-web", nil); err != nil {
-		t.Fatalf("StartForward() error = %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sm := newMockSSHManager()
+			sm.setConnected("server1", tt.mockConn)
+			fm := NewForwardManager(sm)
+			_, _ = fm.AddRule(tt.rule)
+			if err := fm.StartForward(tt.rule.Name, nil); err != nil {
+				t.Fatalf("StartForward() error = %v", err)
+			}
+			assertSessionStatus(t, fm, tt.rule.Name, core.Active)
+			fm.Close()
+		})
 	}
-
-	session, err := fm.GetSession("remote-web")
-	if err != nil {
-		t.Fatalf("GetSession() error = %v", err)
-	}
-	if session.Status != core.Active {
-		t.Errorf("session status = %v, want %v", session.Status, core.Active)
-	}
-
-	fm.Close()
-}
-
-func TestForwardManager_StartForward_Dynamic(t *testing.T) {
-	sm := newMockSSHManager()
-	mockConn := &mockSSHConnection{
-		client:  nil,
-		isAlive: true,
-		dynamicForwardF: func(ctx context.Context, localPort int) (net.Listener, error) {
-			return newMockListener(), nil
-		},
-	}
-	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
-
-	_, _ = fm.AddRule(core.ForwardRule{
-		Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080,
-	})
-
-	if err := fm.StartForward("socks", nil); err != nil {
-		t.Fatalf("StartForward() error = %v", err)
-	}
-
-	session, err := fm.GetSession("socks")
-	if err != nil {
-		t.Fatalf("GetSession() error = %v", err)
-	}
-	if session.Status != core.Active {
-		t.Errorf("session status = %v, want %v", session.Status, core.Active)
-	}
-
-	fm.Close()
 }

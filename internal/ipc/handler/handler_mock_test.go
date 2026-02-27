@@ -172,6 +172,14 @@ func (m *mockForwardManager) GetAllSessions() []core.ForwardSession {
 	return m.sessions
 }
 
+func (m *mockForwardManager) MarkReconnecting(hostName string) {}
+
+func (m *mockForwardManager) RestoreForwards(hostName string) []core.ForwardRestoreResult {
+	return nil
+}
+
+func (m *mockForwardManager) FailReconnecting(hostName string) {}
+
 func (m *mockForwardManager) Subscribe() <-chan core.ForwardEvent {
 	return make(chan core.ForwardEvent)
 }

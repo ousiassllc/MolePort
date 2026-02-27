@@ -39,6 +39,13 @@ type ForwardSession struct {
 	LastError      string
 }
 
+// ForwardRestoreResult はフォワード復元の結果を表す。
+type ForwardRestoreResult struct {
+	RuleName string
+	OK       bool
+	Error    string
+}
+
 // Config はアプリケーション設定。
 type Config struct {
 	SSHConfigPath string                `yaml:"ssh_config_path"`

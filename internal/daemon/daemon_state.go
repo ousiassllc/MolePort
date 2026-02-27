@@ -10,6 +10,7 @@ import (
 )
 
 // startEventRouting は SSH/Forward イベントをブローカーにルーティングするゴルーチンを開始する。
+// SSH 再接続イベントを検知してフォワード復元をトリガーする。
 func (d *Daemon) startEventRouting() {
 	sshEvents := d.sshMgr.Subscribe()
 	fwdEvents := d.fwdMgr.Subscribe()
@@ -17,8 +18,25 @@ func (d *Daemon) startEventRouting() {
 	d.wg.Add(2)
 	go func() {
 		defer d.wg.Done()
+		reconnecting := make(map[string]bool)
 		for evt := range sshEvents {
 			d.broker.HandleSSHEvent(evt)
+			switch evt.Type {
+			case core.SSHEventReconnecting:
+				reconnecting[evt.HostName] = true
+				d.fwdMgr.MarkReconnecting(evt.HostName)
+			case core.SSHEventConnected:
+				if reconnecting[evt.HostName] {
+					delete(reconnecting, evt.HostName)
+					results := d.fwdMgr.RestoreForwards(evt.HostName)
+					d.logRestoreSummary(evt.HostName, results)
+				}
+			case core.SSHEventError:
+				if reconnecting[evt.HostName] {
+					delete(reconnecting, evt.HostName)
+					d.fwdMgr.FailReconnecting(evt.HostName)
+				}
+			}
 		}
 	}()
 
@@ -28,6 +46,23 @@ func (d *Daemon) startEventRouting() {
 			d.broker.HandleForwardEvent(evt)
 		}
 	}()
+}
+
+// logRestoreSummary はフォワード復元結果のサマリーをログ出力する。
+func (d *Daemon) logRestoreSummary(hostName string, results []core.ForwardRestoreResult) {
+	if len(results) == 0 {
+		return
+	}
+	succeeded, failed := 0, 0
+	for _, r := range results {
+		if r.OK {
+			succeeded++
+		} else {
+			failed++
+			slog.Warn("forward restore failed", "host", hostName, "rule", r.RuleName, "error", r.Error)
+		}
+	}
+	slog.Info("forward restore summary", "host", hostName, "total", len(results), "succeeded", succeeded, "failed", failed)
 }
 
 // restoreState は前回の状態を復元する。auto_restore が有効な場合のみ。
