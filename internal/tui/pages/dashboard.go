@@ -5,7 +5,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
-	"github.com/ousiassllc/moleport/internal/tui/atoms"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
@@ -158,9 +157,7 @@ func (d DashboardPage) View() string {
 
 	header := d.renderHeader()
 	forwardView := d.forward.View()
-	divider1 := atoms.RenderDivider(d.width)
 	setupView := d.setup.View()
-	divider2 := atoms.RenderDivider(d.width)
 
 	// パスワード入力がアクティブな場合はログパネルの代わりに表示
 	var logView string
@@ -175,9 +172,7 @@ func (d DashboardPage) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
 		forwardView,
-		divider1,
 		setupView,
-		divider2,
 		logView,
 		statusView,
 	)

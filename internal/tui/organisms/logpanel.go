@@ -3,7 +3,6 @@ package organisms
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
@@ -43,37 +42,37 @@ func (p *LogPanel) SetSize(width, height int) {
 
 // View はパネルを描画する。
 func (p LogPanel) View() string {
-	contentWidth := p.width
-	if contentWidth < 10 {
-		contentWidth = 10
+	// innerWidth = p.width - 4 (2 border + 2 padding)
+	innerWidth := p.width - 4
+	if innerWidth < 10 {
+		innerWidth = 10
 	}
-
-	displayLines := p.height
-	if displayLines < 1 {
-		displayLines = 1
+	// innerHeight = p.height - 2 (top + bottom border)
+	innerHeight := p.height - 2
+	if innerHeight < 1 {
+		innerHeight = 1
 	}
 
 	// 出力バッファから表示分を取得
 	var lines []string
-	if len(p.output) > displayLines {
-		lines = p.output[len(p.output)-displayLines:]
+	if len(p.output) > innerHeight {
+		lines = p.output[len(p.output)-innerHeight:]
 	} else {
 		lines = p.output
 	}
 
 	// 不足分の空行で埋める
-	for len(lines) < displayLines {
+	for len(lines) < innerHeight {
 		lines = append(lines, "")
 	}
 
 	var rows []string
 	for _, line := range lines {
-		styled := styleLogLine(line)
-		rows = append(rows, "  "+styled)
+		rows = append(rows, styleLogLine(line))
 	}
 
 	content := strings.Join(rows, "\n")
-	return lipgloss.NewStyle().Width(contentWidth).Height(p.height).Render(content)
+	return tui.RenderWithBorderTitle(tui.UnfocusedBorder, innerWidth, innerHeight, "Log", content)
 }
 
 // styleLogLine はログ行にスタイルを適用する。
