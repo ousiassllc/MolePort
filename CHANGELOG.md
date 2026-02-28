@@ -1,5 +1,28 @@
 # Changelog
 
+## [v0.2.0] - 2026-02-28
+
+### ✨ New Features / 新機能
+- Auto-start `auto_connect` forward rules on daemon startup / daemon起動時にauto_connectフォワードルールを自動開始 (#32)
+- TUI visual improvements: rounded borders, inline titles, status bar, dialog borders / TUIビジュアル改善（Rounded Border・ステータスバー・ダイアログボーダー） (#30)
+- Per-host reconnect policy runtime integration / ホスト別再接続ポリシーのランタイム統合 (#29)
+- Forward restoration after SSH reconnect / SSH再接続後のフォワード復元 (#29)
+- Configurable KeepAlive interval / KeepAlive間隔を設定可能に (#29)
+- Data model extensions: ReconnectConfig, HostConfig, ForwardEvent types / データモデル拡張 (#29)
+
+### 🐛 Bug Fixes / バグ修正
+- Fix status bar background color issues / ステータスバー背景色の問題を修正 (#30)
+- Delete state.yaml on daemon kill to prevent stale session restore / daemon kill時にstate.yamlを削除して古いセッション復元を防止 (#30)
+- Fix KeepAliveInterval test data race / KeepAliveIntervalテストのデータレースを修正 (#29)
+- Add jitter (0-10%) to reconnect backoff / 再接続バックオフにジッターを追加 (#29)
+
+### 📝 Documentation / ドキュメント
+- Add auto_connect supplementary notes to UC-9 / UC-9にauto_connect補足を追加 (#32)
+- Add TUI visual improvement specs / TUIビジュアル改善仕様を追記 (#30)
+- Update architecture, component, data model, IPC, and requirements docs for reconnect features / 再接続関連の設計ドキュメントを全面更新 (#29)
+- Fix documentation drift in architecture, component, and data model docs / 設計ドキュメントの乖離を修正 (#28)
+- Add daemon kill command spec / daemon killコマンド仕様を追加 (#28)
+
 ## [v0.1.0] - 2026-02-26
 
 Initial release of MolePort / MolePort 初回リリース
