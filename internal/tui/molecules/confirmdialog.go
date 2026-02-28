@@ -84,5 +84,5 @@ func (m ConfirmDialog) View() string {
 		hints,
 	)
 
-	return tui.DialogStyle.Render(content)
+	return tui.FocusedBorder.Render(content)
 }

@@ -63,16 +63,6 @@ var SectionTitleStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(Accent)
 
-// フォーカスインジケーター
-var FocusIndicator = lipgloss.NewStyle().
-	Foreground(Accent).
-	Bold(true).
-	Render("▌")
-
-// ダイアログスタイル（ボーダーなし、パディングのみ）
-var DialogStyle = lipgloss.NewStyle().
-	Padding(0, 1)
-
 // パネルボーダースタイル
 var (
 	FocusedBorder = lipgloss.NewStyle().

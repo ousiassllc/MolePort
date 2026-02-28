@@ -85,19 +85,20 @@ func (s StatusBar) View() string {
 		hints = contextHints + sep + globalHints
 	}
 
-	left := tui.MutedStyle.Render(" ") + stats
+	left := stats
 	right := hints
 
-	// 幅が足りない場合は統計のみ表示
-	if s.width <= 0 {
-		return left + sep + right
+	// StatusBarStyle の Padding(0,1) 分を差し引いたコンテンツ幅
+	contentWidth := s.width - 2
+	if contentWidth <= 0 {
+		return tui.StatusBarStyle.Render(left + sep + right)
 	}
 
-	gap := s.width - lipgloss.Width(left) - lipgloss.Width(right)
+	gap := contentWidth - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 3 {
-		return left
+		return tui.StatusBarStyle.Width(contentWidth).Render(left)
 	}
 
 	padding := lipgloss.NewStyle().Width(gap).Render("")
-	return left + padding + right
+	return tui.StatusBarStyle.Width(contentWidth).Render(left + padding + right)
 }
