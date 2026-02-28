@@ -44,15 +44,29 @@ func (s *StatusBar) SetWidth(width int) {
 
 // View はステータスバーを描画する。
 func (s StatusBar) View() string {
-	sep := tui.DividerStyle.Render(" │ ")
+	// ステータスバー内の各スタイルは Background(BgHighlight) が必要。
+	// 内部のANSIリセットが外側の背景色を打ち消すため、各テキスト片に個別適用する。
+	bg := tui.BgHighlight
+	accentBg := tui.ActiveStyle.Background(bg)
+	keyBg := tui.KeyStyle.Background(bg)
+	descBg := tui.DescStyle.Background(bg)
+	mutedBg := tui.MutedStyle.Background(bg)
+	dimBg := tui.DividerStyle.Background(bg)
+	textBg := lipgloss.NewStyle().Background(bg)
+
+	sep := dimBg.Render(" │ ")
 
 	stats := fmt.Sprintf(
-		"%s hosts  %s connected%s%s forwards  %s active",
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
+		"%s%s%s%s%s%s%s%s%s",
+		accentBg.Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
+		mutedBg.Render(" hosts  "),
+		accentBg.Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
+		mutedBg.Render(" connected"),
 		sep,
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
+		accentBg.Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
+		mutedBg.Render(" forwards  "),
+		accentBg.Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
+		mutedBg.Render(" active"),
 	)
 
 	// ペインに応じたキーヒント
@@ -61,23 +75,23 @@ func (s StatusBar) View() string {
 	case tui.PaneForwards:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s  %s %s",
-			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Toggle"),
-			tui.KeyStyle.Render("[d]"), tui.DescStyle.Render("Disconnect"),
-			tui.KeyStyle.Render("[x]"), tui.DescStyle.Render("Delete"),
+			keyBg.Render("[Enter]"), descBg.Render("Toggle"),
+			keyBg.Render("[d]"), descBg.Render("Disconnect"),
+			keyBg.Render("[x]"), descBg.Render("Delete"),
 		)
 	case tui.PaneSetup:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s",
-			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Select"),
-			tui.KeyStyle.Render("[Esc]"), tui.DescStyle.Render("Cancel"),
+			keyBg.Render("[Enter]"), descBg.Render("Select"),
+			keyBg.Render("[Esc]"), descBg.Render("Cancel"),
 		)
 	}
 
 	globalHints := fmt.Sprintf(
 		"%s %s  %s %s  %s %s",
-		tui.KeyStyle.Render("[Tab]"), tui.DescStyle.Render("Switch"),
-		tui.KeyStyle.Render("[?]"), tui.DescStyle.Render("Help"),
-		tui.KeyStyle.Render("[q]"), tui.DescStyle.Render("Quit"),
+		keyBg.Render("[Tab]"), descBg.Render("Switch"),
+		keyBg.Render("[?]"), descBg.Render("Help"),
+		keyBg.Render("[q]"), descBg.Render("Quit"),
 	)
 
 	hints := globalHints
@@ -99,6 +113,6 @@ func (s StatusBar) View() string {
 		return tui.StatusBarStyle.Width(contentWidth).Render(left)
 	}
 
-	padding := lipgloss.NewStyle().Background(tui.BgHighlight).Width(gap).Render("")
+	padding := textBg.Width(gap).Render("")
 	return tui.StatusBarStyle.Width(contentWidth).Render(left + padding + right)
 }
