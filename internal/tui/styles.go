@@ -76,7 +76,6 @@ var (
 			Padding(0, 1)
 
 	StatusBarStyle = lipgloss.NewStyle().
-			Background(BgHighlight).
 			Padding(0, 1)
 )
 
