@@ -6,7 +6,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
@@ -105,27 +104,26 @@ func (p ForwardPanel) selectedSession() *core.ForwardSession {
 
 // View はパネルを描画する。
 func (p ForwardPanel) View() string {
-	contentWidth := p.width
-	if contentWidth < 10 {
-		contentWidth = 10
+	// innerWidth = p.width - 4 (2 border + 2 padding)
+	innerWidth := p.width - 4
+	if innerWidth < 10 {
+		innerWidth = 10
+	}
+	// innerHeight = p.height - 2 (top + bottom border)
+	innerHeight := p.height - 2
+	if innerHeight < 1 {
+		innerHeight = 1
 	}
 
-	// セクションタイトル: "Active Forwards (N)"
-	countLabel := tui.MutedStyle.Render(fmt.Sprintf("(%d)", len(p.sessions)))
-	var title string
-	if p.focused {
-		title = tui.FocusIndicator + " " + tui.SectionTitleStyle.Render("Active Forwards") + " " + countLabel
-	} else {
-		title = "  " + tui.MutedStyle.Bold(true).Render("Active Forwards") + " " + countLabel
-	}
+	// ボーダータイトル
+	title := fmt.Sprintf("Active Forwards (%d)", len(p.sessions))
 
 	var rows []string
-	rows = append(rows, title)
 
 	if len(p.sessions) == 0 {
-		rows = append(rows, "  "+tui.MutedStyle.Render("フォワーディングルールがありません"))
+		rows = append(rows, tui.MutedStyle.Render("フォワーディングルールがありません"))
 	} else {
-		maxRows := p.height - 1
+		maxRows := innerHeight
 		if maxRows < 1 {
 			maxRows = 1
 		}
@@ -145,9 +143,9 @@ func (p ForwardPanel) View() string {
 				Session:  p.sessions[i],
 				HostName: p.sessions[i].Rule.Host,
 				Selected: i == p.cursor,
-				Width:    contentWidth,
+				Width:    innerWidth,
 			}
-			prefix := "  "
+			var prefix string
 			if i == p.cursor {
 				prefix = tui.ActiveStyle.Render("> ")
 			}
@@ -155,8 +153,13 @@ func (p ForwardPanel) View() string {
 		}
 	}
 
+	border := tui.UnfocusedBorder
+	if p.focused {
+		border = tui.FocusedBorder
+	}
+
 	content := strings.Join(rows, "\n")
-	return lipgloss.NewStyle().Width(contentWidth).Height(p.height).Render(content)
+	return tui.RenderWithBorderTitle(border, innerWidth, innerHeight, title, content)
 }
 
 // Sessions は現在のセッション一覧を返す。
