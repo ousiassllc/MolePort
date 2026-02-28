@@ -100,6 +100,11 @@ func runDaemonKill(configDir string) {
 		exitError("デーモンの強制終了に失敗しました: %v", err)
 	}
 
+	// 強制終了では graceful shutdown が走らないため、state.yaml を手動で削除する。
+	// 残すと次回起動時に古いセッションが自動復元されてしまう。
+	statePath := filepath.Join(configDir, "state.yaml")
+	_ = os.Remove(statePath)
+
 	fmt.Printf("デーモンを強制終了しました (PID: %d)\n", pid)
 }
 

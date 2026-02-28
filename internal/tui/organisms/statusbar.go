@@ -88,7 +88,6 @@ func (s StatusBar) View() string {
 	left := tui.MutedStyle.Render(" ") + stats
 	right := hints
 
-	// 幅が足りない場合は統計のみ表示
 	if s.width <= 0 {
 		return left + sep + right
 	}

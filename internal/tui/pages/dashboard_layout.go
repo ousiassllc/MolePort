@@ -29,15 +29,13 @@ func (d *DashboardPage) updateSizes() {
 
 	// レイアウト:
 	//   Header:    1 line
-	//   Forward:   ~40% of remaining
-	//   Divider:   1 line
-	//   Setup:     ~45% of remaining (残り全部)
-	//   Divider:   1 line
-	//   Log:       3 lines (固定)
+	//   Forward:   ~40% of remaining (ボーダー含む)
+	//   Setup:     残り全部 (ボーダー含む)
+	//   Log:       5 lines (3 content + 2 border)
 	//   StatusBar: 1 line
 
-	const logHeight = 3
-	fixedLines := 1 + 1 + 1 + logHeight + 1 // header + divider1 + divider2 + log + statusbar
+	const logHeight = 5
+	fixedLines := 1 + logHeight + 1 // header + log + statusbar
 	remaining := d.height - fixedLines
 	if remaining < 8 {
 		remaining = 8
