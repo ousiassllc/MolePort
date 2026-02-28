@@ -151,6 +151,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 
 	d.startEventRouting()
 	d.restoreState()
+	d.autoStartForwards()
 
 	slog.Info("daemon started", "pid", os.Getpid(), "config_dir", d.configDir)
 	return nil
