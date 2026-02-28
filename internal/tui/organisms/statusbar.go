@@ -99,6 +99,6 @@ func (s StatusBar) View() string {
 		return tui.StatusBarStyle.Width(contentWidth).Render(left)
 	}
 
-	padding := lipgloss.NewStyle().Width(gap).Render("")
+	padding := lipgloss.NewStyle().Background(tui.BgHighlight).Width(gap).Render("")
 	return tui.StatusBarStyle.Width(contentWidth).Render(left + padding + right)
 }
