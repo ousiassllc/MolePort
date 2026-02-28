@@ -85,6 +85,35 @@ func (d *Daemon) restoreState() {
 	}
 }
 
+// autoStartForwards は config.yaml で auto_connect が有効なフォワードルールを自動開始する。
+// restoreState() で既に開始済みのルールはスキップする。
+func (d *Daemon) autoStartForwards() {
+	cfg := d.cfgMgr.GetConfig()
+
+	var started, skipped, failed int
+	for _, rule := range cfg.Forwards {
+		if !rule.AutoConnect {
+			continue
+		}
+		// restoreState() で既にアクティブなルールはスキップ
+		if s, err := d.fwdMgr.GetSession(rule.Name); err == nil && s.Status == core.Active {
+			skipped++
+			continue
+		}
+		// cb=nil: daemon 起動時は対話的認証が不可のため、鍵認証/エージェントのみで接続を試みる
+		if err := d.fwdMgr.StartForward(rule.Name, nil); err != nil {
+			slog.Warn("auto-start forward failed", "rule", rule.Name, "error", err)
+			failed++
+		} else {
+			started++
+		}
+	}
+
+	if started+failed+skipped > 0 {
+		slog.Info("auto-start forwards summary", "started", started, "skipped", skipped, "failed", failed)
+	}
+}
+
 // saveState はアクティブなフォワード状態を保存する。
 func (d *Daemon) saveState() {
 	sessions := d.fwdMgr.GetAllSessions()
