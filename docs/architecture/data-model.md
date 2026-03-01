@@ -98,6 +98,9 @@ forwards:
     local_port: 1080
     auto_connect: false
 
+# 言語設定（"en" | "ja"）
+language: "ja"
+
 # TUI 設定
 tui:
   theme:
@@ -115,6 +118,7 @@ type Config struct {
     Session       SessionConfig             `yaml:"session"`
     Log           LogConfig                 `yaml:"log"`
     Forwards      []ForwardRule             `yaml:"forwards"`
+    Language      string                    `yaml:"language"`
     TUI           TUIConfig                 `yaml:"tui"`
 }
 
@@ -589,6 +593,11 @@ type ForwardStopResult struct {
     Name   string `json:"name"`
     Status string `json:"status"` // "stopped"
 }
+
+// forward.stopAll
+type ForwardStopAllResult struct {
+    Stopped int `json:"stopped"`
+}
 ```
 
 ### セッション情報
@@ -633,6 +642,7 @@ type ConfigGetResult struct {
     Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
     Session       SessionCfgInfo            `json:"session"`
     Log           LogInfo                   `json:"log"`
+    Language      string                    `json:"language"`
     TUI           TUIInfo                   `json:"tui"`
 }
 type TUIInfo struct {
@@ -673,6 +683,7 @@ type ConfigUpdateParams struct {
     Hosts         map[string]*HostConfigUpdateInfo  `json:"hosts,omitempty"`
     Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
     Log           *LogUpdateInfo                   `json:"log,omitempty"`
+    Language      *string                          `json:"language,omitempty"`
     TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
 }
 
@@ -718,7 +729,7 @@ type LogUpdateInfo struct {
 // daemon.status
 type DaemonStatusParams struct{}
 type DaemonStatusResult struct {
-    Version              string `json:"version"`    // ビルドバージョン（ldflags で埋め込み、例: "v0.1.0"、開発時は "dev"）
+    Version              string `json:"version"`    // ビルドバージョン（ldflags で埋め込み、例: "v0.2.0"、開発時は "dev"）
     PID                  int    `json:"pid"`
     StartedAt            string `json:"started_at"` // RFC3339
     Uptime               string `json:"uptime"`     // human-readable ("2h 30m")
@@ -728,7 +739,9 @@ type DaemonStatusResult struct {
 }
 
 // daemon.shutdown
-type DaemonShutdownParams struct{}
+type DaemonShutdownParams struct {
+    Purge bool `json:"purge,omitempty"` // true の場合、停止時に状態ファイル（state.yaml）を削除する
+}
 type DaemonShutdownResult struct {
     OK bool `json:"ok"`
 }
@@ -788,26 +801,17 @@ type SessionMetrics struct {
 ### クレデンシャル要求/応答
 
 ```go
-// CredentialType はクレデンシャル要求の種別を表す。
-type CredentialType string
-
-const (
-    CredentialPassword            CredentialType = "password"              // パスワード認証
-    CredentialPassphrase          CredentialType = "passphrase"            // パスフレーズ付き秘密鍵
-    CredentialKeyboardInteractive CredentialType = "keyboard-interactive"  // keyboard-interactive 認証
-)
-
 // credential.request（デーモン → クライアント通知）
 // ssh.connect の処理中にクレデンシャルが必要になった場合に送信される。
 type CredentialRequestNotification struct {
-    RequestID string         `json:"request_id"`             // リクエスト一意 ID（レスポンスとの紐付け用）
-    Type      CredentialType `json:"type"`                   // 認証種別
-    Host      string         `json:"host"`                   // 対象ホスト名
-    Prompt    string         `json:"prompt,omitempty"`       // password/passphrase 用の表示プロンプト
-    Prompts   []PromptInfo   `json:"prompts,omitempty"`      // keyboard-interactive 用（複数プロンプト対応）
+    RequestID string       `json:"request_id"`             // リクエスト一意 ID（レスポンスとの紐付け用）
+    Type      string       `json:"type"`                   // "password" | "passphrase" | "keyboard-interactive"
+    Host      string       `json:"host"`                   // 対象ホスト名
+    Prompt    string       `json:"prompt,omitempty"`       // password/passphrase 用の表示プロンプト
+    Prompts   []PromptData `json:"prompts,omitempty"`      // keyboard-interactive 用（複数プロンプト対応）
 }
 
-type PromptInfo struct {
+type PromptData struct {
     Prompt string `json:"prompt"`    // プロンプト文字列（例: "Password:", "OTP Code:"）
     Echo   bool   `json:"echo"`      // true の場合は入力をエコー表示する（OTP 等）
 }
@@ -856,3 +860,4 @@ type CredentialResponseResult struct {
 | 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
 | 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |
 | 2.6 | 2026-03-01 | DaemonStatusResult に Version フィールドを追加 | #36 バージョン不一致検出 |
+| 2.7 | 2026-03-01 | Config/ConfigGetResult/ConfigUpdateParams に Language フィールド追加、DaemonShutdownParams に Purge フィールド追加、PromptInfo→PromptData 型名統一、CredentialRequestNotification.Type を string 型に修正、forward.stopAll 型定義追加 | ドキュメント乖離修正 (#40) |

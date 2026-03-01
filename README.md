@@ -129,6 +129,7 @@ reconnect:
   max_retries: 10
   initial_delay: "1s"
   max_delay: "60s"
+  keepalive_interval: "30s"
 
 session:
   auto_restore: true
@@ -136,6 +137,13 @@ session:
 log:
   level: "info"
   file: "~/.config/moleport/moleport.log"
+
+language: "ja"
+
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
 ```
 
 ## Host Key Verification
@@ -163,15 +171,17 @@ Host ts-host1 ts-host2 ts-host3
 ## Development
 
 ```bash
-make help       # Show available targets
-make build      # Build
-make run        # Build and run
-make test       # Run tests
-make test-race  # Run tests with race detector
-make vet        # Run go vet
-make fmt        # Run go fmt
-make lint       # Run golangci-lint
-make clean      # Remove build artifacts
+make help        # Show available targets
+make build       # Build
+make run         # Build and run
+make test        # Run tests
+make test-race   # Run tests with race detector
+make vet         # Run go vet
+make fmt         # Run go fmt
+make lint        # Run golangci-lint
+make linterly    # Run linterly (file line count check)
+make setup-tools # Install development tools (linterly, golangci-lint)
+make clean       # Remove build artifacts
 ```
 
 ### Git Hooks (lefthook)
