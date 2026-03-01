@@ -2,7 +2,7 @@
 
 APP_NAME := moleport
 BUILD_DIR := bin
-VERSION := 0.1.0
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 

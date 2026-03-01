@@ -35,6 +35,7 @@ func PIDFilePath(configDir string) string {
 // Daemon はデーモンプロセスの全コンポーネントを保持し、ライフサイクルを管理する。
 type Daemon struct {
 	configDir string
+	version   string
 	startedAt time.Time
 
 	cfgMgr core.ConfigManager
@@ -55,7 +56,7 @@ type Daemon struct {
 }
 
 // New は新しい Daemon を生成する。
-func New(configDir string) (*Daemon, error) {
+func New(configDir string, version string) (*Daemon, error) {
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("create config dir: %w", err)
 	}
@@ -96,6 +97,7 @@ func New(configDir string) (*Daemon, error) {
 	// Daemon を先に生成し、IPC コンポーネントに渡す
 	d := &Daemon{
 		configDir: configDir,
+		version:   version,
 		cfgMgr:    cfgMgr,
 		sshMgr:    sshMgr,
 		fwdMgr:    fwdMgr,

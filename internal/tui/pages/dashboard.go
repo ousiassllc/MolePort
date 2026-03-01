@@ -226,6 +226,15 @@ func (d *DashboardPage) ShowPasswordInput(prompt string) tea.Cmd {
 	return d.passwordInput.Show(prompt)
 }
 
+// SetVersionWarning はバージョン不一致の警告表示を切り替える。
+func (d *DashboardPage) SetVersionWarning(show bool) {
+	if show {
+		d.statusBar.SetWarning("バージョン不一致")
+	} else {
+		d.statusBar.SetWarning("")
+	}
+}
+
 // SetSize はサイズを設定する。
 func (d *DashboardPage) SetSize(width, height int) {
 	d.width = width

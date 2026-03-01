@@ -718,6 +718,7 @@ type LogUpdateInfo struct {
 // daemon.status
 type DaemonStatusParams struct{}
 type DaemonStatusResult struct {
+    Version              string `json:"version"`    // ビルドバージョン（ldflags で埋め込み、例: "v0.1.0"、開発時は "dev"）
     PID                  int    `json:"pid"`
     StartedAt            string `json:"started_at"` // RFC3339
     Uptime               string `json:"uptime"`     // human-readable ("2h 30m")
@@ -854,3 +855,4 @@ type CredentialResponseResult struct {
 | 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
 | 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
 | 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |
+| 2.6 | 2026-03-01 | DaemonStatusResult に Version フィールドを追加 | #36 バージョン不一致検出 |

@@ -119,3 +119,11 @@ type ConfigLoadedMsg struct {
 type ThemeSavedMsg struct {
 	Err error
 }
+
+// VersionCheckDoneMsg はバージョンチェック結果を通知するメッセージ。
+type VersionCheckDoneMsg struct {
+	Match         bool
+	DaemonVersion string
+	TUIVersion    string
+	Err           error
+}

@@ -131,6 +131,7 @@ func runDaemonStatus(configDir string) {
 	}
 
 	fmt.Println("MolePort Daemon:")
+	fmt.Printf("  Version:    %s\n", status.Version)
 	fmt.Printf("  PID:        %d\n", status.PID)
 	fmt.Printf("  Uptime:     %s\n", status.Uptime)
 	fmt.Printf("  Clients:    %d connected\n", status.ConnectedClients)
@@ -146,7 +147,7 @@ func RunDaemonMode(configDir string) {
 		os.Exit(1)
 	}
 
-	d, err := daemon.New(configDir)
+	d, err := daemon.New(configDir, Version)
 	if err != nil {
 		slog.Error("failed to create daemon", "error", err)
 		os.Exit(1)

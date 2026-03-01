@@ -45,6 +45,9 @@ func ErrorStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(theme
 func ReconnectingStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Warning)
 }
+func WarningStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Warning).Bold(true)
+}
 
 // キーヒントスタイル
 

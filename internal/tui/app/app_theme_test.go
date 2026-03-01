@@ -11,7 +11,7 @@ import (
 func TestMainModel_ConfigLoaded_ThemeUnset_ShowsThemePage(t *testing.T) {
 	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
 
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	// テーマ未設定の ConfigLoadedMsg を送信
@@ -33,7 +33,7 @@ func TestMainModel_ConfigLoaded_ThemeUnset_ShowsThemePage(t *testing.T) {
 func TestMainModel_ConfigLoaded_ThemeSet_AppliesTheme(t *testing.T) {
 	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
 
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	msg := tui.ConfigLoadedMsg{ThemeBase: "dark", ThemeAccent: "blue"}
@@ -49,7 +49,7 @@ func TestMainModel_ConfigLoaded_ThemeSet_AppliesTheme(t *testing.T) {
 }
 
 func TestMainModel_ConfigLoaded_Error_LogsError(t *testing.T) {
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	msg := tui.ConfigLoadedMsg{Err: fmt.Errorf("connection refused")}
@@ -65,7 +65,7 @@ func TestMainModel_ConfigLoaded_Error_LogsError(t *testing.T) {
 func TestMainModel_ThemeSelected_SwitchesToDashboard(t *testing.T) {
 	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
 
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 	m.currentPage = pageTheme
 	m.isFirstLaunch = true
@@ -92,7 +92,7 @@ func TestMainModel_ThemeSelected_SwitchesToDashboard(t *testing.T) {
 func TestMainModel_ThemeCancelled_FirstLaunch_AppliesDefault(t *testing.T) {
 	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
 
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 	m.currentPage = pageTheme
 	m.isFirstLaunch = true
@@ -119,7 +119,7 @@ func TestMainModel_ThemeCancelled_FirstLaunch_AppliesDefault(t *testing.T) {
 func TestMainModel_ThemeCancelled_RestoresPrevious(t *testing.T) {
 	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
 
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 	m.currentPage = pageTheme
 	m.isFirstLaunch = false
@@ -143,7 +143,7 @@ func TestMainModel_ThemeCancelled_RestoresPrevious(t *testing.T) {
 }
 
 func TestMainModel_ThemeSavedMsg_Error_Logs(t *testing.T) {
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	msg := tui.ThemeSavedMsg{Err: fmt.Errorf("save failed")}
@@ -156,7 +156,7 @@ func TestMainModel_ThemeSavedMsg_Error_Logs(t *testing.T) {
 }
 
 func TestMainModel_ThemeSavedMsg_Success_NoLog(t *testing.T) {
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	msg := tui.ThemeSavedMsg{}

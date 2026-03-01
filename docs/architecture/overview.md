@@ -696,6 +696,44 @@ sequenceDiagram
     Note over TUI: ユーザーが手動で connect → UC-13 フローへ
 ```
 
+### TUI 起動時バージョンチェックフロー
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant TUI as TUI (MainModel)
+    participant IPC as IPCClient
+    participant Daemon as デーモン (旧バージョン)
+    participant NewDaemon as デーモン (新バージョン)
+
+    TUI->>IPC: Connect()
+    IPC->>Daemon: Unix Socket 接続
+    TUI->>IPC: Call("daemon.status", {})
+    IPC->>Daemon: daemon.status
+    Daemon-->>IPC: {"version":"v0.1.0", ...}
+    IPC-->>TUI: DaemonStatusResult
+
+    TUI->>TUI: バージョン比較: TUI="v0.2.0" vs Daemon="v0.1.0"
+
+    alt バージョン一致 or dev ビルド
+        TUI->>TUI: 通常フロー（イベント購読 → ダッシュボード表示）
+    else バージョン不一致
+        TUI->>User: 確認ダイアログ「バージョンが一致しません。再起動しますか？」
+        alt ユーザーが「はい」を選択
+            TUI->>IPC: Call("daemon.shutdown", {"purge": false})
+            Daemon-->>IPC: {"ok": true}
+            Daemon->>Daemon: グレースフルシャットダウン
+            TUI->>TUI: daemon.StartDaemonProcess()
+            TUI->>IPC: 新デーモンに再接続
+            IPC->>NewDaemon: Unix Socket 接続
+            TUI->>TUI: 通常フロー
+        else ユーザーが「いいえ」を選択
+            TUI->>TUI: ステータスバーに警告表示
+            TUI->>TUI: 通常フロー（バージョン不一致のまま続行）
+        end
+    end
+```
+
 ### TUI テーマ選択フロー
 
 ```mermaid
@@ -796,3 +834,4 @@ graph LR
 | 2.3 | 2026-02-27 | Go バージョン要件更新、ディレクトリ構成を実態に同期、Infra Layer 説明更新 | #25 ドキュメント乖離修正 |
 | 2.4 | 2026-02-27 | 自動再接続+フォワード復元フロー追加、認証失敗時の代替フロー追加、並行処理モデルにフォワード復元を反映 | #27 自動再接続機能の改善・拡張 |
 | 2.5 | 2026-03-01 | TUI Layer にテーマシステム追加（theme/ パッケージ、ThemePage、テーマ選択フロー）、Atomic Design 階層図・ディレクトリ構成を更新 | #34 TUI カラーテーマ機能 |
+| 2.6 | 2026-03-01 | TUI 起動時バージョンチェックフローのシーケンス図を追加 | #36 バージョン不一致検出 |

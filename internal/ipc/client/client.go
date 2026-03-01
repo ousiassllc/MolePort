@@ -189,6 +189,11 @@ func (c *IPCClient) SetCredentialHandler(handler CredentialHandler) {
 	c.credHandler = handler
 }
 
+// CredentialHandler は現在設定されているクレデンシャルハンドラーを返す。
+func (c *IPCClient) CredentialHandler() CredentialHandler {
+	return c.credHandler
+}
+
 func (c *IPCClient) readLoop() {
 	defer func() {
 		c.connected.Store(false)

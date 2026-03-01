@@ -646,6 +646,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "id": 1,
   "result": {
     "pid": 12345,
+    "version": "v0.2.0",
     "started_at": "2026-02-11T09:00:00+09:00",
     "uptime": "3h 30m",
     "connected_clients": 1,
@@ -654,6 +655,20 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   }
 }
 ```
+
+**レスポンスフィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `pid` | int | デーモンのプロセス ID |
+| `version` | string | デーモンのビルドバージョン（例: `"v0.2.0"`、開発時は `"dev"`） |
+| `started_at` | string | 起動時刻（RFC3339） |
+| `uptime` | string | 稼働時間（human-readable） |
+| `connected_clients` | int | 接続中のクライアント数 |
+| `active_ssh_connections` | int | アクティブな SSH 接続数 |
+| `active_forwards` | int | アクティブなポートフォワーディング数 |
+
+> **Note**: TUI は起動時に `version` フィールドを自身のバージョンと比較し、不一致の場合はデーモン再起動を提案する（UC-17 参照）。`version` が `"dev"` の場合はチェックをスキップする。
 
 ---
 
@@ -1030,3 +1045,4 @@ SSH 接続状態の変化。
 | 1.2 | 2026-02-24 | forward.start の説明にクレデンシャルコールバック対応を追記 | #16 フォワード開始失敗時の修正 |
 | 1.3 | 2026-02-27 | config.get/update に keepalive_interval と hosts セクション追加、event.forward に reconnecting/restored タイプ追加 | #27 自動再接続機能の改善・拡張 |
 | 1.4 | 2026-03-01 | config.get レスポンスに `tui.theme` セクション追加、config.update にテーマ更新例追加 | #34 TUI カラーテーマ機能 |
+| 1.5 | 2026-03-01 | daemon.status レスポンスに `version` フィールド追加、レスポンスフィールド表を追加 | #36 バージョン不一致検出 |

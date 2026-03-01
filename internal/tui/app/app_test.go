@@ -160,7 +160,7 @@ func TestParseConnectionState(t *testing.T) {
 }
 
 func TestLogOutputMsgNotDuplicated(t *testing.T) {
-	m := NewMainModel(nil, "test")
+	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
 	msg := tui.LogOutputMsg{Text: "テストメッセージ"}

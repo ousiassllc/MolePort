@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
+	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
 
@@ -44,10 +45,19 @@ type MainModel struct {
 	sessions       []core.ForwardSession
 	quitting       bool
 	subscriptionID string
+	version        string
+	configDir      string
 
 	// クレデンシャル入力状態
 	credRequest    *protocol.CredentialRequestNotification
 	credResponseCh chan<- *protocol.CredentialResponseParams
+
+	// バージョン確認ダイアログ
+	versionConfirm     molecules.ConfirmDialog
+	showVersionConfirm bool
+
+	// ヘルプモーダル
+	showHelpModal bool
 
 	// テーマ / ページ遷移
 	currentPage      string // "dashboard" | "theme"
@@ -60,10 +70,12 @@ type MainModel struct {
 }
 
 // NewMainModel は新しい MainModel を生成する。
-func NewMainModel(client *client.IPCClient, version string) MainModel {
+func NewMainModel(client *client.IPCClient, version string, configDir string) MainModel {
 	return MainModel{
 		dashboard:   pages.NewDashboardPage(version),
 		client:      client,
+		version:     version,
+		configDir:   configDir,
 		keys:        tui.DefaultKeyMap(),
 		currentPage: pageDashboard,
 	}
@@ -78,6 +90,7 @@ func (m MainModel) Init() tea.Cmd {
 		m.metricsTick(),
 		m.dashboard.Init(),
 		m.loadConfig(),
+		m.checkDaemonVersion(),
 	)
 }
 
@@ -100,6 +113,17 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.ForceQuit) {
 			return m, m.shutdown()
 		}
+		// ヘルプモーダル表示中は任意のキーで閉じる
+		if m.showHelpModal {
+			m.showHelpModal = false
+			return m, nil
+		}
+		// バージョン確認ダイアログ表示中は ForceQuit 以外はダイアログに転送
+		if m.showVersionConfirm {
+			var cmd tea.Cmd
+			m.versionConfirm, cmd = m.versionConfirm.Update(msg)
+			return m, cmd
+		}
 		// テーマページ表示中は ForceQuit 以外は themePage に転送
 		if m.currentPage == pageTheme {
 			var cmd tea.Cmd
@@ -112,15 +136,27 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Quit):
 				return m, m.shutdown()
 			case key.Matches(msg, m.keys.Help):
-				m.showHelp()
-				var cmd tea.Cmd
-				m.dashboard, cmd = m.dashboard.Update(msg)
-				return m, cmd
+				m.showHelpModal = true
+				return m, nil
 			case key.Matches(msg, m.keys.Theme):
 				m.openThemePage()
 				return m, nil
+			case key.Matches(msg, m.keys.Version):
+				m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version))
+				return m, nil
 			}
 		}
+
+	case tui.VersionCheckDoneMsg:
+		return m.handleVersionCheckDone(msg)
+
+	case molecules.ConfirmResultMsg:
+		if m.showVersionConfirm {
+			return m.handleVersionConfirmResult(msg.Confirmed)
+		}
+
+	case daemonRestartDoneMsg:
+		return m.handleDaemonRestartDone(msg)
 
 	case tui.ConfigLoadedMsg:
 		return m.handleConfigLoaded(msg)
@@ -220,6 +256,12 @@ func (m MainModel) View() string {
 	if m.quitting {
 		return "終了中...\n"
 	}
+	if m.showHelpModal {
+		return m.renderHelpOverlay()
+	}
+	if m.showVersionConfirm {
+		return m.renderVersionConfirmOverlay()
+	}
 	if m.currentPage == pageTheme {
 		return m.themePage.View()
 	}
@@ -227,20 +269,6 @@ func (m MainModel) View() string {
 }
 
 // --- ヘルパー ---
-
-func (m *MainModel) showHelp() {
-	m.dashboard.AppendLog("--- キー操作 ---")
-	m.dashboard.AppendLog("  Tab         : ペイン切替 (Forwards ↔ Setup)")
-	m.dashboard.AppendLog("  /           : セットアップパネルにフォーカス")
-	m.dashboard.AppendLog("  ↑/k ↓/j     : カーソル移動")
-	m.dashboard.AppendLog("  Enter       : 選択 / 接続トグル")
-	m.dashboard.AppendLog("  d           : 切断")
-	m.dashboard.AppendLog("  x           : ルール削除")
-	m.dashboard.AppendLog("  Esc         : ウィザードキャンセル")
-	m.dashboard.AppendLog("  t           : テーマ選択")
-	m.dashboard.AppendLog("  ?           : ヘルプ")
-	m.dashboard.AppendLog("  q / Ctrl+C  : 終了")
-}
 
 func (m *MainModel) refreshForwardPanel() {
 	m.dashboard.SetForwardSessions(m.sessions)
