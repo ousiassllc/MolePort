@@ -20,6 +20,7 @@ type KeyMap struct {
 	Enter      key.Binding
 	Disconnect key.Binding
 	Delete     key.Binding
+	Theme      key.Binding
 }
 
 // DefaultKeyMap はデフォルトのキーバインドを返す。
@@ -69,6 +70,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("x"),
 			key.WithHelp("x", "削除"),
 		),
+		Theme: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "テーマ"),
+		),
 	}
 }
 
@@ -84,6 +89,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab, k.Help, k.Search, k.Escape, k.Quit, k.ForceQuit},
 		{k.Up, k.Down},
-		{k.Enter, k.Disconnect, k.Delete},
+		{k.Enter, k.Disconnect, k.Delete, k.Theme},
 	}
 }
