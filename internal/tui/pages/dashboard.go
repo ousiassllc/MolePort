@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
@@ -229,7 +230,7 @@ func (d *DashboardPage) ShowPasswordInput(prompt string) tea.Cmd {
 // SetVersionWarning はバージョン不一致の警告表示を切り替える。
 func (d *DashboardPage) SetVersionWarning(show bool) {
 	if show {
-		d.statusBar.SetWarning("バージョン不一致")
+		d.statusBar.SetWarning(i18n.T("tui.version.mismatch_warning"))
 	} else {
 		d.statusBar.SetWarning("")
 	}

@@ -32,6 +32,13 @@ func ToRPCError(err error, defaultCode int) *RPCError {
 		return &RPCError{Code: CredentialTimeout, Message: msg}
 	case strings.Contains(msg, "credential cancelled"):
 		return &RPCError{Code: CredentialCancelled, Message: msg}
+	case strings.Contains(msg, "address already in use"):
+		return &RPCError{Code: PortConflict, Message: msg}
+	case strings.Contains(msg, "authentication required"),
+		strings.Contains(msg, "unable to authenticate"),
+		strings.Contains(msg, "no authentication methods available"),
+		strings.Contains(msg, "no supported methods remain"):
+		return &RPCError{Code: AuthenticationFailed, Message: msg}
 	}
 
 	return &RPCError{Code: defaultCode, Message: msg}

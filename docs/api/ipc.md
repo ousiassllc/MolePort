@@ -543,6 +543,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
       "level": "info",
       "file": "~/.config/moleport/moleport.log"
     },
+    "language": "ja",
     "tui": {
       "theme": {
         "base": "dark",
@@ -552,6 +553,12 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   }
 }
 ```
+
+**`language` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `language` | string | UI 言語設定: `"en"` \| `"ja"` |
 
 **`tui.theme` フィールド**:
 
@@ -586,7 +593,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
           "enabled": false
         }
       }
-    }
+    },
+    "language": "en"
   }
 }
 ```
@@ -645,8 +653,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "pid": 12345,
     "version": "v0.2.0",
+    "pid": 12345,
     "started_at": "2026-02-11T09:00:00+09:00",
     "uptime": "3h 30m",
     "connected_clients": 1,
@@ -742,7 +750,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 |-------|------|
 | `ssh` | SSH 接続状態の変化（接続/切断/再接続/エラー） |
 | `forward` | ポートフォワーディングの状態変化（開始/停止/再接続中/復元/エラー） |
-| `metrics` | メトリクスの定期更新（1秒間隔） |
+| `metrics` | メトリクスの定期更新（1秒間隔）**※未実装。TUI は `session.list` を2秒間隔でポーリングすることで代替** |
 
 ---
 
@@ -990,6 +998,8 @@ SSH 接続状態の変化。
 
 ### event.metrics
 
+> **Note**: 未実装。TUI は `session.list` を2秒間隔でポーリングすることで代替している。
+
 メトリクスの定期更新（1秒間隔）。
 
 ```json
@@ -1046,3 +1056,4 @@ SSH 接続状態の変化。
 | 1.3 | 2026-02-27 | config.get/update に keepalive_interval と hosts セクション追加、event.forward に reconnecting/restored タイプ追加 | #27 自動再接続機能の改善・拡張 |
 | 1.4 | 2026-03-01 | config.get レスポンスに `tui.theme` セクション追加、config.update にテーマ更新例追加 | #34 TUI カラーテーマ機能 |
 | 1.5 | 2026-03-01 | daemon.status レスポンスに `version` フィールド追加、レスポンスフィールド表を追加 | #36 バージョン不一致検出 |
+| 1.6 | 2026-03-01 | config.get/update に `language` フィールド追加、event.metrics に未実装注記追加 | ドキュメント乖離修正 (#40) |

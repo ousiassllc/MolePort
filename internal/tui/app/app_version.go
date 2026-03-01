@@ -96,13 +96,13 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 
 		// 3. 新しいデーモンプロセスを起動
 		if _, err := daemon.StartDaemonProcess(configDir); err != nil {
-			return daemonRestartDoneMsg{err: fmt.Errorf("新しいデーモンの起動に失敗: %w", err)}
+			return daemonRestartDoneMsg{err: fmt.Errorf("%s: %w", i18n.T("tui.log.daemon_start_failed"), err)}
 		}
 
 		// 4. 新しいデーモンに接続
 		newClient, err := daemon.EnsureDaemonWithRetry(configDir, 5*time.Second)
 		if err != nil {
-			return daemonRestartDoneMsg{err: fmt.Errorf("新しいデーモンへの接続に失敗: %w", err)}
+			return daemonRestartDoneMsg{err: fmt.Errorf("%s: %w", i18n.T("tui.log.daemon_connect_failed"), err)}
 		}
 
 		// 5. クレデンシャルハンドラーを新しいクライアントに復元

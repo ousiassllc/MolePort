@@ -1,13 +1,14 @@
 package organisms
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
@@ -60,7 +61,7 @@ func NewSetupPanel() SetupPanel {
 	hostIn.CharLimit = 256
 
 	nameIn := textinput.New()
-	nameIn.Placeholder = "任意のルール名"
+	nameIn.Placeholder = i18n.T("tui.setup_panel.rule_name_placeholder")
 	nameIn.CharLimit = 64
 
 	return SetupPanel{
@@ -186,14 +187,14 @@ func (p SetupPanel) stepProgress() (current int, total int) {
 // validatePortStr はポート番号の文字列をバリデーションする。
 func validatePortStr(s string) error {
 	if s == "" {
-		return fmt.Errorf("ポート番号を入力してください")
+		return errors.New(i18n.T("tui.setup_panel.port_required"))
 	}
 	port, err := strconv.Atoi(s)
 	if err != nil {
-		return fmt.Errorf("数値を入力してください")
+		return errors.New(i18n.T("tui.setup_panel.port_not_number"))
 	}
 	if port < 1 || port > 65535 {
-		return fmt.Errorf("ポート番号は 1-65535 の範囲で指定してください")
+		return errors.New(i18n.T("tui.setup_panel.port_out_of_range"))
 	}
 	return nil
 }

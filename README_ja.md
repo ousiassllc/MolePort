@@ -127,6 +127,7 @@ reconnect:
   max_retries: 10
   initial_delay: "1s"
   max_delay: "60s"
+  keepalive_interval: "30s"
 
 session:
   auto_restore: true
@@ -134,6 +135,13 @@ session:
 log:
   level: "info"
   file: "~/.config/moleport/moleport.log"
+
+language: "ja"
+
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
 ```
 
 ## ホスト鍵検証
@@ -161,15 +169,17 @@ Host ts-host1 ts-host2 ts-host3
 ## 開発
 
 ```bash
-make help       # 利用可能なターゲットを表示
-make build      # ビルド
-make run        # ビルドして実行
-make test       # テスト実行
-make test-race  # race detector 付きテスト
-make vet        # go vet
-make fmt        # go fmt
-make lint       # golangci-lint を実行
-make clean      # ビルド成果物を削除
+make help        # 利用可能なターゲットを表示
+make build       # ビルド
+make run         # ビルドして実行
+make test        # テスト実行
+make test-race   # race detector 付きテスト
+make vet         # go vet
+make fmt         # go fmt
+make lint        # golangci-lint を実行
+make linterly    # linterly でファイル行数チェック
+make setup-tools # 開発ツールをインストール（linterly, golangci-lint）
+make clean       # ビルド成果物を削除
 ```
 
 ### Git Hooks (lefthook)
