@@ -1,6 +1,7 @@
-package handler
+package config
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -8,10 +9,60 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
-func TestHandler_ConfigGet(t *testing.T) {
-	h, _, _, _ := newTestHandler()
+// --- Mock ---
 
-	result, rpcErr := h.Handle("client-1", "config.get", nil)
+type mockConfigManager struct {
+	config *core.Config
+	err    error
+}
+
+func (m *mockConfigManager) LoadConfig() (*core.Config, error)    { return m.config, m.err }
+func (m *mockConfigManager) SaveConfig(config *core.Config) error { return m.err }
+func (m *mockConfigManager) GetConfig() *core.Config {
+	if m.config == nil {
+		cfg := core.DefaultConfig()
+		return &cfg
+	}
+	return m.config
+}
+func (m *mockConfigManager) UpdateConfig(fn func(*core.Config)) error {
+	if m.err != nil {
+		return m.err
+	}
+	if m.config == nil {
+		cfg := core.DefaultConfig()
+		m.config = &cfg
+	}
+	fn(m.config)
+	return nil
+}
+func (m *mockConfigManager) LoadState() (*core.State, error) { return &core.State{}, nil }
+func (m *mockConfigManager) SaveState(_ *core.State) error   { return nil }
+func (m *mockConfigManager) DeleteState() error              { return nil }
+func (m *mockConfigManager) ConfigDir() string               { return "/tmp/moleport" }
+
+// --- Helpers ---
+
+func newTestHandler() (*Handler, *mockConfigManager) {
+	cfgMgr := &mockConfigManager{}
+	return New(cfgMgr), cfgMgr
+}
+
+func mustMarshal(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return data
+}
+
+// --- Tests ---
+
+func TestGet(t *testing.T) {
+	h, _ := newTestHandler()
+
+	result, rpcErr := h.Get()
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
@@ -33,10 +84,17 @@ func TestHandler_ConfigGet(t *testing.T) {
 	if cfgResult.Reconnect.KeepAliveInterval != "30s" {
 		t.Errorf("Reconnect.KeepAliveInterval = %q, want %q", cfgResult.Reconnect.KeepAliveInterval, "30s")
 	}
+	// デフォルトではテーマは空文字列
+	if cfgResult.TUI.Theme.Base != "" {
+		t.Errorf("TUI.Theme.Base = %q, want empty string", cfgResult.TUI.Theme.Base)
+	}
+	if cfgResult.TUI.Theme.Accent != "" {
+		t.Errorf("TUI.Theme.Accent = %q, want empty string", cfgResult.TUI.Theme.Accent)
+	}
 }
 
-func TestHandler_ConfigUpdate(t *testing.T) {
-	h, _, _, cfgMgr := newTestHandler()
+func TestUpdate(t *testing.T) {
+	h, cfgMgr := newTestHandler()
 
 	level := "debug"
 	file := "/tmp/test.log"
@@ -44,7 +102,7 @@ func TestHandler_ConfigUpdate(t *testing.T) {
 		Log: &protocol.LogUpdateInfo{Level: &level, File: &file},
 	})
 
-	result, rpcErr := h.Handle("client-1", "config.update", params)
+	result, rpcErr := h.Update(params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
@@ -57,7 +115,6 @@ func TestHandler_ConfigUpdate(t *testing.T) {
 		t.Error("OK should be true")
 	}
 
-	// 設定が更新されていることを確認
 	cfg := cfgMgr.GetConfig()
 	if cfg.Log.Level != "debug" {
 		t.Errorf("Log.Level = %q, want %q", cfg.Log.Level, "debug")
@@ -67,8 +124,8 @@ func TestHandler_ConfigUpdate(t *testing.T) {
 	}
 }
 
-func TestHandler_ConfigGet_WithHosts(t *testing.T) {
-	h, _, _, cfgMgr := newTestHandler()
+func TestGet_WithHosts(t *testing.T) {
+	h, cfgMgr := newTestHandler()
 
 	enabled := true
 	maxRetries := 5
@@ -84,7 +141,7 @@ func TestHandler_ConfigGet_WithHosts(t *testing.T) {
 	}
 	cfgMgr.config = &cfg
 
-	result, rpcErr := h.Handle("client-1", "config.get", nil)
+	result, rpcErr := h.Get()
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
@@ -115,8 +172,8 @@ func TestHandler_ConfigGet_WithHosts(t *testing.T) {
 	}
 }
 
-func TestHandler_ConfigUpdate_KeepAliveInterval(t *testing.T) {
-	h, _, _, cfgMgr := newTestHandler()
+func TestUpdate_KeepAliveInterval(t *testing.T) {
+	h, cfgMgr := newTestHandler()
 
 	interval := "45s"
 	params := mustMarshal(t, protocol.ConfigUpdateParams{
@@ -125,7 +182,7 @@ func TestHandler_ConfigUpdate_KeepAliveInterval(t *testing.T) {
 		},
 	})
 
-	result, rpcErr := h.Handle("client-1", "config.update", params)
+	result, rpcErr := h.Update(params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
@@ -141,8 +198,8 @@ func TestHandler_ConfigUpdate_KeepAliveInterval(t *testing.T) {
 	}
 }
 
-func TestHandler_ConfigUpdate_Hosts(t *testing.T) {
-	h, _, _, cfgMgr := newTestHandler()
+func TestUpdate_Hosts(t *testing.T) {
+	h, cfgMgr := newTestHandler()
 
 	enabled := true
 	maxRetries := 3
@@ -159,7 +216,7 @@ func TestHandler_ConfigUpdate_Hosts(t *testing.T) {
 		},
 	})
 
-	result, rpcErr := h.Handle("client-1", "config.update", params)
+	result, rpcErr := h.Update(params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}
@@ -188,8 +245,8 @@ func TestHandler_ConfigUpdate_Hosts(t *testing.T) {
 	}
 }
 
-func TestHandler_ConfigUpdate_HostsDelete(t *testing.T) {
-	h, _, _, cfgMgr := newTestHandler()
+func TestUpdate_HostsDelete(t *testing.T) {
+	h, cfgMgr := newTestHandler()
 
 	// まずホスト設定を追加
 	enabled := true
@@ -210,7 +267,7 @@ func TestHandler_ConfigUpdate_HostsDelete(t *testing.T) {
 		},
 	})
 
-	result, rpcErr := h.Handle("client-1", "config.update", params)
+	result, rpcErr := h.Update(params)
 	if rpcErr != nil {
 		t.Fatalf("unexpected error: %v", rpcErr)
 	}

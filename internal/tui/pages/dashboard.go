@@ -137,8 +137,8 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 
 // renderHeader は1行ヘッダーを描画する。
 func (d DashboardPage) renderHeader() string {
-	appName := tui.HeaderStyle.Render("  MolePort")
-	version := tui.MutedStyle.Render(d.version)
+	appName := tui.HeaderStyle().Render("  MolePort")
+	version := tui.MutedStyle().Render(d.version)
 
 	gap := d.width - lipgloss.Width(appName) - lipgloss.Width(version) - 1
 	if gap < 1 {

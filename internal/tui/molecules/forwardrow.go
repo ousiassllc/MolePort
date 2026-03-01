@@ -39,20 +39,20 @@ func (r ForwardRow) View() string {
 
 	hostLabel := ""
 	if r.HostName != "" {
-		hostLabel = tui.MutedStyle.Render("["+r.HostName+"]") + " "
+		hostLabel = tui.MutedStyle().Render("["+r.HostName+"]") + " "
 	}
 
-	typeLabel := tui.ActiveStyle.Render(forwardTypeLabel(r.Session.Rule.Type))
+	typeLabel := tui.ActiveStyle().Render(forwardTypeLabel(r.Session.Rule.Type))
 
 	localPort := atoms.RenderPortLabel(r.Session.Rule.LocalPort)
 
-	arrow := tui.DividerStyle.Render("──▸")
+	arrow := tui.DividerStyle().Render("──▸")
 
 	var route string
 	if r.Session.Rule.Type == core.Dynamic {
-		route = tui.MutedStyle.Render("(SOCKS)")
+		route = tui.MutedStyle().Render("(SOCKS)")
 	} else {
-		route = tui.MutedStyle.Render(
+		route = tui.MutedStyle().Render(
 			fmt.Sprintf("%s:%d", r.Session.Rule.RemoteHost, r.Session.Rule.RemotePort),
 		)
 	}

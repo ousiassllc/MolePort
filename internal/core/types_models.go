@@ -54,6 +54,7 @@ type Config struct {
 	Session       SessionConfig         `yaml:"session"`
 	Log           LogConfig             `yaml:"log"`
 	Forwards      []ForwardRule         `yaml:"forwards"`
+	TUI           TUIConfig             `yaml:"tui"`
 }
 
 // ReconnectConfig は自動再接続の設定。
@@ -88,6 +89,17 @@ type SessionConfig struct {
 type LogConfig struct {
 	Level string `yaml:"level"`
 	File  string `yaml:"file"`
+}
+
+// TUIConfig は TUI の設定。
+type TUIConfig struct {
+	Theme ThemeConfig `yaml:"theme"`
+}
+
+// ThemeConfig はテーマの設定。
+type ThemeConfig struct {
+	Base   string `yaml:"base"`
+	Accent string `yaml:"accent"`
 }
 
 // State はアプリケーション終了時のセッション状態を保持する。

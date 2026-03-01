@@ -12,6 +12,7 @@ type ConfigGetResult struct {
 	Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
 	Session       SessionCfgInfo            `json:"session"`
 	Log           LogInfo                   `json:"log"`
+	TUI           TUIInfo                   `json:"tui"`
 }
 
 // HostConfigInfo はホスト別設定の情報を表す。
@@ -47,6 +48,17 @@ type LogInfo struct {
 	File  string `json:"file"`
 }
 
+// TUIInfo は TUI 設定の情報を表す。
+type TUIInfo struct {
+	Theme ThemeInfo `json:"theme"`
+}
+
+// ThemeInfo はテーマ設定の情報を表す。
+type ThemeInfo struct {
+	Base   string `json:"base"`
+	Accent string `json:"accent"`
+}
+
 // ConfigUpdateParams は config.update リクエストのパラメータ（部分更新）。
 // 各フィールドはポインタ型で、nil なら変更なしを意味する。
 type ConfigUpdateParams struct {
@@ -55,6 +67,7 @@ type ConfigUpdateParams struct {
 	Hosts         map[string]*HostConfigUpdateInfo `json:"hosts,omitempty"`
 	Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
 	Log           *LogUpdateInfo                   `json:"log,omitempty"`
+	TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
 }
 
 // HostConfigUpdateInfo はホスト別設定の部分更新パラメータ。
@@ -82,6 +95,17 @@ type SessionCfgUpdateInfo struct {
 type LogUpdateInfo struct {
 	Level *string `json:"level,omitempty"`
 	File  *string `json:"file,omitempty"`
+}
+
+// TUIUpdateInfo は TUI 設定の部分更新パラメータ。
+type TUIUpdateInfo struct {
+	Theme *ThemeUpdateInfo `json:"theme,omitempty"`
+}
+
+// ThemeUpdateInfo はテーマ設定の部分更新パラメータ。
+type ThemeUpdateInfo struct {
+	Base   *string `json:"base,omitempty"`
+	Accent *string `json:"accent,omitempty"`
 }
 
 // ConfigUpdateResult は config.update リクエストの結果。

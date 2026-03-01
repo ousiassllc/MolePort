@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
+	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
 
 // --- IPC 操作 ---
@@ -77,6 +78,49 @@ func (m *MainModel) metricsTick() tea.Cmd {
 	return tea.Tick(metricsInterval, func(time.Time) tea.Msg {
 		return tui.MetricsTickMsg{}
 	})
+}
+
+// loadConfig は config.get を呼んでテーマ設定を取得する。
+func (m *MainModel) loadConfig() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
+		defer cancel()
+		var result protocol.ConfigGetResult
+		if err := m.client.Call(ctx, "config.get", nil, &result); err != nil {
+			return tui.ConfigLoadedMsg{Err: err}
+		}
+		return tui.ConfigLoadedMsg{
+			ThemeBase:   result.TUI.Theme.Base,
+			ThemeAccent: result.TUI.Theme.Accent,
+		}
+	}
+}
+
+// saveTheme は config.update でテーマ設定を保存する。
+func (m *MainModel) saveTheme(presetID string) tea.Cmd {
+	return func() tea.Msg {
+		p, ok := theme.FindPreset(presetID)
+		if !ok {
+			return tui.ThemeSavedMsg{Err: fmt.Errorf("unknown preset: %s", presetID)}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		defer cancel()
+		base := p.Base
+		accent := p.Accent
+		params := protocol.ConfigUpdateParams{
+			TUI: &protocol.TUIUpdateInfo{
+				Theme: &protocol.ThemeUpdateInfo{
+					Base:   &base,
+					Accent: &accent,
+				},
+			},
+		}
+		var result protocol.ConfigUpdateResult
+		if err := m.client.Call(ctx, "config.update", params, &result); err != nil {
+			return tui.ThemeSavedMsg{Err: err}
+		}
+		return tui.ThemeSavedMsg{}
+	}
 }
 
 // --- IPC 通知ハンドリング ---

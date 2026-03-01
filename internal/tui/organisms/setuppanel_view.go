@@ -50,9 +50,9 @@ func (p SetupPanel) View() string {
 		rows = p.viewConfirm()
 	}
 
-	border := tui.UnfocusedBorder
+	border := tui.UnfocusedBorder()
 	if p.focused {
-		border = tui.FocusedBorder
+		border = tui.FocusedBorder()
 	}
 
 	content := strings.Join(rows, "\n")
@@ -63,7 +63,7 @@ func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
 	var rows []string
 
 	if len(p.hosts) == 0 {
-		rows = append(rows, tui.MutedStyle.Render("ホストが見つかりません"))
+		rows = append(rows, tui.MutedStyle().Render("ホストが見つかりません"))
 	} else {
 		maxRows := innerHeight
 		if maxRows < 1 {
@@ -88,7 +88,7 @@ func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
 			}
 			var prefix string
 			if i == p.hostCursor {
-				prefix = tui.ActiveStyle.Render("> ")
+				prefix = tui.ActiveStyle().Render("> ")
 			}
 			rows = append(rows, prefix+row.View())
 		}
@@ -107,18 +107,18 @@ func (p SetupPanel) wizardTitleText() string {
 
 func (p SetupPanel) viewSelectType() []string {
 	var rows []string
-	rows = append(rows, tui.MutedStyle.Render("Select type:"))
+	rows = append(rows, tui.MutedStyle().Render("Select type:"))
 
 	for i, opt := range p.typeOptions {
 		if i == p.typeCursor {
-			rows = append(rows, tui.ActiveStyle.Render("> ")+tui.SelectedStyle.Render(opt))
+			rows = append(rows, tui.ActiveStyle().Render("> ")+tui.SelectedStyle().Render(opt))
 		} else {
-			rows = append(rows, "  "+tui.TextStyle.Render(opt))
+			rows = append(rows, "  "+tui.TextStyle().Render(opt))
 		}
 	}
 
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle.Render("[Enter] 選択  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render("[Enter] 選択  [Esc] キャンセル"))
 	return rows
 }
 
@@ -126,10 +126,10 @@ func (p SetupPanel) viewTextInput(label string, input *textinput.Model) []string
 	stepNum, totalSteps := p.stepProgress()
 
 	var rows []string
-	rows = append(rows, tui.MutedStyle.Render(fmt.Sprintf("Step %d/%d", stepNum, totalSteps)))
-	rows = append(rows, tui.TextStyle.Render(label+": ")+input.View())
+	rows = append(rows, tui.MutedStyle().Render(fmt.Sprintf("Step %d/%d", stepNum, totalSteps)))
+	rows = append(rows, tui.TextStyle().Render(label+": ")+input.View())
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle.Render("[Enter] 次へ  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render("[Enter] 次へ  [Esc] キャンセル"))
 	return rows
 }
 
@@ -138,18 +138,18 @@ func (p SetupPanel) viewConfirm() []string {
 	rows = append(rows, "")
 
 	if p.selectedType == core.Dynamic {
-		rows = append(rows, tui.TextStyle.Render(fmt.Sprintf(":%s (SOCKS)", p.localPort)))
+		rows = append(rows, tui.TextStyle().Render(fmt.Sprintf(":%s (SOCKS)", p.localPort)))
 	} else {
-		rows = append(rows, tui.TextStyle.Render(fmt.Sprintf(":%s %s %s:%s",
+		rows = append(rows, tui.TextStyle().Render(fmt.Sprintf(":%s %s %s:%s",
 			p.localPort,
-			tui.MutedStyle.Render("→"),
+			tui.MutedStyle().Render("→"),
 			p.remoteHost,
 			p.remotePort,
 		)))
 	}
 
-	rows = append(rows, tui.MutedStyle.Render("Name: ")+tui.TextStyle.Render(p.ruleName))
+	rows = append(rows, tui.MutedStyle().Render("Name: ")+tui.TextStyle().Render(p.ruleName))
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle.Render("[Enter] 作成 & 接続  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render("[Enter] 作成 & 接続  [Esc] キャンセル"))
 	return rows
 }

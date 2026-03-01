@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
 
 func TestRenderWithBorderTitle_EmptyTitle(t *testing.T) {
-	style := UnfocusedBorder
+	style := UnfocusedBorder()
 	rendered := RenderWithBorderTitle(style, 20, 3, "", "hello")
 	plain := style.Width(20).Height(3).Render("hello")
 	if rendered != plain {
@@ -17,7 +18,7 @@ func TestRenderWithBorderTitle_EmptyTitle(t *testing.T) {
 }
 
 func TestRenderWithBorderTitle_HasTitle(t *testing.T) {
-	style := FocusedBorder
+	style := FocusedBorder()
 	rendered := RenderWithBorderTitle(style, 30, 3, "My Title", "content")
 
 	lines := strings.Split(rendered, "\n")
@@ -40,7 +41,7 @@ func TestRenderWithBorderTitle_HasTitle(t *testing.T) {
 }
 
 func TestRenderWithBorderTitle_PreservesWidth(t *testing.T) {
-	style := UnfocusedBorder
+	style := UnfocusedBorder()
 	width := 40
 
 	withTitle := RenderWithBorderTitle(style, width, 3, "Test", "body")
@@ -55,11 +56,21 @@ func TestRenderWithBorderTitle_PreservesWidth(t *testing.T) {
 }
 
 func TestRenderWithBorderTitle_LongTitle(t *testing.T) {
-	style := UnfocusedBorder
+	style := UnfocusedBorder()
 	longTitle := strings.Repeat("A", 100)
 	// Should not panic even if title exceeds border width
 	rendered := RenderWithBorderTitle(style, 20, 3, longTitle, "body")
 	if rendered == "" {
 		t.Error("should produce non-empty output even with long title")
+	}
+}
+
+func TestStyles_ReflectThemeChange(t *testing.T) {
+	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
+	s1 := ActiveStyle()
+	theme.Apply("dark-blue")
+	s2 := ActiveStyle()
+	if s1.GetForeground() == s2.GetForeground() {
+		t.Error("ActiveStyle should change after theme.Apply")
 	}
 }

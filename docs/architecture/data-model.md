@@ -97,6 +97,12 @@ forwards:
     type: "dynamic"
     local_port: 1080
     auto_connect: false
+
+# TUI 設定
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
 ```
 
 ### Go 型定義
@@ -109,6 +115,16 @@ type Config struct {
     Session       SessionConfig             `yaml:"session"`
     Log           LogConfig                 `yaml:"log"`
     Forwards      []ForwardRule             `yaml:"forwards"`
+    TUI           TUIConfig                 `yaml:"tui"`
+}
+
+type TUIConfig struct {
+    Theme ThemeConfig `yaml:"theme"`
+}
+
+type ThemeConfig struct {
+    Base   string `yaml:"base"`   // "dark" | "light"
+    Accent string `yaml:"accent"` // "violet" | "blue" | "green" | "cyan" | "orange"
 }
 
 type ReconnectConfig struct {
@@ -617,6 +633,14 @@ type ConfigGetResult struct {
     Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
     Session       SessionCfgInfo            `json:"session"`
     Log           LogInfo                   `json:"log"`
+    TUI           TUIInfo                   `json:"tui"`
+}
+type TUIInfo struct {
+    Theme ThemeInfo `json:"theme"`
+}
+type ThemeInfo struct {
+    Base   string `json:"base"`
+    Accent string `json:"accent"`
 }
 type HostConfigInfo struct {
     Reconnect *ReconnectOverrideInfo `json:"reconnect,omitempty"`
@@ -649,6 +673,16 @@ type ConfigUpdateParams struct {
     Hosts         map[string]*HostConfigUpdateInfo  `json:"hosts,omitempty"`
     Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
     Log           *LogUpdateInfo                   `json:"log,omitempty"`
+    TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
+}
+
+// TUI 設定の部分更新パラメータ
+type TUIUpdateInfo struct {
+    Theme *ThemeUpdateInfo `json:"theme,omitempty"`
+}
+type ThemeUpdateInfo struct {
+    Base   *string `json:"base,omitempty"`
+    Accent *string `json:"accent,omitempty"`
 }
 type HostConfigUpdateInfo struct {
     Reconnect *ReconnectUpdateInfo `json:"reconnect,omitempty"`
@@ -819,3 +853,4 @@ type CredentialResponseResult struct {
 | 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
 | 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
 | 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
+| 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |

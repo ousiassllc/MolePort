@@ -542,10 +542,25 @@ SSH config を再読み込みし、ホスト一覧を更新する。
     "log": {
       "level": "info",
       "file": "~/.config/moleport/moleport.log"
+    },
+    "tui": {
+      "theme": {
+        "base": "dark",
+        "accent": "violet"
+      }
     }
   }
 }
 ```
+
+**`tui.theme` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `base` | string | ベーステーマ: `"dark"` \| `"light"` |
+| `accent` | string | アクセントカラー: `"violet"` \| `"blue"` \| `"green"` \| `"cyan"` \| `"orange"` |
+
+> **Note**: `tui.theme` が未設定（ゼロ値）の場合、TUI は初回起動時にテーマ選択画面を表示する。
 
 ---
 
@@ -570,6 +585,24 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "reconnect": {
           "enabled": false
         }
+      }
+    }
+  }
+}
+```
+
+**テーマ更新の例**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "config.update",
+  "params": {
+    "tui": {
+      "theme": {
+        "base": "light",
+        "accent": "blue"
       }
     }
   }
@@ -996,3 +1029,4 @@ SSH 接続状態の変化。
 | 1.1 | 2026-02-11 | credential.request/response 仕様追加、エラーコード 1008/1009 追加、event.ssh に pending_auth 追加 | #11 クレデンシャル入力機能追加 |
 | 1.2 | 2026-02-24 | forward.start の説明にクレデンシャルコールバック対応を追記 | #16 フォワード開始失敗時の修正 |
 | 1.3 | 2026-02-27 | config.get/update に keepalive_interval と hosts セクション追加、event.forward に reconnecting/restored タイプ追加 | #27 自動再接続機能の改善・拡張 |
+| 1.4 | 2026-03-01 | config.get レスポンスに `tui.theme` セクション追加、config.update にテーマ更新例追加 | #34 TUI カラーテーマ機能 |

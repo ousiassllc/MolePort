@@ -121,7 +121,7 @@ func (p ForwardPanel) View() string {
 	var rows []string
 
 	if len(p.sessions) == 0 {
-		rows = append(rows, tui.MutedStyle.Render("フォワーディングルールがありません"))
+		rows = append(rows, tui.MutedStyle().Render("フォワーディングルールがありません"))
 	} else {
 		maxRows := innerHeight
 		if maxRows < 1 {
@@ -147,15 +147,15 @@ func (p ForwardPanel) View() string {
 			}
 			var prefix string
 			if i == p.cursor {
-				prefix = tui.ActiveStyle.Render("> ")
+				prefix = tui.ActiveStyle().Render("> ")
 			}
 			rows = append(rows, prefix+row.View())
 		}
 	}
 
-	border := tui.UnfocusedBorder
+	border := tui.UnfocusedBorder()
 	if p.focused {
-		border = tui.FocusedBorder
+		border = tui.FocusedBorder()
 	}
 
 	content := strings.Join(rows, "\n")

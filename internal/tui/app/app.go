@@ -48,14 +48,24 @@ type MainModel struct {
 	// クレデンシャル入力状態
 	credRequest    *protocol.CredentialRequestNotification
 	credResponseCh chan<- *protocol.CredentialResponseParams
+
+	// テーマ / ページ遷移
+	currentPage      string // "dashboard" | "theme"
+	themePage        pages.ThemePage
+	currentPresetID  string
+	previousPresetID string
+	isFirstLaunch    bool
+	width            int
+	height           int
 }
 
 // NewMainModel は新しい MainModel を生成する。
 func NewMainModel(client *client.IPCClient, version string) MainModel {
 	return MainModel{
-		dashboard: pages.NewDashboardPage(version),
-		client:    client,
-		keys:      tui.DefaultKeyMap(),
+		dashboard:   pages.NewDashboardPage(version),
+		client:      client,
+		keys:        tui.DefaultKeyMap(),
+		currentPage: pageDashboard,
 	}
 }
 
@@ -67,6 +77,7 @@ func (m MainModel) Init() tea.Cmd {
 		m.subscribeEvents(),
 		m.metricsTick(),
 		m.dashboard.Init(),
+		m.loadConfig(),
 	)
 }
 
@@ -76,7 +87,10 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
+		m.themePage.SetSize(msg.Width, msg.Height)
 		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		return m, cmd
@@ -86,7 +100,13 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.ForceQuit) {
 			return m, m.shutdown()
 		}
-		// テキスト入力中は q/? をグローバル処理しない
+		// テーマページ表示中は ForceQuit 以外は themePage に転送
+		if m.currentPage == pageTheme {
+			var cmd tea.Cmd
+			m.themePage, cmd = m.themePage.Update(msg)
+			return m, cmd
+		}
+		// テキスト入力中は q/?/t をグローバル処理しない
 		if !m.dashboard.IsInputActive() {
 			switch {
 			case key.Matches(msg, m.keys.Quit):
@@ -96,8 +116,23 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				var cmd tea.Cmd
 				m.dashboard, cmd = m.dashboard.Update(msg)
 				return m, cmd
+			case key.Matches(msg, m.keys.Theme):
+				m.openThemePage()
+				return m, nil
 			}
 		}
+
+	case tui.ConfigLoadedMsg:
+		return m.handleConfigLoaded(msg)
+
+	case tui.ThemeSelectedMsg:
+		return m.handleThemeSelected(msg)
+
+	case tui.ThemeCancelledMsg:
+		return m.handleThemeCancelled()
+
+	case tui.ThemeSavedMsg:
+		return m.handleThemeSaved(msg)
 
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
@@ -185,6 +220,9 @@ func (m MainModel) View() string {
 	if m.quitting {
 		return "終了中...\n"
 	}
+	if m.currentPage == pageTheme {
+		return m.themePage.View()
+	}
 	return m.dashboard.View()
 }
 
@@ -199,6 +237,7 @@ func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("  d           : 切断")
 	m.dashboard.AppendLog("  x           : ルール削除")
 	m.dashboard.AppendLog("  Esc         : ウィザードキャンセル")
+	m.dashboard.AppendLog("  t           : テーマ選択")
 	m.dashboard.AppendLog("  ?           : ヘルプ")
 	m.dashboard.AppendLog("  q / Ctrl+C  : 終了")
 }

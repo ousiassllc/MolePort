@@ -97,3 +97,25 @@ type CredentialSubmitMsg struct {
 	Value     string
 	Cancelled bool
 }
+
+// --- テーマ関連メッセージ ---
+
+// ThemeSelectedMsg はテーマ選択ページで確定時に発行される。
+type ThemeSelectedMsg struct {
+	PresetID string
+}
+
+// ThemeCancelledMsg はテーマ選択ページでキャンセル時に発行される。
+type ThemeCancelledMsg struct{}
+
+// ConfigLoadedMsg は config.get IPC の結果。
+type ConfigLoadedMsg struct {
+	ThemeBase   string
+	ThemeAccent string
+	Err         error
+}
+
+// ThemeSavedMsg はテーマ保存 IPC の完了通知。
+type ThemeSavedMsg struct {
+	Err error
+}
