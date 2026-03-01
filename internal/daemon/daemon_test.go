@@ -43,7 +43,7 @@ func createTestConfigDir(t *testing.T) string {
 func TestDaemon_New(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestDaemon_New(t *testing.T) {
 func TestDaemon_StartStop(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestDaemon_StartStop(t *testing.T) {
 func TestDaemon_Status(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -126,6 +126,9 @@ func TestDaemon_Status(t *testing.T) {
 
 	status := d.Status()
 
+	if status.Version != "test" {
+		t.Errorf("Version = %q, want %q", status.Version, "test")
+	}
 	if status.PID != os.Getpid() {
 		t.Errorf("PID = %d, want %d", status.PID, os.Getpid())
 	}
@@ -149,7 +152,7 @@ func TestDaemon_Status(t *testing.T) {
 func TestDaemon_Shutdown(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -179,7 +182,7 @@ func TestDaemon_Shutdown(t *testing.T) {
 func TestDaemon_DoubleStop(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}

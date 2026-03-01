@@ -7,6 +7,7 @@ type DaemonStatusParams struct{}
 
 // DaemonStatusResult は daemon.status リクエストの結果。
 type DaemonStatusResult struct {
+	Version              string `json:"version"`
 	PID                  int    `json:"pid"`
 	StartedAt            string `json:"started_at"`
 	Uptime               string `json:"uptime"`

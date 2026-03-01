@@ -160,6 +160,7 @@ func (d *Daemon) Status() protocol.DaemonStatusResult {
 	}
 
 	return protocol.DaemonStatusResult{
+		Version:              d.version,
 		PID:                  os.Getpid(),
 		StartedAt:            d.startedAt.Format(time.RFC3339),
 		Uptime:               time.Since(d.startedAt).Truncate(time.Second).String(),

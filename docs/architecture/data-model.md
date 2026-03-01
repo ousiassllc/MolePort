@@ -718,8 +718,8 @@ type LogUpdateInfo struct {
 // daemon.status
 type DaemonStatusParams struct{}
 type DaemonStatusResult struct {
-    PID                  int    `json:"pid"`
     Version              string `json:"version"`    // ビルドバージョン（ldflags で埋め込み、例: "v0.1.0"、開発時は "dev"）
+    PID                  int    `json:"pid"`
     StartedAt            string `json:"started_at"` // RFC3339
     Uptime               string `json:"uptime"`     // human-readable ("2h 30m")
     ConnectedClients     int    `json:"connected_clients"`

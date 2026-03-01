@@ -19,6 +19,9 @@ func TestHandler_DaemonStatus(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want protocol.DaemonStatusResult", result)
 	}
+	if statusResult.Version != "test" {
+		t.Errorf("Version = %q, want %q", statusResult.Version, "test")
+	}
 	if statusResult.PID != 1234 {
 		t.Errorf("PID = %d, want %d", statusResult.PID, 1234)
 	}

@@ -87,6 +87,7 @@ func TestConfigUpdateParams_AllFields(t *testing.T) {
 
 func TestDaemonStatusResult_JSONRoundtrip(t *testing.T) {
 	original := DaemonStatusResult{
+		Version:              "v0.2.0",
 		PID:                  12345,
 		StartedAt:            "2026-02-11T10:00:00Z",
 		Uptime:               "2h 30m",
