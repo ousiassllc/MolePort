@@ -2,7 +2,7 @@
 
 APP_NAME := moleport
 BUILD_DIR := bin
-VERSION := 0.1.0
+VERSION := 0.2.0
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 
