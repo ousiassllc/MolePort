@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -290,21 +289,4 @@ func (m MainModel) View() string {
 		return m.langPage.View()
 	}
 	return m.dashboard.View()
-}
-
-// --- ヘルパー ---
-
-func (m *MainModel) refreshForwardPanel() {
-	m.dashboard.SetForwardSessions(m.sessions)
-}
-
-func (m *MainModel) shutdown() tea.Cmd {
-	m.quitting = true
-	// IPC クライアントをクリーンアップ（daemon は停止しない）
-	if m.subscriptionID != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), ipcShutdownTimeout)
-		defer cancel()
-		_ = m.client.Unsubscribe(ctx, m.subscriptionID)
-	}
-	return tea.Quit
 }
