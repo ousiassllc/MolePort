@@ -110,6 +110,10 @@ tui:
     enter_create: "[Enter] 作成 & 接続  [Esc] キャンセル"
     step_progress: "ステップ {{.Current}}/{{.Total}}"
     wizard_title: "新規フォワード"
+    rule_name_placeholder: "任意のルール名"
+    port_required: "ポート番号を入力してください"
+    port_not_number: "数値を入力してください"
+    port_out_of_range: "ポート番号は 1-65535 の範囲で指定してください"
   keys:
     switch_pane: "ペイン切替"
     help: "ヘルプ"
@@ -160,6 +164,7 @@ tui:
     restart_error: "デーモン再起動エラー: {{.Error}}"
     restarted: "デーモンを再起動しました"
     mismatch_continue: "バージョン不一致のまま続行します"
+    mismatch_warning: "バージョン不一致"
   theme:
     header: "テーマ選択"
     help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"
@@ -177,10 +182,24 @@ tui:
     config_load_error: "設定読み込みエラー: {{.Error}}"
     theme_save_error: "テーマ保存エラー: {{.Error}}"
     lang_save_error: "言語保存エラー: {{.Error}}"
-    forward_add_error: "ルール追加エラー: {{.Error}}"
+    # add
     forward_added: "ルール '{{.Name}}' を追加しました"
-    forward_start_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}"
+    forward_added_started: "ルール '{{.Name}}' を追加し、開始しました"
+    forward_add_error: "ルール追加エラー: {{.Error}}"
+    # start
     forward_started: "フォワード [{{.Name}}] を開始しました"
+    forward_start_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}"
+    forward_start_rollback_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}（ルール削除にも失敗: {{.DeleteError}}）"
+    # stop
     forward_stopped: "フォワード [{{.Name}}] を停止しました"
+    forward_stop_error: "フォワード '{{.Name}}' の停止に失敗: {{.Error}}"
+    # delete
     forward_deleted: "ルール '{{.Name}}' を削除しました"
     forward_delete_error: "ルール '{{.Name}}' の削除に失敗: {{.Error}}"
+    credential_required: "認証が必要です: {{.Host}} ({{.Type}})"
+    credential_cancelled: "認証がキャンセルされました"
+    credential_passphrase_prompt: "{{.Host}} の鍵パスフレーズを入力:"
+    credential_code_prompt: "{{.Host}} の認証コードを入力:"
+    credential_password_prompt: "{{.Host}} のパスワードを入力:"
+    daemon_start_failed: "新しいデーモンの起動に失敗"
+    daemon_connect_failed: "新しいデーモンへの接続に失敗"

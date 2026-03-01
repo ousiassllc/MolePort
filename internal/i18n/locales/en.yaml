@@ -110,6 +110,10 @@ tui:
     enter_create: "[Enter] Create & Connect  [Esc] Cancel"
     step_progress: "Step {{.Current}}/{{.Total}}"
     wizard_title: "New Forward"
+    rule_name_placeholder: "Optional rule name"
+    port_required: "Port number is required"
+    port_not_number: "Must be a number"
+    port_out_of_range: "Port must be in range 1-65535"
   keys:
     switch_pane: "Switch"
     help: "Help"
@@ -160,6 +164,7 @@ tui:
     restart_error: "Daemon restart error: {{.Error}}"
     restarted: "Daemon restarted"
     mismatch_continue: "Continuing with version mismatch"
+    mismatch_warning: "Version mismatch"
   theme:
     header: "Theme Select"
     help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"
@@ -177,10 +182,24 @@ tui:
     config_load_error: "Config load error: {{.Error}}"
     theme_save_error: "Theme save error: {{.Error}}"
     lang_save_error: "Language save error: {{.Error}}"
-    forward_add_error: "Forward add error: {{.Error}}"
+    # add
     forward_added: "Rule '{{.Name}}' added"
-    forward_start_error: "Rule '{{.Name}}' start error: {{.Error}}"
+    forward_added_started: "Rule '{{.Name}}' added and started"
+    forward_add_error: "Forward add error: {{.Error}}"
+    # start
     forward_started: "Forward [{{.Name}}] started"
+    forward_start_error: "Rule '{{.Name}}' start error: {{.Error}}"
+    forward_start_rollback_error: "Rule '{{.Name}}' start error: {{.Error}} (rule delete also failed: {{.DeleteError}})"
+    # stop
     forward_stopped: "Forward [{{.Name}}] stopped"
+    forward_stop_error: "Forward '{{.Name}}' stop error: {{.Error}}"
+    # delete
     forward_deleted: "Rule '{{.Name}}' deleted"
     forward_delete_error: "Rule '{{.Name}}' delete error: {{.Error}}"
+    credential_required: "Authentication required: {{.Host}} ({{.Type}})"
+    credential_cancelled: "Authentication cancelled"
+    credential_passphrase_prompt: "Enter key passphrase for {{.Host}}:"
+    credential_code_prompt: "Enter authentication code for {{.Host}}:"
+    credential_password_prompt: "Enter password for {{.Host}}:"
+    daemon_start_failed: "Failed to start new daemon"
+    daemon_connect_failed: "Failed to connect to new daemon"
