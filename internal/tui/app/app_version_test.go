@@ -233,3 +233,29 @@ func TestDaemonRestartDone_Error_ClearsRestartingFlag(t *testing.T) {
 		t.Error("restarting should be false after failed daemon restart")
 	}
 }
+
+func TestLogOutputDuringRestart_Suppressed(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, _ := m.Update(tui.LogOutputMsg{Text: "Session fetch error: not connected"})
+	updated := result.(MainModel)
+
+	if got := updated.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("LogLineCount() = %d, want 0 (LogOutputMsg should be suppressed during restart)", got)
+	}
+}
+
+func TestThemeSavedErrorDuringRestart_Suppressed(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, _ := m.Update(tui.ThemeSavedMsg{Err: fmt.Errorf("not connected")})
+	updated := result.(MainModel)
+
+	if got := updated.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("LogLineCount() = %d, want 0 (ThemeSavedMsg error should be suppressed during restart)", got)
+	}
+}

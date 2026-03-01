@@ -194,7 +194,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}))
+			if !m.restarting {
+				m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}))
+			}
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
@@ -246,7 +248,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tui.LogOutputMsg:
-		m.dashboard.AppendLog(msg.Text)
+		if !m.restarting {
+			m.dashboard.AppendLog(msg.Text)
+		}
 		return m, nil
 
 	case tui.ForwardToggleMsg:
