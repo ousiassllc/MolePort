@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/theme"
@@ -39,7 +40,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 		defer cancel()
 		var result protocol.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("セッション取得エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.session_error", map[string]any{"Error": err})}
 		}
 		sessions := make([]core.ForwardSession, len(result.Sessions))
 		for i, s := range result.Sessions {
@@ -56,7 +57,7 @@ func (m *MainModel) subscribeEvents() tea.Cmd {
 		defer cancel()
 		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
 		if err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("イベント購読エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.subscribe_error", map[string]any{"Error": err})}
 		}
 		return subscriptionStartedMsg{SubscriptionID: subID}
 	}

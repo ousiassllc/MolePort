@@ -1,12 +1,12 @@
 package organisms
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
@@ -116,12 +116,12 @@ func (p ForwardPanel) View() string {
 	}
 
 	// ボーダータイトル
-	title := fmt.Sprintf("Active Forwards (%d)", len(p.sessions))
+	title := i18n.T("tui.forward.title", map[string]any{"Count": len(p.sessions)})
 
 	var rows []string
 
 	if len(p.sessions) == 0 {
-		rows = append(rows, tui.MutedStyle().Render("フォワーディングルールがありません"))
+		rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.forward.empty")))
 	} else {
 		maxRows := innerHeight
 		if maxRows < 1 {

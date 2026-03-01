@@ -55,7 +55,7 @@ func (m MainModel) handleLangCancelled() (MainModel, tea.Cmd) {
 // handleLangSaved は言語保存完了メッセージを処理する。
 func (m MainModel) handleLangSaved(msg tui.LangSavedMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
-		m.dashboard.AppendLog("lang save error: " + msg.Err.Error())
+		m.dashboard.AppendLog(i18n.T("tui.log.lang_save_error", map[string]any{"Error": msg.Err}))
 	}
 	return m, nil
 }

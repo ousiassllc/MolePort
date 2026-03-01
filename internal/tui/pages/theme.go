@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	tui "github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
@@ -52,9 +53,9 @@ func (p ThemePage) Update(msg tea.Msg) (ThemePage, tea.Cmd) {
 
 // View はテーマ選択ページを描画する。
 func (p ThemePage) View() string {
-	header := tui.HeaderStyle().Render("  Theme Select")
+	header := tui.HeaderStyle().Render("  " + i18n.T("tui.theme.header"))
 	gridView := p.grid.View()
-	help := tui.MutedStyle().Render("  [←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel")
+	help := tui.MutedStyle().Render("  " + i18n.T("tui.theme.help"))
 	return lipgloss.JoinVertical(lipgloss.Left, header, "", gridView, "", help)
 }
 

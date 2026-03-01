@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
@@ -28,7 +29,7 @@ func (p SetupPanel) View() string {
 
 	switch p.step {
 	case StepIdle:
-		title = fmt.Sprintf("SSH Hosts (%d)", len(p.hosts))
+		title = i18n.T("tui.setup_panel.title", map[string]any{"Count": len(p.hosts)})
 		rows = p.viewHostList(innerWidth, innerHeight)
 	case StepSelectType:
 		title = p.wizardTitleText()
@@ -63,7 +64,7 @@ func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
 	var rows []string
 
 	if len(p.hosts) == 0 {
-		rows = append(rows, tui.MutedStyle().Render("ホストが見つかりません"))
+		rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.no_hosts")))
 	} else {
 		maxRows := innerHeight
 		if maxRows < 1 {
@@ -98,7 +99,7 @@ func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
 }
 
 func (p SetupPanel) wizardTitleText() string {
-	title := fmt.Sprintf("New Forward > %s", p.selectedHost)
+	title := i18n.T("tui.setup_panel.wizard_title") + " > " + p.selectedHost
 	if p.step > StepSelectType {
 		title += " > " + p.selectedType.String()
 	}
@@ -107,7 +108,7 @@ func (p SetupPanel) wizardTitleText() string {
 
 func (p SetupPanel) viewSelectType() []string {
 	var rows []string
-	rows = append(rows, tui.MutedStyle().Render("Select type:"))
+	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.select_type")))
 
 	for i, opt := range p.typeOptions {
 		if i == p.typeCursor {
@@ -118,7 +119,7 @@ func (p SetupPanel) viewSelectType() []string {
 	}
 
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle().Render("[Enter] 選択  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.enter_select")))
 	return rows
 }
 
@@ -126,10 +127,10 @@ func (p SetupPanel) viewTextInput(label string, input *textinput.Model) []string
 	stepNum, totalSteps := p.stepProgress()
 
 	var rows []string
-	rows = append(rows, tui.MutedStyle().Render(fmt.Sprintf("Step %d/%d", stepNum, totalSteps)))
+	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.step_progress", map[string]any{"Current": stepNum, "Total": totalSteps})))
 	rows = append(rows, tui.TextStyle().Render(label+": ")+input.View())
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle().Render("[Enter] 次へ  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.enter_next")))
 	return rows
 }
 
@@ -150,6 +151,6 @@ func (p SetupPanel) viewConfirm() []string {
 
 	rows = append(rows, tui.MutedStyle().Render("Name: ")+tui.TextStyle().Render(p.ruleName))
 	rows = append(rows, "")
-	rows = append(rows, tui.MutedStyle().Render("[Enter] 作成 & 接続  [Esc] キャンセル"))
+	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.enter_create")))
 	return rows
 }

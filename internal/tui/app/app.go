@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
@@ -192,21 +193,21 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(fmt.Sprintf("ホスト読み込みエラー: %s", msg.Err))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}))
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
 			m.refreshForwardPanel()
-			m.dashboard.AppendLog(fmt.Sprintf("%d 件のホストを読み込みました", len(msg.Hosts)))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_loaded", map[string]any{"Count": len(msg.Hosts)}))
 		}
 
 	case tui.HostsReloadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(fmt.Sprintf("ホスト再読み込みエラー: %s", msg.Err))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reload_error", map[string]any{"Error": msg.Err}))
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
-			m.dashboard.AppendLog(fmt.Sprintf("%d 件のホストを再読み込みしました", len(msg.Hosts)))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reloaded", map[string]any{"Count": len(msg.Hosts)}))
 		}
 
 	case tui.HostSelectedMsg:
@@ -225,7 +226,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.listenIPCEvents())
 
 	case tui.IPCDisconnectedMsg:
-		m.dashboard.AppendLog("デーモンとの接続が切断されました")
+		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"))
 		return m, m.shutdown()
 
 	case tui.MetricsTickMsg:
@@ -274,7 +275,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View は Bubble Tea の View メソッド。
 func (m MainModel) View() string {
 	if m.quitting {
-		return "終了中...\n"
+		return i18n.T("tui.log.quitting") + "\n"
 	}
 	if m.showHelpModal {
 		return m.renderHelpOverlay()
