@@ -135,6 +135,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case key.Matches(msg, m.keys.Theme):
 				m.openThemePage()
 				return m, nil
+			case key.Matches(msg, m.keys.Version):
+				m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version))
+				return m, nil
 			}
 		}
 
@@ -268,6 +271,7 @@ func (m *MainModel) showHelp() {
 	m.dashboard.AppendLog("  x           : ルール削除")
 	m.dashboard.AppendLog("  Esc         : ウィザードキャンセル")
 	m.dashboard.AppendLog("  t           : テーマ選択")
+	m.dashboard.AppendLog("  v           : バージョン表示")
 	m.dashboard.AppendLog("  ?           : ヘルプ")
 	m.dashboard.AppendLog("  q / Ctrl+C  : 終了")
 }
