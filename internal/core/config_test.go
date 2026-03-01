@@ -238,3 +238,60 @@ func TestConfigManager_LoadConfig_MergesDefaults(t *testing.T) {
 		t.Errorf("MaxRetries = %d, want 10 (default)", cfg.Reconnect.MaxRetries)
 	}
 }
+
+func TestConfigManager_DefaultConfig_ThemeUnset(t *testing.T) {
+	dir := t.TempDir()
+	store := newTestStore()
+	cm := NewConfigManager(store, dir)
+
+	cfg, err := cm.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	if cfg.TUI.Theme.Base != "" {
+		t.Errorf("TUI.Theme.Base = %q, want empty string", cfg.TUI.Theme.Base)
+	}
+	if cfg.TUI.Theme.Accent != "" {
+		t.Errorf("TUI.Theme.Accent = %q, want empty string", cfg.TUI.Theme.Accent)
+	}
+}
+
+func TestConfigManager_UpdateConfig_Theme(t *testing.T) {
+	dir := t.TempDir()
+	store := newTestStore()
+	cm := NewConfigManager(store, dir)
+
+	if _, err := cm.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	err := cm.UpdateConfig(func(cfg *Config) {
+		cfg.TUI.Theme.Base = "dark"
+		cfg.TUI.Theme.Accent = "#FF6600"
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfig() error = %v", err)
+	}
+
+	got := cm.GetConfig()
+	if got.TUI.Theme.Base != "dark" {
+		t.Errorf("TUI.Theme.Base = %q, want %q", got.TUI.Theme.Base, "dark")
+	}
+	if got.TUI.Theme.Accent != "#FF6600" {
+		t.Errorf("TUI.Theme.Accent = %q, want %q", got.TUI.Theme.Accent, "#FF6600")
+	}
+
+	// ファイルにも永続化されていることを確認
+	cm2 := NewConfigManager(store, dir)
+	loaded, err := cm2.LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if loaded.TUI.Theme.Base != "dark" {
+		t.Errorf("persisted TUI.Theme.Base = %q, want %q", loaded.TUI.Theme.Base, "dark")
+	}
+	if loaded.TUI.Theme.Accent != "#FF6600" {
+		t.Errorf("persisted TUI.Theme.Accent = %q, want %q", loaded.TUI.Theme.Accent, "#FF6600")
+	}
+}

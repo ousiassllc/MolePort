@@ -27,6 +27,12 @@ func (h *Handler) configGet() (any, *protocol.RPCError) {
 			Level: cfg.Log.Level,
 			File:  cfg.Log.File,
 		},
+		TUI: protocol.TUIInfo{
+			Theme: protocol.ThemeInfo{
+				Base:   cfg.TUI.Theme.Base,
+				Accent: cfg.TUI.Theme.Accent,
+			},
+		},
 	}
 
 	if len(cfg.Hosts) > 0 {
@@ -131,6 +137,14 @@ func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError)
 			}
 			if p.Log.File != nil {
 				cfg.Log.File = *p.Log.File
+			}
+		}
+		if p.TUI != nil && p.TUI.Theme != nil {
+			if p.TUI.Theme.Base != nil {
+				cfg.TUI.Theme.Base = *p.TUI.Theme.Base
+			}
+			if p.TUI.Theme.Accent != nil {
+				cfg.TUI.Theme.Accent = *p.TUI.Theme.Accent
 			}
 		}
 	}); err != nil {

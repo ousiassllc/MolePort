@@ -33,6 +33,13 @@ func TestHandler_ConfigGet(t *testing.T) {
 	if cfgResult.Reconnect.KeepAliveInterval != "30s" {
 		t.Errorf("Reconnect.KeepAliveInterval = %q, want %q", cfgResult.Reconnect.KeepAliveInterval, "30s")
 	}
+	// デフォルトではテーマは空文字列
+	if cfgResult.TUI.Theme.Base != "" {
+		t.Errorf("TUI.Theme.Base = %q, want empty string", cfgResult.TUI.Theme.Base)
+	}
+	if cfgResult.TUI.Theme.Accent != "" {
+		t.Errorf("TUI.Theme.Accent = %q, want empty string", cfgResult.TUI.Theme.Accent)
+	}
 }
 
 func TestHandler_ConfigUpdate(t *testing.T) {
@@ -223,5 +230,98 @@ func TestHandler_ConfigUpdate_HostsDelete(t *testing.T) {
 	updatedCfg := cfgMgr.GetConfig()
 	if _, ok := updatedCfg.Hosts["prod"]; ok {
 		t.Error("Hosts[\"prod\"] should have been deleted")
+	}
+}
+
+func TestHandler_ConfigGet_WithTheme(t *testing.T) {
+	h, _, _, cfgMgr := newTestHandler()
+
+	cfg := core.DefaultConfig()
+	cfg.TUI.Theme.Base = "dark"
+	cfg.TUI.Theme.Accent = "#FF6600"
+	cfgMgr.config = &cfg
+
+	result, rpcErr := h.Handle("client-1", "config.get", nil)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	cfgResult := result.(protocol.ConfigGetResult)
+	if cfgResult.TUI.Theme.Base != "dark" {
+		t.Errorf("TUI.Theme.Base = %q, want %q", cfgResult.TUI.Theme.Base, "dark")
+	}
+	if cfgResult.TUI.Theme.Accent != "#FF6600" {
+		t.Errorf("TUI.Theme.Accent = %q, want %q", cfgResult.TUI.Theme.Accent, "#FF6600")
+	}
+}
+
+func TestHandler_ConfigUpdate_Theme(t *testing.T) {
+	h, _, _, cfgMgr := newTestHandler()
+
+	base := "dark"
+	accent := "#FF6600"
+	params := mustMarshal(t, protocol.ConfigUpdateParams{
+		TUI: &protocol.TUIUpdateInfo{
+			Theme: &protocol.ThemeUpdateInfo{
+				Base:   &base,
+				Accent: &accent,
+			},
+		},
+	})
+
+	result, rpcErr := h.Handle("client-1", "config.update", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	updateResult := result.(protocol.ConfigUpdateResult)
+	if !updateResult.OK {
+		t.Error("OK should be true")
+	}
+
+	cfg := cfgMgr.GetConfig()
+	if cfg.TUI.Theme.Base != "dark" {
+		t.Errorf("TUI.Theme.Base = %q, want %q", cfg.TUI.Theme.Base, "dark")
+	}
+	if cfg.TUI.Theme.Accent != "#FF6600" {
+		t.Errorf("TUI.Theme.Accent = %q, want %q", cfg.TUI.Theme.Accent, "#FF6600")
+	}
+}
+
+func TestHandler_ConfigUpdate_ThemePartial(t *testing.T) {
+	h, _, _, cfgMgr := newTestHandler()
+
+	// まずテーマを設定
+	cfg := core.DefaultConfig()
+	cfg.TUI.Theme.Base = "dark"
+	cfg.TUI.Theme.Accent = "#FF6600"
+	cfgMgr.config = &cfg
+
+	// Accent のみ更新
+	newAccent := "#00FF00"
+	params := mustMarshal(t, protocol.ConfigUpdateParams{
+		TUI: &protocol.TUIUpdateInfo{
+			Theme: &protocol.ThemeUpdateInfo{
+				Accent: &newAccent,
+			},
+		},
+	})
+
+	result, rpcErr := h.Handle("client-1", "config.update", params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+
+	updateResult := result.(protocol.ConfigUpdateResult)
+	if !updateResult.OK {
+		t.Error("OK should be true")
+	}
+
+	updatedCfg := cfgMgr.GetConfig()
+	if updatedCfg.TUI.Theme.Base != "dark" {
+		t.Errorf("TUI.Theme.Base = %q, want %q (unchanged)", updatedCfg.TUI.Theme.Base, "dark")
+	}
+	if updatedCfg.TUI.Theme.Accent != "#00FF00" {
+		t.Errorf("TUI.Theme.Accent = %q, want %q", updatedCfg.TUI.Theme.Accent, "#00FF00")
 	}
 }
