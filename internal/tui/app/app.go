@@ -59,11 +59,13 @@ type MainModel struct {
 	// ヘルプモーダル
 	showHelpModal bool
 
-	// テーマ / ページ遷移
-	currentPage      string // "dashboard" | "theme"
+	// ページ遷移
+	currentPage      string // "dashboard" | "theme" | "lang"
 	themePage        pages.ThemePage
+	langPage         pages.LangPage
 	currentPresetID  string
 	previousPresetID string
+	currentLang      string
 	isFirstLaunch    bool
 	width            int
 	height           int
@@ -104,6 +106,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
 		m.themePage.SetSize(msg.Width, msg.Height)
+		m.langPage.SetSize(msg.Width, msg.Height)
 		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		return m, cmd
@@ -130,7 +133,13 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.themePage, cmd = m.themePage.Update(msg)
 			return m, cmd
 		}
-		// テキスト入力中は q/?/t をグローバル処理しない
+		// 言語ページ表示中は ForceQuit 以外は langPage に転送
+		if m.currentPage == pageLang {
+			var cmd tea.Cmd
+			m.langPage, cmd = m.langPage.Update(msg)
+			return m, cmd
+		}
+		// テキスト入力中は q/?/t/l をグローバル処理しない
 		if !m.dashboard.IsInputActive() {
 			switch {
 			case key.Matches(msg, m.keys.Quit):
@@ -140,6 +149,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case key.Matches(msg, m.keys.Theme):
 				m.openThemePage()
+				return m, nil
+			case key.Matches(msg, m.keys.Lang):
+				m.openLangPage()
 				return m, nil
 			case key.Matches(msg, m.keys.Version):
 				m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version))
@@ -169,6 +181,15 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tui.ThemeSavedMsg:
 		return m.handleThemeSaved(msg)
+
+	case tui.LangSelectedMsg:
+		return m.handleLangSelected(msg)
+
+	case tui.LangCancelledMsg:
+		return m.handleLangCancelled()
+
+	case tui.LangSavedMsg:
+		return m.handleLangSaved(msg)
 
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
@@ -264,6 +285,9 @@ func (m MainModel) View() string {
 	}
 	if m.currentPage == pageTheme {
 		return m.themePage.View()
+	}
+	if m.currentPage == pageLang {
+		return m.langPage.View()
 	}
 	return m.dashboard.View()
 }

@@ -21,6 +21,7 @@ type KeyMap struct {
 	Disconnect key.Binding
 	Delete     key.Binding
 	Theme      key.Binding
+	Lang       key.Binding
 	Version    key.Binding
 }
 
@@ -75,6 +76,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("t"),
 			key.WithHelp("t", "テーマ"),
 		),
+		Lang: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", "言語"),
+		),
 		Version: key.NewBinding(
 			key.WithKeys("v"),
 			key.WithHelp("v", "バージョン"),
@@ -94,6 +99,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab, k.Help, k.Search, k.Escape, k.Quit, k.ForceQuit},
 		{k.Up, k.Down},
-		{k.Enter, k.Disconnect, k.Delete, k.Theme, k.Version},
+		{k.Enter, k.Disconnect, k.Delete, k.Theme, k.Lang, k.Version},
 	}
 }

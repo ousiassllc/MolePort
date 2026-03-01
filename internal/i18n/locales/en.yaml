@@ -137,6 +137,7 @@ tui:
     x: "Delete rule"
     esc: "Cancel wizard"
     t: "Theme select"
+    l: "Language switch"
     v: "Show version"
     question: "Help"
     q: "Quit"

@@ -18,6 +18,7 @@ func (m MainModel) renderHelpOverlay() string {
 		tui.KeyStyle().Render("  x") + tui.MutedStyle().Render("           ルール削除"),
 		tui.KeyStyle().Render("  Esc") + tui.MutedStyle().Render("         ウィザードキャンセル"),
 		tui.KeyStyle().Render("  t") + tui.MutedStyle().Render("           テーマ選択"),
+		tui.KeyStyle().Render("  l") + tui.MutedStyle().Render("           言語切替"),
 		tui.KeyStyle().Render("  v") + tui.MutedStyle().Render("           バージョン表示"),
 		tui.KeyStyle().Render("  ?") + tui.MutedStyle().Render("           ヘルプ"),
 		tui.KeyStyle().Render("  q / Ctrl+C") + tui.MutedStyle().Render("  終了"),

@@ -92,6 +92,7 @@ func (m *MainModel) loadConfig() tea.Cmd {
 		return tui.ConfigLoadedMsg{
 			ThemeBase:   result.TUI.Theme.Base,
 			ThemeAccent: result.TUI.Theme.Accent,
+			Language:    result.Language,
 		}
 	}
 }
