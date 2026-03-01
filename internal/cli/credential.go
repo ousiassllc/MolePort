@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -31,9 +32,9 @@ func handlePasswordPrompt(req protocol.CredentialRequestNotification) (*protocol
 	prompt := req.Prompt
 	if prompt == "" {
 		if req.Type == "passphrase" {
-			prompt = fmt.Sprintf("%s の鍵パスフレーズ: ", req.Host)
+			prompt = i18n.T("cli.credential.passphrase_prompt", map[string]any{"Host": req.Host})
 		} else {
-			prompt = fmt.Sprintf("%s のパスワード: ", req.Host)
+			prompt = i18n.T("cli.credential.password_prompt", map[string]any{"Host": req.Host})
 		}
 	}
 

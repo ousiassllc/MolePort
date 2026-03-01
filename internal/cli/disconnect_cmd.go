@@ -3,13 +3,14 @@ package cli
 import (
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDisconnect は disconnect サブコマンドを実行する。
 func RunDisconnect(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("ホスト名を指定してください: moleport disconnect <host>")
+		exitError("%s", i18n.T("cli.disconnect.host_required"))
 	}
 
 	host := args[0]
@@ -25,5 +26,5 @@ func RunDisconnect(configDir string, args []string) {
 		exitError("%v", err)
 	}
 
-	fmt.Printf("%s を切断しました\n", result.Host)
+	fmt.Println(i18n.T("cli.disconnect.success", map[string]any{"Host": result.Host}))
 }

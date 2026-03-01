@@ -66,7 +66,7 @@ cli:
     name_required: "ルール名を指定してください: moleport stop <name> / --all"
   list:
     no_rules: "(転送ルールなし)"
-    hosts_header: "SSH Hosts ({{.Total}} hosts, {{.Connected}} connected):"
+    hosts_header: "SSH ホスト ({{.Total}} 件, {{.Connected}} 件接続中):"
     get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
     get_forwards_failed: "転送ルール一覧の取得に失敗しました: {{.Error}}"
   status:
@@ -86,8 +86,12 @@ cli:
     daemon_started: "デーモンを起動しました (PID: {{.PID}})"
     daemon_connect_failed: "デーモンへの接続に失敗しました: {{.Error}}"
     tui_error: "TUI エラー: {{.Error}}"
+  credential:
+    password_prompt: "{{.Host}} のパスワード: "
+    passphrase_prompt: "{{.Host}} の鍵パスフレーズ: "
   error:
     daemon_not_running: "デーモンが稼働していません。moleport daemon start で起動してください。"
+    json_output_failed: "JSON 出力に失敗しました: {{.Error}}"
     unknown_command: "エラー: 不明なコマンド '{{.Command}}'"
     prefix: "エラー"
 

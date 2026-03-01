@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -19,7 +20,7 @@ import (
 // RunDaemon は daemon サブコマンドをルーティングする。
 func RunDaemon(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("サブコマンドを指定してください: start, stop, status, kill")
+		exitError("%s", i18n.T("cli.daemon.subcommand_required"))
 	}
 
 	switch args[0] {
@@ -32,7 +33,7 @@ func RunDaemon(configDir string, args []string) {
 	case "kill":
 		runDaemonKill(configDir)
 	default:
-		exitError("不明なサブコマンド: daemon %s", args[0])
+		exitError("%s", i18n.T("cli.daemon.unknown_subcommand", map[string]any{"Sub": args[0]}))
 	}
 }
 
@@ -40,16 +41,16 @@ func runDaemonStart(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, pid := daemon.IsRunning(pidPath)
 	if running {
-		fmt.Printf("デーモンは既に稼働中です (PID: %d)\n", pid)
+		fmt.Println(i18n.T("cli.daemon.already_running", map[string]any{"PID": pid}))
 		return
 	}
 
 	pid, err := daemon.StartDaemonProcess(configDir)
 	if err != nil {
-		exitError("デーモンの起動に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.start_failed", map[string]any{"Error": err}))
 	}
 
-	fmt.Printf("デーモンを起動しました (PID: %d)\n", pid)
+	fmt.Println(i18n.T("cli.daemon.started", map[string]any{"PID": pid}))
 }
 
 func runDaemonStop(configDir string, args []string) {
@@ -62,13 +63,13 @@ func runDaemonStop(configDir string, args []string) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := daemon.IsRunning(pidPath)
 	if !running {
-		fmt.Println("デーモンは稼働していません")
+		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
 	}
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("デーモンへの接続に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
@@ -78,13 +79,13 @@ func runDaemonStop(configDir string, args []string) {
 	params := protocol.DaemonShutdownParams{Purge: *purge}
 	var result protocol.DaemonShutdownResult
 	if err := client.Call(ctx, "daemon.shutdown", params, &result); err != nil {
-		exitError("デーモンの停止に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.stop_failed", map[string]any{"Error": err}))
 	}
 
 	if *purge {
-		fmt.Println("デーモンを停止しました（状態をクリア）")
+		fmt.Println(i18n.T("cli.daemon.stopped_purge"))
 	} else {
-		fmt.Println("デーモンを停止しました")
+		fmt.Println(i18n.T("cli.daemon.stopped"))
 	}
 }
 
@@ -92,12 +93,12 @@ func runDaemonKill(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, pid := daemon.IsRunning(pidPath)
 	if !running {
-		fmt.Println("デーモンは稼働していません")
+		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
 	}
 
 	if err := daemon.KillProcess(pidPath); err != nil {
-		exitError("デーモンの強制終了に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.kill_failed", map[string]any{"Error": err}))
 	}
 
 	// 強制終了では graceful shutdown が走らないため、state.yaml を手動で削除する。
@@ -105,20 +106,20 @@ func runDaemonKill(configDir string) {
 	statePath := filepath.Join(configDir, "state.yaml")
 	_ = os.Remove(statePath)
 
-	fmt.Printf("デーモンを強制終了しました (PID: %d)\n", pid)
+	fmt.Println(i18n.T("cli.daemon.killed", map[string]any{"PID": pid}))
 }
 
 func runDaemonStatus(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := daemon.IsRunning(pidPath)
 	if !running {
-		fmt.Println("デーモンは稼働していません")
+		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
 	}
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("デーモンへの接続に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
@@ -127,7 +128,7 @@ func runDaemonStatus(configDir string) {
 
 	var status protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &status); err != nil {
-		exitError("ステータスの取得に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.status_failed", map[string]any{"Error": err}))
 	}
 
 	fmt.Println("MolePort Daemon:")

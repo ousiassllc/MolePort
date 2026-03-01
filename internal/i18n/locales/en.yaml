@@ -86,8 +86,12 @@ cli:
     daemon_started: "Daemon started (PID: {{.PID}})"
     daemon_connect_failed: "Failed to connect to daemon: {{.Error}}"
     tui_error: "TUI error: {{.Error}}"
+  credential:
+    password_prompt: "Password for {{.Host}}: "
+    passphrase_prompt: "Key passphrase for {{.Host}}: "
   error:
     daemon_not_running: "Daemon is not running. Start with: moleport daemon start"
+    json_output_failed: "Failed to output JSON: {{.Error}}"
     unknown_command: "Error: unknown command '{{.Command}}'"
     prefix: "Error"
 
