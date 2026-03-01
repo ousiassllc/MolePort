@@ -20,6 +20,7 @@ type StatusBar struct {
 	stats       StatusBarStats
 	focusedPane tui.FocusPane
 	width       int
+	warning     string
 }
 
 // NewStatusBar は新しい StatusBar を生成する。
@@ -35,6 +36,11 @@ func (s *StatusBar) SetStats(stats StatusBarStats) {
 // SetFocusedPane はフォーカス中のペインを更新する。
 func (s *StatusBar) SetFocusedPane(pane tui.FocusPane) {
 	s.focusedPane = pane
+}
+
+// SetWarning は警告テキストを設定する。空文字列で警告を解除する。
+func (s *StatusBar) SetWarning(text string) {
+	s.warning = text
 }
 
 // SetWidth は表示幅を設定する。
@@ -85,7 +91,12 @@ func (s StatusBar) View() string {
 		hints = contextHints + sep + globalHints
 	}
 
-	left := tui.MutedStyle().Render(" ") + stats
+	var warningText string
+	if s.warning != "" {
+		warningText = sep + tui.WarningStyle().Render(s.warning)
+	}
+
+	left := tui.MutedStyle().Render(" ") + stats + warningText
 	right := hints
 
 	if s.width <= 0 {

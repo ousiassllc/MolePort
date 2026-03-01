@@ -29,7 +29,7 @@ func RunTUI(configDir string, args []string) {
 	}
 
 	// Bubble Tea プログラム起動
-	model := app.NewMainModel(client, Version)
+	model := app.NewMainModel(client, Version, configDir)
 	p := tea.NewProgram(model, tea.WithAltScreen())
 
 	// TUI クレデンシャルハンドラーを設定

@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
+	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
 
@@ -44,10 +45,16 @@ type MainModel struct {
 	sessions       []core.ForwardSession
 	quitting       bool
 	subscriptionID string
+	version        string
+	configDir      string
 
 	// クレデンシャル入力状態
 	credRequest    *protocol.CredentialRequestNotification
 	credResponseCh chan<- *protocol.CredentialResponseParams
+
+	// バージョン確認ダイアログ
+	versionConfirm     molecules.ConfirmDialog
+	showVersionConfirm bool
 
 	// テーマ / ページ遷移
 	currentPage      string // "dashboard" | "theme"
@@ -60,10 +67,12 @@ type MainModel struct {
 }
 
 // NewMainModel は新しい MainModel を生成する。
-func NewMainModel(client *client.IPCClient, version string) MainModel {
+func NewMainModel(client *client.IPCClient, version string, configDir string) MainModel {
 	return MainModel{
 		dashboard:   pages.NewDashboardPage(version),
 		client:      client,
+		version:     version,
+		configDir:   configDir,
 		keys:        tui.DefaultKeyMap(),
 		currentPage: pageDashboard,
 	}
@@ -78,6 +87,7 @@ func (m MainModel) Init() tea.Cmd {
 		m.metricsTick(),
 		m.dashboard.Init(),
 		m.loadConfig(),
+		m.checkDaemonVersion(),
 	)
 }
 
@@ -100,6 +110,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.ForceQuit) {
 			return m, m.shutdown()
 		}
+		// バージョン確認ダイアログ表示中は ForceQuit 以外はダイアログに転送
+		if m.showVersionConfirm {
+			var cmd tea.Cmd
+			m.versionConfirm, cmd = m.versionConfirm.Update(msg)
+			return m, cmd
+		}
 		// テーマページ表示中は ForceQuit 以外は themePage に転送
 		if m.currentPage == pageTheme {
 			var cmd tea.Cmd
@@ -121,6 +137,17 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+
+	case tui.VersionCheckDoneMsg:
+		return m.handleVersionCheckDone(msg)
+
+	case molecules.ConfirmResultMsg:
+		if m.showVersionConfirm {
+			return m.handleVersionConfirmResult(msg.Confirmed)
+		}
+
+	case daemonRestartDoneMsg:
+		return m.handleDaemonRestartDone(msg)
 
 	case tui.ConfigLoadedMsg:
 		return m.handleConfigLoaded(msg)
@@ -219,6 +246,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m MainModel) View() string {
 	if m.quitting {
 		return "終了中...\n"
+	}
+	if m.showVersionConfirm {
+		return m.renderVersionConfirmOverlay()
 	}
 	if m.currentPage == pageTheme {
 		return m.themePage.View()
