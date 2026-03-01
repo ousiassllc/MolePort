@@ -84,6 +84,10 @@ func TestGet(t *testing.T) {
 	if cfgResult.Reconnect.KeepAliveInterval != "30s" {
 		t.Errorf("Reconnect.KeepAliveInterval = %q, want %q", cfgResult.Reconnect.KeepAliveInterval, "30s")
 	}
+	// デフォルトでは Language は空文字列
+	if cfgResult.Language != "" {
+		t.Errorf("Language = %q, want empty string", cfgResult.Language)
+	}
 	// デフォルトではテーマは空文字列
 	if cfgResult.TUI.Theme.Base != "" {
 		t.Errorf("TUI.Theme.Base = %q, want empty string", cfgResult.TUI.Theme.Base)

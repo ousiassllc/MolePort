@@ -54,6 +54,7 @@ type Config struct {
 	Session       SessionConfig         `yaml:"session"`
 	Log           LogConfig             `yaml:"log"`
 	Forwards      []ForwardRule         `yaml:"forwards"`
+	Language      string                `yaml:"language"`
 	TUI           TUIConfig             `yaml:"tui"`
 }
 

@@ -38,6 +38,7 @@ func (h *Handler) Get() (any, *protocol.RPCError) {
 			Level: cfg.Log.Level,
 			File:  cfg.Log.File,
 		},
+		Language: cfg.Language,
 		TUI: protocol.TUIInfo{
 			Theme: protocol.ThemeInfo{
 				Base:   cfg.TUI.Theme.Base,
@@ -153,6 +154,9 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 			if p.Log.File != nil {
 				cfg.Log.File = *p.Log.File
 			}
+		}
+		if p.Language != nil {
+			cfg.Language = *p.Language
 		}
 		if p.TUI != nil && p.TUI.Theme != nil {
 			if p.TUI.Theme.Base != nil {

@@ -12,6 +12,7 @@ type ConfigGetResult struct {
 	Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
 	Session       SessionCfgInfo            `json:"session"`
 	Log           LogInfo                   `json:"log"`
+	Language      string                    `json:"language"`
 	TUI           TUIInfo                   `json:"tui"`
 }
 
@@ -67,6 +68,7 @@ type ConfigUpdateParams struct {
 	Hosts         map[string]*HostConfigUpdateInfo `json:"hosts,omitempty"`
 	Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
 	Log           *LogUpdateInfo                   `json:"log,omitempty"`
+	Language      *string                          `json:"language,omitempty"`
 	TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
 }
 
