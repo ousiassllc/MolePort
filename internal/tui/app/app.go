@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,27 +13,6 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
-
-const (
-	// metricsInterval はメトリクス更新の間隔。
-	metricsInterval = 2 * time.Second
-	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
-	ipcReadTimeout = 5 * time.Second
-	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
-	ipcWriteTimeout = 10 * time.Second
-	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
-	ipcShutdownTimeout = 2 * time.Second
-)
-
-// --- 内部メッセージ型 ---
-
-type sessionsLoadedMsg struct {
-	Sessions []core.ForwardSession
-}
-
-type subscriptionStartedMsg struct {
-	SubscriptionID string
-}
 
 // MainModel はアプリケーションのルート Bubble Tea モデル。
 type MainModel struct {
