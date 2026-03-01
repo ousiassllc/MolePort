@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -24,7 +25,7 @@ func RunConfig(configDir string, args []string) {
 
 	var result protocol.ConfigGetResult
 	if err := client.Call(ctx, "config.get", nil, &result); err != nil {
-		exitError("設定の取得に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.config.get_failed", map[string]any{"Error": err}))
 	}
 
 	if *jsonFlag {

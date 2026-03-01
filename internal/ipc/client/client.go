@@ -197,6 +197,7 @@ func (c *IPCClient) CredentialHandler() CredentialHandler {
 func (c *IPCClient) readLoop() {
 	defer func() {
 		c.connected.Store(false)
+		close(c.eventCh)
 		close(c.done)
 	}()
 

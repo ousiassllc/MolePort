@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -72,13 +73,13 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := daemon.IsRunning(pidPath)
 	if !running {
-		fmt.Println("デーモンは稼働していません")
+		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
 	}
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("デーモンへの接続に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
@@ -88,19 +89,19 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	// デーモンステータス
 	var daemonStatus protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &daemonStatus); err != nil {
-		exitError("ステータスの取得に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.status.get_failed", map[string]any{"Error": err}))
 	}
 
 	// ホスト一覧
 	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
-		exitError("ホスト一覧の取得に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.status.get_hosts_failed", map[string]any{"Error": err}))
 	}
 
 	// セッション一覧
 	var sessions protocol.SessionListResult
 	if err := client.Call(ctx, "session.list", nil, &sessions); err != nil {
-		exitError("セッション一覧の取得に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.status.get_sessions_failed", map[string]any{"Error": err}))
 	}
 
 	if jsonOutput {

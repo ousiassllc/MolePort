@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -26,13 +27,13 @@ func RunStop(configDir string, args []string) {
 		if err := client.Call(ctx, "forward.stopAll", nil, &result); err != nil {
 			exitError("%v", err)
 		}
-		fmt.Printf("全フォワーディングを停止しました (%d 件)\n", result.Stopped)
+		fmt.Println(i18n.T("cli.stop.all_stopped", map[string]any{"Count": result.Stopped}))
 		return
 	}
 
 	remaining := fs.Args()
 	if len(remaining) == 0 {
-		exitError("ルール名を指定してください: moleport stop <name> / --all")
+		exitError("%s", i18n.T("cli.stop.name_required"))
 	}
 
 	name := remaining[0]
@@ -42,5 +43,5 @@ func RunStop(configDir string, args []string) {
 		exitError("%v", err)
 	}
 
-	fmt.Printf("%s を停止しました\n", result.Name)
+	fmt.Println(i18n.T("cli.stop.success", map[string]any{"Name": result.Name}))
 }

@@ -3,13 +3,14 @@ package cli
 import (
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunDelete は delete サブコマンドを実行する。
 func RunDelete(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("ルール名を指定してください: moleport delete <name>")
+		exitError("%s", i18n.T("cli.delete.name_required"))
 	}
 
 	name := args[0]
@@ -25,5 +26,5 @@ func RunDelete(configDir string, args []string) {
 		exitError("%v", err)
 	}
 
-	fmt.Printf("ルール '%s' を削除しました\n", name)
+	fmt.Println(i18n.T("cli.delete.success", map[string]any{"Name": name}))
 }

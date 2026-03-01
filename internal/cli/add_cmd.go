@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -24,28 +25,28 @@ func RunAdd(configDir string, args []string) {
 	}
 
 	if *host == "" {
-		exitError("--host フラグは必須です")
+		exitError("%s", i18n.T("cli.add.host_required"))
 	}
 	if *localPort == 0 {
-		exitError("--local-port フラグは必須です")
+		exitError("%s", i18n.T("cli.add.local_port_required"))
 	}
 	if *localPort < 1 || *localPort > 65535 {
-		exitError("ポート番号は 1〜65535 の範囲で入力してください")
+		exitError("%s", i18n.T("cli.add.port_range"))
 	}
 
 	switch *fwdType {
 	case "local", "remote", "dynamic":
 		// OK
 	default:
-		exitError("--type は local, remote, dynamic のいずれかを指定してください")
+		exitError("%s", i18n.T("cli.add.type_invalid"))
 	}
 
 	if *fwdType != "dynamic" {
 		if *remotePort == 0 {
-			exitError("--remote-port フラグは local/remote 転送で必須です")
+			exitError("%s", i18n.T("cli.add.remote_port_required"))
 		}
 		if *remotePort < 1 || *remotePort > 65535 {
-			exitError("ポート番号は 1〜65535 の範囲で入力してください")
+			exitError("%s", i18n.T("cli.add.port_range"))
 		}
 	}
 
@@ -70,5 +71,5 @@ func RunAdd(configDir string, args []string) {
 		exitError("%v", err)
 	}
 
-	fmt.Printf("ルール '%s' を追加しました\n", result.Name)
+	fmt.Println(i18n.T("cli.add.success", map[string]any{"Name": result.Name}))
 }

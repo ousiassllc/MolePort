@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 	"github.com/ousiassllc/moleport/internal/tui/theme"
@@ -11,14 +12,30 @@ import (
 const (
 	pageDashboard = "dashboard"
 	pageTheme     = "theme"
+	pageLang      = "lang"
 )
 
 // handleConfigLoaded は設定読み込み完了メッセージを処理する。
 func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
-		m.dashboard.AppendLog("config load error: " + msg.Err.Error())
+		if !m.restarting {
+			m.dashboard.AppendLog(i18n.T("tui.log.config_load_error", map[string]any{"Error": msg.Err}))
+		}
 		return m, nil
 	}
+
+	// 言語が未設定 → 初回起動: 言語選択ページから開始
+	if msg.Language == "" {
+		m.isFirstLaunch = true
+		m.openLangPage()
+		return m, nil
+	}
+
+	// 言語が設定済み → 適用
+	_ = i18n.SetLang(i18n.Lang(msg.Language))
+	m.currentLang = msg.Language
+
+	// テーマが未設定 → テーマ選択ページへ
 	if msg.ThemeBase == "" || msg.ThemeAccent == "" {
 		m.isFirstLaunch = true
 		m.currentPresetID = theme.DefaultPresetID()
@@ -61,8 +78,8 @@ func (m MainModel) handleThemeCancelled() (MainModel, tea.Cmd) {
 
 // handleThemeSaved はテーマ保存完了メッセージを処理する。
 func (m MainModel) handleThemeSaved(msg tui.ThemeSavedMsg) (MainModel, tea.Cmd) {
-	if msg.Err != nil {
-		m.dashboard.AppendLog("theme save error: " + msg.Err.Error())
+	if msg.Err != nil && !m.restarting {
+		m.dashboard.AppendLog(i18n.T("tui.log.theme_save_error", map[string]any{"Error": msg.Err}))
 	}
 	return m, nil
 }

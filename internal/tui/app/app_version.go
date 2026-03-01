@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
@@ -50,16 +51,13 @@ func (m *MainModel) checkDaemonVersion() tea.Cmd {
 // handleVersionCheckDone はバージョンチェック結果を処理する。
 func (m MainModel) handleVersionCheckDone(msg tui.VersionCheckDoneMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("バージョンチェックエラー: %s", msg.Err))
+		m.dashboard.AppendLog(i18n.T("tui.version.check_error", map[string]any{"Error": msg.Err}))
 		return m, nil
 	}
 	if msg.Match {
 		return m, nil
 	}
-	message := fmt.Sprintf(
-		"デーモンのバージョン (%s) が TUI のバージョン (%s) と一致しません。デーモンを再起動しますか？",
-		msg.DaemonVersion, msg.TUIVersion,
-	)
+	message := i18n.T("tui.version.mismatch", map[string]any{"DaemonVersion": msg.DaemonVersion, "TUIVersion": msg.TUIVersion})
 	m.versionConfirm = molecules.NewConfirmDialog(message)
 	m.showVersionConfirm = true
 	return m, nil
@@ -69,11 +67,12 @@ func (m MainModel) handleVersionCheckDone(msg tui.VersionCheckDoneMsg) (MainMode
 func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cmd) {
 	m.showVersionConfirm = false
 	if confirmed {
-		m.dashboard.AppendLog("デーモンを再起動中...")
+		m.restarting = true
+		m.dashboard.AppendLog(i18n.T("tui.version.restarting"))
 		return m, m.restartDaemon()
 	}
 	m.dashboard.SetVersionWarning(true)
-	m.dashboard.AppendLog("バージョン不一致のまま続行します")
+	m.dashboard.AppendLog(i18n.T("tui.version.mismatch_continue"))
 	return m, nil
 }
 
@@ -118,13 +117,14 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 // handleDaemonRestartDone はデーモン再起動完了を処理する。
 // メインの Update ループで実行されるため、m.client の入れ替えはスレッドセーフ。
 func (m MainModel) handleDaemonRestartDone(msg daemonRestartDoneMsg) (MainModel, tea.Cmd) {
+	m.restarting = false
 	if msg.err != nil {
-		m.dashboard.AppendLog(fmt.Sprintf("デーモン再起動エラー: %s", msg.err))
+		m.dashboard.AppendLog(i18n.T("tui.version.restart_error", map[string]any{"Error": msg.err}))
 		return m, nil
 	}
 	m.client = msg.newClient
 	m.subscriptionID = ""
-	m.dashboard.AppendLog("デーモンを再起動しました")
+	m.dashboard.AppendLog(i18n.T("tui.version.restarted"))
 	return m, tea.Batch(
 		m.loadHosts(),
 		m.loadSessions(),

@@ -1,40 +1,18 @@
 package app
 
 import (
-	"context"
 	"fmt"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/pages"
 )
-
-const (
-	// metricsInterval はメトリクス更新の間隔。
-	metricsInterval = 2 * time.Second
-	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
-	ipcReadTimeout = 5 * time.Second
-	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
-	ipcWriteTimeout = 10 * time.Second
-	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
-	ipcShutdownTimeout = 2 * time.Second
-)
-
-// --- 内部メッセージ型 ---
-
-type sessionsLoadedMsg struct {
-	Sessions []core.ForwardSession
-}
-
-type subscriptionStartedMsg struct {
-	SubscriptionID string
-}
 
 // MainModel はアプリケーションのルート Bubble Tea モデル。
 type MainModel struct {
@@ -55,15 +33,18 @@ type MainModel struct {
 	// バージョン確認ダイアログ
 	versionConfirm     molecules.ConfirmDialog
 	showVersionConfirm bool
+	restarting         bool // デーモン再起動中フラグ
 
 	// ヘルプモーダル
 	showHelpModal bool
 
-	// テーマ / ページ遷移
-	currentPage      string // "dashboard" | "theme"
+	// ページ遷移
+	currentPage      string // "dashboard" | "theme" | "lang"
 	themePage        pages.ThemePage
+	langPage         pages.LangPage
 	currentPresetID  string
 	previousPresetID string
+	currentLang      string
 	isFirstLaunch    bool
 	width            int
 	height           int
@@ -104,6 +85,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
 		m.themePage.SetSize(msg.Width, msg.Height)
+		m.langPage.SetSize(msg.Width, msg.Height)
 		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		return m, cmd
@@ -130,7 +112,13 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.themePage, cmd = m.themePage.Update(msg)
 			return m, cmd
 		}
-		// テキスト入力中は q/?/t をグローバル処理しない
+		// 言語ページ表示中は ForceQuit 以外は langPage に転送
+		if m.currentPage == pageLang {
+			var cmd tea.Cmd
+			m.langPage, cmd = m.langPage.Update(msg)
+			return m, cmd
+		}
+		// テキスト入力中は q/?/t/l をグローバル処理しない
 		if !m.dashboard.IsInputActive() {
 			switch {
 			case key.Matches(msg, m.keys.Quit):
@@ -140,6 +128,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case key.Matches(msg, m.keys.Theme):
 				m.openThemePage()
+				return m, nil
+			case key.Matches(msg, m.keys.Lang):
+				m.openLangPage()
 				return m, nil
 			case key.Matches(msg, m.keys.Version):
 				m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version))
@@ -170,23 +161,34 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tui.ThemeSavedMsg:
 		return m.handleThemeSaved(msg)
 
+	case tui.LangSelectedMsg:
+		return m.handleLangSelected(msg)
+
+	case tui.LangCancelledMsg:
+		return m.handleLangCancelled()
+
+	case tui.LangSavedMsg:
+		return m.handleLangSaved(msg)
+
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(fmt.Sprintf("ホスト読み込みエラー: %s", msg.Err))
+			if !m.restarting {
+				m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}))
+			}
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
 			m.refreshForwardPanel()
-			m.dashboard.AppendLog(fmt.Sprintf("%d 件のホストを読み込みました", len(msg.Hosts)))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_loaded", map[string]any{"Count": len(msg.Hosts)}))
 		}
 
 	case tui.HostsReloadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(fmt.Sprintf("ホスト再読み込みエラー: %s", msg.Err))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reload_error", map[string]any{"Error": msg.Err}))
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
-			m.dashboard.AppendLog(fmt.Sprintf("%d 件のホストを再読み込みしました", len(msg.Hosts)))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reloaded", map[string]any{"Count": len(msg.Hosts)}))
 		}
 
 	case tui.HostSelectedMsg:
@@ -205,11 +207,16 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.listenIPCEvents())
 
 	case tui.IPCDisconnectedMsg:
-		m.dashboard.AppendLog("デーモンとの接続が切断されました")
+		if m.restarting {
+			return m, nil
+		}
+		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"))
 		return m, m.shutdown()
 
 	case tui.MetricsTickMsg:
-		cmds = append(cmds, m.loadSessions())
+		if !m.restarting {
+			cmds = append(cmds, m.loadSessions())
+		}
 		cmds = append(cmds, m.metricsTick())
 
 	case tui.ForwardAddRequestMsg:
@@ -219,7 +226,9 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tui.LogOutputMsg:
-		m.dashboard.AppendLog(msg.Text)
+		if !m.restarting {
+			m.dashboard.AppendLog(msg.Text)
+		}
 		return m, nil
 
 	case tui.ForwardToggleMsg:
@@ -254,7 +263,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View は Bubble Tea の View メソッド。
 func (m MainModel) View() string {
 	if m.quitting {
-		return "終了中...\n"
+		return i18n.T("tui.log.quitting") + "\n"
 	}
 	if m.showHelpModal {
 		return m.renderHelpOverlay()
@@ -265,22 +274,8 @@ func (m MainModel) View() string {
 	if m.currentPage == pageTheme {
 		return m.themePage.View()
 	}
-	return m.dashboard.View()
-}
-
-// --- ヘルパー ---
-
-func (m *MainModel) refreshForwardPanel() {
-	m.dashboard.SetForwardSessions(m.sessions)
-}
-
-func (m *MainModel) shutdown() tea.Cmd {
-	m.quitting = true
-	// IPC クライアントをクリーンアップ（daemon は停止しない）
-	if m.subscriptionID != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), ipcShutdownTimeout)
-		defer cancel()
-		_ = m.client.Unsubscribe(ctx, m.subscriptionID)
+	if m.currentPage == pageLang {
+		return m.langPage.View()
 	}
-	return tea.Quit
+	return m.dashboard.View()
 }

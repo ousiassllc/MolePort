@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -15,7 +16,7 @@ const connectCallTimeout = 60 * time.Second
 // RunConnect は connect サブコマンドを実行する。
 func RunConnect(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("ホスト名を指定してください: moleport connect <host>")
+		exitError("%s", i18n.T("cli.connect.host_required"))
 	}
 
 	host := args[0]
@@ -34,5 +35,5 @@ func RunConnect(configDir string, args []string) {
 		exitError("%v", err)
 	}
 
-	fmt.Printf("%s に接続しました\n", result.Host)
+	fmt.Println(i18n.T("cli.connect.success", map[string]any{"Host": result.Host}))
 }

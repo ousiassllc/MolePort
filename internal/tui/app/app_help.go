@@ -2,27 +2,29 @@ package app
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
 // renderHelpOverlay はヘルプモーダルを画面中央にオーバーレイ描画する。
 func (m MainModel) renderHelpOverlay() string {
 	lines := []string{
-		tui.TitleStyle().Render("キー操作"),
+		tui.TitleStyle().Render(i18n.T("tui.help.title")),
 		"",
-		tui.KeyStyle().Render("  Tab") + tui.MutedStyle().Render("         ペイン切替 (Forwards ↔ Setup)"),
-		tui.KeyStyle().Render("  /") + tui.MutedStyle().Render("           セットアップパネルにフォーカス"),
-		tui.KeyStyle().Render("  ↑/k ↓/j") + tui.MutedStyle().Render("     カーソル移動"),
-		tui.KeyStyle().Render("  Enter") + tui.MutedStyle().Render("       選択 / 接続トグル"),
-		tui.KeyStyle().Render("  d") + tui.MutedStyle().Render("           切断"),
-		tui.KeyStyle().Render("  x") + tui.MutedStyle().Render("           ルール削除"),
-		tui.KeyStyle().Render("  Esc") + tui.MutedStyle().Render("         ウィザードキャンセル"),
-		tui.KeyStyle().Render("  t") + tui.MutedStyle().Render("           テーマ選択"),
-		tui.KeyStyle().Render("  v") + tui.MutedStyle().Render("           バージョン表示"),
-		tui.KeyStyle().Render("  ?") + tui.MutedStyle().Render("           ヘルプ"),
-		tui.KeyStyle().Render("  q / Ctrl+C") + tui.MutedStyle().Render("  終了"),
+		tui.KeyStyle().Render("  Tab") + tui.MutedStyle().Render("         "+i18n.T("tui.help.tab")),
+		tui.KeyStyle().Render("  /") + tui.MutedStyle().Render("           "+i18n.T("tui.help.slash")),
+		tui.KeyStyle().Render("  ↑/k ↓/j") + tui.MutedStyle().Render("     "+i18n.T("tui.help.arrows")),
+		tui.KeyStyle().Render("  Enter") + tui.MutedStyle().Render("       "+i18n.T("tui.help.enter")),
+		tui.KeyStyle().Render("  d") + tui.MutedStyle().Render("           "+i18n.T("tui.help.d")),
+		tui.KeyStyle().Render("  x") + tui.MutedStyle().Render("           "+i18n.T("tui.help.x")),
+		tui.KeyStyle().Render("  Esc") + tui.MutedStyle().Render("         "+i18n.T("tui.help.esc")),
+		tui.KeyStyle().Render("  t") + tui.MutedStyle().Render("           "+i18n.T("tui.help.t")),
+		tui.KeyStyle().Render("  l") + tui.MutedStyle().Render("           "+i18n.T("tui.help.l")),
+		tui.KeyStyle().Render("  v") + tui.MutedStyle().Render("           "+i18n.T("tui.help.v")),
+		tui.KeyStyle().Render("  ?") + tui.MutedStyle().Render("           "+i18n.T("tui.help.question")),
+		tui.KeyStyle().Render("  q / Ctrl+C") + tui.MutedStyle().Render("  "+i18n.T("tui.help.q")),
 		"",
-		tui.MutedStyle().Render("  任意のキーで閉じる"),
+		tui.MutedStyle().Render("  " + i18n.T("tui.help.any_key_close")),
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)

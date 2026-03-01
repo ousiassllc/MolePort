@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
 
 // KeyMap はアプリケーション全体のキーバインドを定義する。
 type KeyMap struct {
@@ -21,6 +24,7 @@ type KeyMap struct {
 	Disconnect key.Binding
 	Delete     key.Binding
 	Theme      key.Binding
+	Lang       key.Binding
 	Version    key.Binding
 }
 
@@ -29,55 +33,59 @@ func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Tab: key.NewBinding(
 			key.WithKeys("tab"),
-			key.WithHelp("Tab", "ペイン切替"),
+			key.WithHelp("Tab", i18n.T("tui.keys.switch_pane")),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
-			key.WithHelp("?", "ヘルプ"),
+			key.WithHelp("?", i18n.T("tui.keys.help")),
 		),
 		Search: key.NewBinding(
 			key.WithKeys("/"),
-			key.WithHelp("/", "検索"),
+			key.WithHelp("/", i18n.T("tui.keys.search")),
 		),
 		Escape: key.NewBinding(
 			key.WithKeys("esc"),
-			key.WithHelp("Esc", "キャンセル"),
+			key.WithHelp("Esc", i18n.T("tui.keys.cancel")),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q"),
-			key.WithHelp("q", "終了"),
+			key.WithHelp("q", i18n.T("tui.keys.quit")),
 		),
 		ForceQuit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
-			key.WithHelp("Ctrl+C", "強制終了"),
+			key.WithHelp("Ctrl+C", i18n.T("tui.keys.force_quit")),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "上"),
+			key.WithHelp("↑/k", i18n.T("tui.keys.up")),
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "下"),
+			key.WithHelp("↓/j", i18n.T("tui.keys.down")),
 		),
 		Enter: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("Enter", "実行"),
+			key.WithHelp("Enter", i18n.T("tui.keys.execute")),
 		),
 		Disconnect: key.NewBinding(
 			key.WithKeys("d"),
-			key.WithHelp("d", "切断"),
+			key.WithHelp("d", i18n.T("tui.keys.disconnect")),
 		),
 		Delete: key.NewBinding(
 			key.WithKeys("x"),
-			key.WithHelp("x", "削除"),
+			key.WithHelp("x", i18n.T("tui.keys.delete")),
 		),
 		Theme: key.NewBinding(
 			key.WithKeys("t"),
-			key.WithHelp("t", "テーマ"),
+			key.WithHelp("t", i18n.T("tui.keys.theme")),
+		),
+		Lang: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", i18n.T("tui.keys.lang")),
 		),
 		Version: key.NewBinding(
 			key.WithKeys("v"),
-			key.WithHelp("v", "バージョン"),
+			key.WithHelp("v", i18n.T("tui.keys.version")),
 		),
 	}
 }
@@ -94,6 +102,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab, k.Help, k.Search, k.Escape, k.Quit, k.ForceQuit},
 		{k.Up, k.Down},
-		{k.Enter, k.Disconnect, k.Delete, k.Theme, k.Version},
+		{k.Enter, k.Disconnect, k.Delete, k.Theme, k.Lang, k.Version},
 	}
 }

@@ -97,6 +97,9 @@ func TestVersionConfirmResult_Yes_ReturnsRestartCmd(t *testing.T) {
 	if updated.showVersionConfirm {
 		t.Error("showVersionConfirm should be false after confirm result")
 	}
+	if !updated.restarting {
+		t.Error("restarting should be true after user confirms restart")
+	}
 	if cmd == nil {
 		t.Error("restart command should be returned when user confirms")
 	}
@@ -163,5 +166,96 @@ func TestView_ShowsConfirmDialog_WhenVersionConfirmActive(t *testing.T) {
 	// ダッシュボードのヘッダーは表示されないこと
 	if strings.Contains(view, "MolePort") {
 		t.Error("View should NOT contain dashboard header when confirm dialog is shown")
+	}
+}
+
+// --- 回帰テスト: デーモン再起動中のガード ---
+
+func TestMetricsTickDuringRestart_SkipsLoadSessions(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, cmd := m.Update(tui.MetricsTickMsg{})
+	updated := result.(MainModel)
+
+	// restarting 中でもタイマーは再スケジュールされるため cmd != nil
+	if cmd == nil {
+		t.Error("metricsTick cmd should still be returned for timer re-schedule")
+	}
+	// loadSessions は呼ばれないのでログが出ない
+	if got := updated.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("LogLineCount() = %d, want 0 (loadSessions should be skipped during restart)", got)
+	}
+}
+
+func TestIPCDisconnectedDuringRestart_SkipsShutdown(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, cmd := m.Update(tui.IPCDisconnectedMsg{})
+	updated := result.(MainModel)
+
+	if updated.quitting {
+		t.Error("quitting should be false when IPCDisconnectedMsg arrives during restart")
+	}
+	if cmd != nil {
+		t.Error("no command should be returned when IPCDisconnectedMsg is skipped during restart")
+	}
+}
+
+func TestDaemonRestartDone_ClearsRestartingFlag(t *testing.T) {
+	newClient := client.NewIPCClient("/tmp/new.sock")
+	m := NewMainModel(newClient, "2.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	msg := daemonRestartDoneMsg{newClient: newClient}
+	result, _ := m.Update(msg)
+	updated := result.(MainModel)
+
+	if updated.restarting {
+		t.Error("restarting should be false after successful daemon restart")
+	}
+}
+
+func TestDaemonRestartDone_Error_ClearsRestartingFlag(t *testing.T) {
+	m := NewMainModel(nil, "2.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	msg := daemonRestartDoneMsg{err: fmt.Errorf("restart failed")}
+	result, _ := m.Update(msg)
+	updated := result.(MainModel)
+
+	if updated.restarting {
+		t.Error("restarting should be false after failed daemon restart")
+	}
+}
+
+func TestLogOutputDuringRestart_Suppressed(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, _ := m.Update(tui.LogOutputMsg{Text: "Session fetch error: not connected"})
+	updated := result.(MainModel)
+
+	if got := updated.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("LogLineCount() = %d, want 0 (LogOutputMsg should be suppressed during restart)", got)
+	}
+}
+
+func TestThemeSavedErrorDuringRestart_Suppressed(t *testing.T) {
+	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+	m.dashboard.SetSize(80, 24)
+	m.restarting = true
+
+	result, _ := m.Update(tui.ThemeSavedMsg{Err: fmt.Errorf("not connected")})
+	updated := result.(MainModel)
+
+	if got := updated.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("LogLineCount() = %d, want 0 (ThemeSavedMsg error should be suppressed during restart)", got)
 	}
 }

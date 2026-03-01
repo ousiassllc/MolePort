@@ -1,0 +1,186 @@
+cli:
+  help:
+    text: |
+      MolePort - SSH ポートフォワーディングマネージャ
+
+      Usage:
+        moleport <command> [arguments]
+
+      Commands:
+        daemon start       デーモンをバックグラウンドで起動
+        daemon stop [--purge]  デーモンを停止（--purge: 状態クリア）
+        daemon status      デーモンの稼働状態を表示
+        daemon kill        デーモンを強制終了（応答しない場合）
+        connect <host>     SSH ホストに接続
+        disconnect <host>  SSH ホストを切断
+        add [flags]        転送ルールを追加
+        delete <name>      転送ルールを削除
+        start <name>       フォワーディングを開始
+        stop <name> / --all  フォワーディングを停止（--all: 全停止）
+        list [--json]      ホスト・転送ルールの一覧
+        status [name]      接続状態のサマリー
+        config [--json]    設定を表示
+        reload             SSH config を再読み込み
+        tui                TUI ダッシュボードを起動
+        help               このヘルプを表示
+        version            バージョン情報を表示
+
+      Global Flags:
+        --config-dir <path>  設定ディレクトリのパス
+  daemon:
+    subcommand_required: "サブコマンドを指定してください: start, stop, status, kill"
+    unknown_subcommand: "不明なサブコマンド: daemon {{.Sub}}"
+    started: "デーモンを起動しました (PID: {{.PID}})"
+    already_running: "デーモンは既に稼働中です (PID: {{.PID}})"
+    start_failed: "デーモンの起動に失敗しました: {{.Error}}"
+    stopped: "デーモンを停止しました"
+    stopped_purge: "デーモンを停止しました（状態をクリア）"
+    stop_failed: "デーモンの停止に失敗しました: {{.Error}}"
+    connect_failed: "デーモンへの接続に失敗しました: {{.Error}}"
+    not_running: "デーモンは稼働していません"
+    killed: "デーモンを強制終了しました (PID: {{.PID}})"
+    kill_failed: "デーモンの強制終了に失敗しました: {{.Error}}"
+    status_failed: "ステータスの取得に失敗しました: {{.Error}}"
+  connect:
+    success: "{{.Host}} に接続しました"
+    host_required: "ホスト名を指定してください: moleport connect <host>"
+  disconnect:
+    success: "{{.Host}} を切断しました"
+    host_required: "ホスト名を指定してください: moleport disconnect <host>"
+  add:
+    success: "ルール '{{.Name}}' を追加しました"
+    host_required: "--host フラグは必須です"
+    local_port_required: "--local-port フラグは必須です"
+    port_range: "ポート番号は 1〜65535 の範囲で入力してください"
+    type_invalid: "--type は local, remote, dynamic のいずれかを指定してください"
+    remote_port_required: "--remote-port フラグは local/remote 転送で必須です"
+  delete:
+    success: "ルール '{{.Name}}' を削除しました"
+    name_required: "ルール名を指定してください: moleport delete <name>"
+  start:
+    success: "{{.Name}} を開始しました"
+    name_required: "ルール名を指定してください: moleport start <name>"
+  stop:
+    success: "{{.Name}} を停止しました"
+    all_stopped: "全フォワーディングを停止しました ({{.Count}} 件)"
+    name_required: "ルール名を指定してください: moleport stop <name> / --all"
+  list:
+    no_rules: "(転送ルールなし)"
+    hosts_header: "SSH ホスト ({{.Total}} 件, {{.Connected}} 件接続中):"
+    get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
+    get_forwards_failed: "転送ルール一覧の取得に失敗しました: {{.Error}}"
+  status:
+    get_failed: "ステータスの取得に失敗しました: {{.Error}}"
+    get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
+    get_sessions_failed: "セッション一覧の取得に失敗しました: {{.Error}}"
+  config:
+    get_failed: "設定の取得に失敗しました: {{.Error}}"
+  reload:
+    success: "SSH config を再読み込みしました"
+    hosts_count: "  {{.Total}} ホスト読み込み（新規: {{.Added}}, 削除: {{.Removed}}）"
+    host_added: "  + {{.Name}} が追加されました"
+    host_removed: "  - {{.Name}} が削除されました"
+    failed: "SSH config の再読み込みに失敗しました: {{.Error}}"
+  tui:
+    daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
+    daemon_started: "デーモンを起動しました (PID: {{.PID}})"
+    daemon_connect_failed: "デーモンへの接続に失敗しました: {{.Error}}"
+    tui_error: "TUI エラー: {{.Error}}"
+  credential:
+    password_prompt: "{{.Host}} のパスワード: "
+    passphrase_prompt: "{{.Host}} の鍵パスフレーズ: "
+  error:
+    daemon_not_running: "デーモンが稼働していません。moleport daemon start で起動してください。"
+    json_output_failed: "JSON 出力に失敗しました: {{.Error}}"
+    unknown_command: "エラー: 不明なコマンド '{{.Command}}'"
+    prefix: "エラー"
+
+tui:
+  setup:
+    lang_title: "Language / 言語"
+  forward:
+    empty: "フォワーディングルールがありません"
+    title: "Active Forwards ({{.Count}})"
+  setup_panel:
+    no_hosts: "ホストが見つかりません"
+    title: "SSH Hosts ({{.Count}})"
+    select_type: "転送種別を選択:"
+    enter_select: "[Enter] 選択  [Esc] キャンセル"
+    enter_next: "[Enter] 次へ  [Esc] キャンセル"
+    enter_create: "[Enter] 作成 & 接続  [Esc] キャンセル"
+    step_progress: "ステップ {{.Current}}/{{.Total}}"
+    wizard_title: "新規フォワード"
+  keys:
+    switch_pane: "ペイン切替"
+    help: "ヘルプ"
+    quit: "終了"
+    search: "検索"
+    cancel: "キャンセル"
+    force_quit: "強制終了"
+    up: "上"
+    down: "下"
+    execute: "実行"
+    disconnect: "切断"
+    delete: "削除"
+    theme: "テーマ"
+    version: "バージョン"
+    lang: "言語"
+    toggle: "切替"
+    select: "選択"
+  help:
+    title: "キー操作"
+    tab: "ペイン切替 (Forwards ↔ Setup)"
+    slash: "セットアップパネルにフォーカス"
+    arrows: "カーソル移動"
+    enter: "選択 / 接続トグル"
+    d: "切断"
+    x: "ルール削除"
+    esc: "ウィザードキャンセル"
+    t: "テーマ選択"
+    l: "言語切替"
+    v: "バージョン表示"
+    question: "ヘルプ"
+    q: "終了"
+    any_key_close: "任意のキーで閉じる"
+  statusbar:
+    hosts: "hosts"
+    connected: "connected"
+    forwards: "forwards"
+    active: "active"
+  confirm:
+    yes: "はい"
+    no: "いいえ"
+    switch_hint: "切替"
+  password:
+    prompt: "{{.Host}} のパスワードを入力:"
+  version:
+    check_error: "バージョンチェックエラー: {{.Error}}"
+    mismatch: "デーモンのバージョン ({{.DaemonVersion}}) が TUI のバージョン ({{.TUIVersion}}) と一致しません。デーモンを再起動しますか？"
+    restarting: "デーモンを再起動中..."
+    restart_error: "デーモン再起動エラー: {{.Error}}"
+    restarted: "デーモンを再起動しました"
+    mismatch_continue: "バージョン不一致のまま続行します"
+  theme:
+    header: "テーマ選択"
+    help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"
+  lang:
+    help: "[↑↓] Select  [Enter] Apply  [Esc] Cancel/Skip"
+  log:
+    hosts_loaded: "{{.Count}} 件のホストを読み込みました"
+    hosts_reloaded: "{{.Count}} 件のホストを再読み込みしました"
+    hosts_load_error: "ホスト読み込みエラー: {{.Error}}"
+    hosts_reload_error: "ホスト再読み込みエラー: {{.Error}}"
+    session_error: "セッション取得エラー: {{.Error}}"
+    subscribe_error: "イベント購読エラー: {{.Error}}"
+    daemon_disconnected: "デーモンとの接続が切断されました"
+    quitting: "終了中..."
+    config_load_error: "設定読み込みエラー: {{.Error}}"
+    theme_save_error: "テーマ保存エラー: {{.Error}}"
+    lang_save_error: "言語保存エラー: {{.Error}}"
+    forward_add_error: "ルール追加エラー: {{.Error}}"
+    forward_added: "ルール '{{.Name}}' を追加しました"
+    forward_start_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}"
+    forward_started: "フォワード [{{.Name}}] を開始しました"
+    forward_stopped: "フォワード [{{.Name}}] を停止しました"
+    forward_deleted: "ルール '{{.Name}}' を削除しました"
+    forward_delete_error: "ルール '{{.Name}}' の削除に失敗: {{.Error}}"

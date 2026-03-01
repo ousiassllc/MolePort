@@ -8,10 +8,32 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
+
+const (
+	// metricsInterval はメトリクス更新の間隔。
+	metricsInterval = 2 * time.Second
+	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
+	ipcReadTimeout = 5 * time.Second
+	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
+	ipcWriteTimeout = 10 * time.Second
+	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
+	ipcShutdownTimeout = 2 * time.Second
+)
+
+// --- 内部メッセージ型 ---
+
+type sessionsLoadedMsg struct {
+	Sessions []core.ForwardSession
+}
+
+type subscriptionStartedMsg struct {
+	SubscriptionID string
+}
 
 // --- IPC 操作 ---
 
@@ -39,7 +61,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 		defer cancel()
 		var result protocol.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("セッション取得エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.session_error", map[string]any{"Error": err})}
 		}
 		sessions := make([]core.ForwardSession, len(result.Sessions))
 		for i, s := range result.Sessions {
@@ -56,7 +78,7 @@ func (m *MainModel) subscribeEvents() tea.Cmd {
 		defer cancel()
 		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
 		if err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("イベント購読エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.subscribe_error", map[string]any{"Error": err})}
 		}
 		return subscriptionStartedMsg{SubscriptionID: subID}
 	}
@@ -92,6 +114,7 @@ func (m *MainModel) loadConfig() tea.Cmd {
 		return tui.ConfigLoadedMsg{
 			ThemeBase:   result.TUI.Theme.Base,
 			ThemeAccent: result.TUI.Theme.Accent,
+			Language:    result.Language,
 		}
 	}
 }

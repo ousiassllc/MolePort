@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
@@ -41,7 +42,7 @@ func ResolveConfigDir(flagValue string) string {
 func connectDaemon(configDir string) *client.IPCClient {
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("デーモンが稼働していません。moleport daemon start で起動してください。")
+		exitError("%s", i18n.T("cli.error.daemon_not_running"))
 	}
 	return client
 }
@@ -53,7 +54,8 @@ func callCtx() (context.Context, context.CancelFunc) {
 
 // exitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
 func exitError(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "エラー: "+format+"\n", args...)
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintf(os.Stderr, "%s: %s\n", i18n.T("cli.error.prefix"), msg)
 	os.Exit(1)
 }
 
@@ -62,7 +64,7 @@ func printJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
-		exitError("JSON 出力に失敗しました: %v", err)
+		exitError("%s", i18n.T("cli.error.json_output_failed", map[string]any{"Error": err}))
 	}
 }
 

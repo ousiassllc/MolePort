@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
@@ -53,12 +54,16 @@ func (s StatusBar) View() string {
 	sep := tui.DividerStyle().Render(" │ ")
 
 	stats := fmt.Sprintf(
-		"%s hosts  %s connected%s%s forwards  %s active",
+		"%s %s  %s %s%s%s %s  %s %s",
 		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
+		i18n.T("tui.statusbar.hosts"),
 		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
+		i18n.T("tui.statusbar.connected"),
 		sep,
 		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
+		i18n.T("tui.statusbar.forwards"),
 		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
+		i18n.T("tui.statusbar.active"),
 	)
 
 	// ペインに応じたキーヒント
@@ -67,23 +72,23 @@ func (s StatusBar) View() string {
 	case tui.PaneForwards:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s  %s %s",
-			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render("Toggle"),
-			tui.KeyStyle().Render("[d]"), tui.DescStyle().Render("Disconnect"),
-			tui.KeyStyle().Render("[x]"), tui.DescStyle().Render("Delete"),
+			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render(i18n.T("tui.keys.toggle")),
+			tui.KeyStyle().Render("[d]"), tui.DescStyle().Render(i18n.T("tui.keys.disconnect")),
+			tui.KeyStyle().Render("[x]"), tui.DescStyle().Render(i18n.T("tui.keys.delete")),
 		)
 	case tui.PaneSetup:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s",
-			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render("Select"),
-			tui.KeyStyle().Render("[Esc]"), tui.DescStyle().Render("Cancel"),
+			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render(i18n.T("tui.keys.select")),
+			tui.KeyStyle().Render("[Esc]"), tui.DescStyle().Render(i18n.T("tui.keys.cancel")),
 		)
 	}
 
 	globalHints := fmt.Sprintf(
 		"%s %s  %s %s  %s %s",
-		tui.KeyStyle().Render("[Tab]"), tui.DescStyle().Render("Switch"),
-		tui.KeyStyle().Render("[?]"), tui.DescStyle().Render("Help"),
-		tui.KeyStyle().Render("[q]"), tui.DescStyle().Render("Quit"),
+		tui.KeyStyle().Render("[Tab]"), tui.DescStyle().Render(i18n.T("tui.keys.switch_pane")),
+		tui.KeyStyle().Render("[?]"), tui.DescStyle().Render(i18n.T("tui.keys.help")),
+		tui.KeyStyle().Render("[q]"), tui.DescStyle().Render(i18n.T("tui.keys.quit")),
 	)
 
 	hints := globalHints

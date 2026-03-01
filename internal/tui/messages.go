@@ -112,11 +112,27 @@ type ThemeCancelledMsg struct{}
 type ConfigLoadedMsg struct {
 	ThemeBase   string
 	ThemeAccent string
+	Language    string
 	Err         error
 }
 
 // ThemeSavedMsg はテーマ保存 IPC の完了通知。
 type ThemeSavedMsg struct {
+	Err error
+}
+
+// --- 言語関連メッセージ ---
+
+// LangSelectedMsg は言語選択ページで確定時に発行される。
+type LangSelectedMsg struct {
+	Lang string
+}
+
+// LangCancelledMsg は言語選択ページでキャンセル時に発行される。
+type LangCancelledMsg struct{}
+
+// LangSavedMsg は言語保存 IPC の完了通知。
+type LangSavedMsg struct {
 	Err error
 }
 

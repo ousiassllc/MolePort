@@ -14,8 +14,8 @@ func TestMainModel_ConfigLoaded_ThemeUnset_ShowsThemePage(t *testing.T) {
 	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
-	// テーマ未設定の ConfigLoadedMsg を送信
-	msg := tui.ConfigLoadedMsg{ThemeBase: "", ThemeAccent: ""}
+	// 言語設定済み・テーマ未設定の ConfigLoadedMsg を送信
+	msg := tui.ConfigLoadedMsg{ThemeBase: "", ThemeAccent: "", Language: "en"}
 	result, _ := m.Update(msg)
 	updated := result.(MainModel)
 
@@ -36,7 +36,7 @@ func TestMainModel_ConfigLoaded_ThemeSet_AppliesTheme(t *testing.T) {
 	m := NewMainModel(nil, "test", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 
-	msg := tui.ConfigLoadedMsg{ThemeBase: "dark", ThemeAccent: "blue"}
+	msg := tui.ConfigLoadedMsg{ThemeBase: "dark", ThemeAccent: "blue", Language: "en"}
 	result, _ := m.Update(msg)
 	updated := result.(MainModel)
 
