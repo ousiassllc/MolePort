@@ -21,7 +21,7 @@ type PromptInput struct {
 // NewPromptInput は新しい PromptInput を生成する。
 func NewPromptInput() PromptInput {
 	ti := textinput.New()
-	ti.Prompt = tui.ActiveStyle.Render("> ") + " "
+	ti.Prompt = tui.ActiveStyle().Render("> ") + " "
 	ti.Placeholder = "コマンドを入力..."
 	ti.CharLimit = 256
 	return PromptInput{textInput: ti}

@@ -72,7 +72,7 @@ func (p LogPanel) View() string {
 	}
 
 	content := strings.Join(rows, "\n")
-	return tui.RenderWithBorderTitle(tui.UnfocusedBorder, innerWidth, innerHeight, "Log", content)
+	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, "Log", content)
 }
 
 // styleLogLine はログ行にスタイルを適用する。
@@ -82,11 +82,11 @@ func styleLogLine(line string) string {
 	}
 	// エラー行
 	if strings.Contains(line, "エラー") || strings.Contains(line, "Error") || strings.Contains(line, "失敗") {
-		return tui.ErrorStyle.Render("✗") + " " + tui.MutedStyle.Render(line)
+		return tui.ErrorStyle().Render("✗") + " " + tui.MutedStyle().Render(line)
 	}
 	// 成功行（「しました」「完了」等）
 	if strings.Contains(line, "しました") || strings.Contains(line, "完了") || strings.Contains(line, "復元") {
-		return tui.ActiveStyle.Render("✓") + " " + tui.MutedStyle.Render(line)
+		return tui.ActiveStyle().Render("✓") + " " + tui.MutedStyle().Render(line)
 	}
-	return tui.MutedStyle.Render(line)
+	return tui.MutedStyle().Render(line)
 }

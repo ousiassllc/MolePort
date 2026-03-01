@@ -44,15 +44,15 @@ func (s *StatusBar) SetWidth(width int) {
 
 // View はステータスバーを描画する。
 func (s StatusBar) View() string {
-	sep := tui.DividerStyle.Render(" │ ")
+	sep := tui.DividerStyle().Render(" │ ")
 
 	stats := fmt.Sprintf(
 		"%s hosts  %s connected%s%s forwards  %s active",
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
+		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.TotalHosts)),
+		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.ConnectedHosts)),
 		sep,
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
-		tui.ActiveStyle.Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
+		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.TotalForwards)),
+		tui.ActiveStyle().Render(fmt.Sprintf("%d", s.stats.ActiveForwards)),
 	)
 
 	// ペインに応じたキーヒント
@@ -61,23 +61,23 @@ func (s StatusBar) View() string {
 	case tui.PaneForwards:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s  %s %s",
-			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Toggle"),
-			tui.KeyStyle.Render("[d]"), tui.DescStyle.Render("Disconnect"),
-			tui.KeyStyle.Render("[x]"), tui.DescStyle.Render("Delete"),
+			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render("Toggle"),
+			tui.KeyStyle().Render("[d]"), tui.DescStyle().Render("Disconnect"),
+			tui.KeyStyle().Render("[x]"), tui.DescStyle().Render("Delete"),
 		)
 	case tui.PaneSetup:
 		contextHints = fmt.Sprintf(
 			"%s %s  %s %s",
-			tui.KeyStyle.Render("[Enter]"), tui.DescStyle.Render("Select"),
-			tui.KeyStyle.Render("[Esc]"), tui.DescStyle.Render("Cancel"),
+			tui.KeyStyle().Render("[Enter]"), tui.DescStyle().Render("Select"),
+			tui.KeyStyle().Render("[Esc]"), tui.DescStyle().Render("Cancel"),
 		)
 	}
 
 	globalHints := fmt.Sprintf(
 		"%s %s  %s %s  %s %s",
-		tui.KeyStyle.Render("[Tab]"), tui.DescStyle.Render("Switch"),
-		tui.KeyStyle.Render("[?]"), tui.DescStyle.Render("Help"),
-		tui.KeyStyle.Render("[q]"), tui.DescStyle.Render("Quit"),
+		tui.KeyStyle().Render("[Tab]"), tui.DescStyle().Render("Switch"),
+		tui.KeyStyle().Render("[?]"), tui.DescStyle().Render("Help"),
+		tui.KeyStyle().Render("[q]"), tui.DescStyle().Render("Quit"),
 	)
 
 	hints := globalHints
@@ -85,7 +85,7 @@ func (s StatusBar) View() string {
 		hints = contextHints + sep + globalHints
 	}
 
-	left := tui.MutedStyle.Render(" ") + stats
+	left := tui.MutedStyle().Render(" ") + stats
 	right := hints
 
 	if s.width <= 0 {

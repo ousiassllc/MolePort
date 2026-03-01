@@ -19,12 +19,12 @@ func RenderDataSize(bytes int64) string {
 	default:
 		text = fmt.Sprintf("%dB", bytes)
 	}
-	return tui.MutedStyle.Render(text)
+	return tui.MutedStyle().Render(text)
 }
 
 // RenderTraffic は送受信トラフィックを ↑/↓ シンボル付きで描画する。
 func RenderTraffic(sent, received int64) string {
-	up := tui.DividerStyle.Render("↑") + RenderDataSize(sent)
-	down := tui.DividerStyle.Render("↓") + RenderDataSize(received)
+	up := tui.DividerStyle().Render("↑") + RenderDataSize(sent)
+	down := tui.DividerStyle().Render("↓") + RenderDataSize(received)
 	return up + " " + down
 }
