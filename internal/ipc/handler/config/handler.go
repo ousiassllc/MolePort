@@ -1,4 +1,4 @@
-package handler
+package config
 
 import (
 	"encoding/json"
@@ -8,7 +8,18 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
-func (h *Handler) configGet() (any, *protocol.RPCError) {
+// Handler は設定関連の JSON-RPC メソッドを処理する。
+type Handler struct {
+	cfgMgr core.ConfigManager
+}
+
+// New は新しい設定ハンドラを生成する。
+func New(cfgMgr core.ConfigManager) *Handler {
+	return &Handler{cfgMgr: cfgMgr}
+}
+
+// Get は config.get リクエストを処理する。
+func (h *Handler) Get() (any, *protocol.RPCError) {
 	cfg := h.cfgMgr.GetConfig()
 
 	result := protocol.ConfigGetResult{
@@ -61,10 +72,14 @@ func (h *Handler) configGet() (any, *protocol.RPCError) {
 	return result, nil
 }
 
-func (h *Handler) configUpdate(params json.RawMessage) (any, *protocol.RPCError) {
+// Update は config.update リクエストを処理する。
+func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.ConfigUpdateParams
-	if err := parseParams(params, &p); err != nil {
-		return nil, err
+	if len(params) == 0 {
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "params required"}
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "invalid params: " + err.Error()}
 	}
 
 	if err := h.cfgMgr.UpdateConfig(func(cfg *core.Config) {

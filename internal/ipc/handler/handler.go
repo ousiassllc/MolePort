@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc"
+	cfghandler "github.com/ousiassllc/moleport/internal/ipc/handler/config"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -24,12 +25,13 @@ type NotificationSender interface {
 
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
 type Handler struct {
-	sshMgr core.SSHManager
-	fwdMgr core.ForwardManager
-	cfgMgr core.ConfigManager
-	broker *ipc.EventBroker
-	daemon DaemonInfo
-	sender NotificationSender
+	sshMgr  core.SSHManager
+	fwdMgr  core.ForwardManager
+	cfgMgr  core.ConfigManager
+	configH *cfghandler.Handler
+	broker  *ipc.EventBroker
+	daemon  DaemonInfo
+	sender  NotificationSender
 
 	credMu      sync.Mutex
 	credPending map[string]chan protocol.CredentialResponseParams
@@ -48,6 +50,7 @@ func NewHandler(
 		sshMgr:      sshMgr,
 		fwdMgr:      fwdMgr,
 		cfgMgr:      cfgMgr,
+		configH:     cfghandler.New(cfgMgr),
 		broker:      broker,
 		daemon:      daemon,
 		credPending: make(map[string]chan protocol.CredentialResponseParams),
@@ -90,9 +93,9 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 	case "session.get":
 		return h.sessionGet(params)
 	case "config.get":
-		return h.configGet()
+		return h.configH.Get()
 	case "config.update":
-		return h.configUpdate(params)
+		return h.configH.Update(params)
 	case "daemon.status":
 		return h.daemonStatus()
 	case "daemon.shutdown":
