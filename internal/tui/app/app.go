@@ -55,6 +55,7 @@ type MainModel struct {
 	// バージョン確認ダイアログ
 	versionConfirm     molecules.ConfirmDialog
 	showVersionConfirm bool
+	restarting         bool // デーモン再起動中フラグ
 
 	// ヘルプモーダル
 	showHelpModal bool
@@ -226,11 +227,16 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.listenIPCEvents())
 
 	case tui.IPCDisconnectedMsg:
+		if m.restarting {
+			return m, nil
+		}
 		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"))
 		return m, m.shutdown()
 
 	case tui.MetricsTickMsg:
-		cmds = append(cmds, m.loadSessions())
+		if !m.restarting {
+			cmds = append(cmds, m.loadSessions())
+		}
 		cmds = append(cmds, m.metricsTick())
 
 	case tui.ForwardAddRequestMsg:

@@ -67,6 +67,7 @@ func (m MainModel) handleVersionCheckDone(msg tui.VersionCheckDoneMsg) (MainMode
 func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cmd) {
 	m.showVersionConfirm = false
 	if confirmed {
+		m.restarting = true
 		m.dashboard.AppendLog(i18n.T("tui.version.restarting"))
 		return m, m.restartDaemon()
 	}
@@ -116,6 +117,7 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 // handleDaemonRestartDone はデーモン再起動完了を処理する。
 // メインの Update ループで実行されるため、m.client の入れ替えはスレッドセーフ。
 func (m MainModel) handleDaemonRestartDone(msg daemonRestartDoneMsg) (MainModel, tea.Cmd) {
+	m.restarting = false
 	if msg.err != nil {
 		m.dashboard.AppendLog(i18n.T("tui.version.restart_error", map[string]any{"Error": msg.err}))
 		return m, nil
