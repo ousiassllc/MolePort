@@ -145,24 +145,24 @@ func runDaemonStatus(configDir string) {
 func RunDaemonMode(configDir string) {
 	if err := setupDaemonLogging(configDir); err != nil {
 		slog.Error("failed to setup logging", "error", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	d, err := daemon.New(configDir, Version)
 	if err != nil {
 		slog.Error("failed to create daemon", "error", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	ctx := context.Background()
 	if err := d.Start(ctx); err != nil {
 		slog.Error("failed to start daemon", "error", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 
 	if err := d.Wait(); err != nil {
 		slog.Error("daemon error", "error", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 }
 
