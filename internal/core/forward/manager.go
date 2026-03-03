@@ -11,6 +11,7 @@ import (
 )
 
 // activeForward は実行中のフォワーディングセッションを保持する。
+// starting が true の場合、起動処理中のプレースホルダーを表す。
 type activeForward struct {
 	session  core.ForwardSession
 	listener net.Listener
@@ -18,6 +19,7 @@ type activeForward struct {
 	cancel   context.CancelFunc
 	sent     atomic.Int64
 	received atomic.Int64
+	starting bool
 }
 
 type forwardManager struct {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -120,6 +122,53 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStopped)
 	}
 	assertSessionStatus(t, fm, "web", core.Stopped)
+}
+
+// TestForwardManager_StartForward_ConcurrentSameRule は、同じルールに対する
+// 並行 StartForward 呼び出しで重複リスナーが作成されないことを検証する。
+func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
+	sm := newMockSSHManager()
+	// ConnectWithCallback を遅延させて競合を発生しやすくする
+	var connectCount atomic.Int32
+	sm.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
+		connectCount.Add(1)
+		sm.mu.Lock()
+		sm.connected[hostName] = true
+		sm.sshConns[hostName] = newMockLocalDefaultConn()
+		sm.mu.Unlock()
+		return nil
+	}
+
+	fm := NewForwardManager(sm)
+	_, _ = fm.AddRule(core.ForwardRule{
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+	})
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	errs := make([]error, goroutines)
+
+	for i := range goroutines {
+		go func() {
+			defer wg.Done()
+			errs[i] = fm.StartForward("web", nil)
+		}()
+	}
+	wg.Wait()
+
+	// 成功は1つだけであること
+	successCount := 0
+	for _, err := range errs {
+		if err == nil {
+			successCount++
+		}
+	}
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 success, got %d", successCount)
+	}
+
+	fm.Close()
 }
 
 func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {

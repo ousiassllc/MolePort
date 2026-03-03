@@ -11,7 +11,7 @@ func (m *forwardManager) GetSession(ruleName string) (*core.ForwardSession, erro
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	if af, exists := m.active[ruleName]; exists {
+	if af, exists := m.active[ruleName]; exists && !af.starting {
 		session := af.session
 		session.BytesSent = af.sent.Load()
 		session.BytesReceived = af.received.Load()
@@ -41,7 +41,7 @@ func (m *forwardManager) GetAllSessions() []core.ForwardSession {
 			continue
 		}
 
-		if af, active := m.active[name]; active {
+		if af, active := m.active[name]; active && !af.starting {
 			session := af.session
 			session.BytesSent = af.sent.Load()
 			session.BytesReceived = af.received.Load()

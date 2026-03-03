@@ -16,6 +16,9 @@ func (m *forwardManager) MarkReconnecting(hostName string) {
 
 	m.mu.Lock()
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.Active {
 			_ = af.listener.Close()
 			af.cancel()
@@ -43,6 +46,9 @@ func (m *forwardManager) RestoreForwards(hostName string) []core.ForwardRestoreR
 	m.mu.RLock()
 	var targets []*activeForward
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.SessionReconnecting {
 			targets = append(targets, af)
 		}
@@ -174,6 +180,9 @@ func (m *forwardManager) FailReconnecting(hostName string) {
 
 	m.mu.Lock()
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.SessionReconnecting {
 			af.session.Status = core.SessionError
 			af.session.LastError = "reconnection failed"
