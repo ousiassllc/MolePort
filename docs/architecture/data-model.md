@@ -101,6 +101,11 @@ forwards:
 # 言語設定（"en" | "ja"）
 language: "ja"
 
+# アップデートチェック設定
+update_check:
+  enabled: true            # 自動アップデートチェックの有効/無効
+  interval: "24h"          # チェック間隔（最小: 1h）
+
 # TUI 設定
 tui:
   theme:
@@ -119,7 +124,13 @@ type Config struct {
     Log           LogConfig                 `yaml:"log"`
     Forwards      []ForwardRule             `yaml:"forwards"`
     Language      string                    `yaml:"language"`
+    UpdateCheck   UpdateCheckConfig         `yaml:"update_check"`
     TUI           TUIConfig                 `yaml:"tui"`
+}
+
+type UpdateCheckConfig struct {
+    Enabled  bool     `yaml:"enabled"`   // デフォルト: true
+    Interval Duration `yaml:"interval"`  // デフォルト: 24h、最小: 1h
 }
 
 type TUIConfig struct {
@@ -341,6 +352,16 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | ReconnectCount | int | 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント） |
 | LastError | string | 最後のエラーメッセージ |
 
+### VersionCheckResult
+
+デーモンがメモリにキャッシュする最新バージョンチェック結果。ディスクには永続化しない。
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| LatestVersion | string | 最新リリースのバージョン（例: `"v0.2.0"`） |
+| ReleaseURL | string | GitHub リリースページの URL |
+| CheckedAt | time.Time | チェック実行日時 |
+
 > **Note**: デーモンの状態情報は core パッケージの内部データモデルではなく、IPC プロトコル層の `DaemonStatusResult`（「デーモン管理」セクション参照）として定義されている。
 
 ### 内部データモデルの Go 型定義
@@ -402,6 +423,13 @@ type ForwardSession struct {
     BytesReceived  int64         // 受信バイト数
     ReconnectCount int           // 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント）
     LastError      string        // 最後のエラーメッセージ
+}
+
+// バージョンチェック結果（デーモンがメモリにキャッシュ）
+type VersionCheckResult struct {
+    LatestVersion string    // 最新リリースのバージョン（例: "v0.2.0"）
+    ReleaseURL    string    // GitHub リリースページの URL
+    CheckedAt     time.Time // チェック実行日時
 }
 
 ```
@@ -643,7 +671,12 @@ type ConfigGetResult struct {
     Session       SessionCfgInfo            `json:"session"`
     Log           LogInfo                   `json:"log"`
     Language      string                    `json:"language"`
+    UpdateCheck   UpdateCheckInfo           `json:"update_check"`
     TUI           TUIInfo                   `json:"tui"`
+}
+type UpdateCheckInfo struct {
+    Enabled  bool   `json:"enabled"`
+    Interval string `json:"interval"`
 }
 type TUIInfo struct {
     Theme ThemeInfo `json:"theme"`
@@ -684,7 +717,14 @@ type ConfigUpdateParams struct {
     Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
     Log           *LogUpdateInfo                   `json:"log,omitempty"`
     Language      *string                          `json:"language,omitempty"`
+    UpdateCheck   *UpdateCheckUpdateInfo           `json:"update_check,omitempty"`
     TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
+}
+
+// アップデートチェック設定の部分更新パラメータ
+type UpdateCheckUpdateInfo struct {
+    Enabled  *bool   `json:"enabled,omitempty"`
+    Interval *string `json:"interval,omitempty"`
 }
 
 // TUI 設定の部分更新パラメータ
@@ -744,6 +784,20 @@ type DaemonShutdownParams struct {
 }
 type DaemonShutdownResult struct {
     OK bool `json:"ok"`
+}
+```
+
+### バージョンチェック
+
+```go
+// version.check
+type VersionCheckParams struct{}
+type VersionCheckRPCResult struct {
+    CurrentVersion  string `json:"current_version"`            // 現在のバージョン（デーモンのビルドバージョン）
+    LatestVersion   string `json:"latest_version,omitempty"`   // 最新リリースバージョン
+    UpdateAvailable bool   `json:"update_available"`           // 更新があるか
+    ReleaseURL      string `json:"release_url,omitempty"`      // GitHub リリースページ URL
+    CheckedAt       string `json:"checked_at,omitempty"`       // チェック日時（RFC3339）
 }
 ```
 
@@ -861,3 +915,4 @@ type CredentialResponseResult struct {
 | 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |
 | 2.6 | 2026-03-01 | DaemonStatusResult に Version フィールドを追加 | #36 バージョン不一致検出 |
 | 2.7 | 2026-03-01 | Config/ConfigGetResult/ConfigUpdateParams に Language フィールド追加、DaemonShutdownParams に Purge フィールド追加、PromptInfo→PromptData 型名統一、CredentialRequestNotification.Type を string 型に修正、forward.stopAll 型定義追加 | ドキュメント乖離修正 (#40) |
+| 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckRPCResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |
