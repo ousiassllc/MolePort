@@ -33,9 +33,11 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 
 		// AutoConnect が設定されている場合はフォワードも開始
 		if msg.AutoConnect {
+			startCtx, startCancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
+			defer startCancel()
 			startParams := protocol.ForwardStartParams(result)
 			var startResult protocol.ForwardStartResult
-			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
+			if err := m.client.Call(startCtx, "forward.start", startParams, &startResult); err != nil {
 				// 開始に失敗したルールを削除（ロールバック）
 				delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 				defer delCancel()
@@ -81,7 +83,7 @@ func (m *MainModel) toggleForward(ruleName string) tea.Cmd {
 
 func (m *MainModel) startForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
 		defer cancel()
 		params := protocol.ForwardStartParams{Name: ruleName}
 		var result protocol.ForwardStartResult

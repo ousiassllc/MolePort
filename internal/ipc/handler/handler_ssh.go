@@ -14,6 +14,9 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(requiredField{"host", p.Host}); err != nil {
+		return nil, err
+	}
 
 	// クレデンシャルコールバックを構築
 	cb := h.buildCredentialCallback(clientID, p.Host)
@@ -98,6 +101,9 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPC
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(requiredField{"request_id", p.RequestID}); err != nil {
+		return nil, err
+	}
 
 	h.credMu.Lock()
 	ch, ok := h.credPending[p.RequestID]
@@ -119,6 +125,9 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPC
 func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.SSHDisconnectParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"host", p.Host}); err != nil {
 		return nil, err
 	}
 

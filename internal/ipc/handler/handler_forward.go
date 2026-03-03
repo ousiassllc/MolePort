@@ -38,6 +38,15 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *protocol.RPCError) {
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(
+		requiredField{"host", p.Host},
+		requiredField{"type", p.Type},
+	); err != nil {
+		return nil, err
+	}
+	if p.LocalPort <= 0 {
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "local_port must be greater than 0"}
+	}
 
 	fwdType, err := core.ParseForwardType(p.Type)
 	if err != nil {
@@ -68,6 +77,9 @@ func (h *Handler) forwardDelete(params json.RawMessage) (any, *protocol.RPCError
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(requiredField{"name", p.Name}); err != nil {
+		return nil, err
+	}
 
 	if err := h.fwdMgr.DeleteRule(p.Name); err != nil {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
@@ -80,6 +92,9 @@ func (h *Handler) forwardDelete(params json.RawMessage) (any, *protocol.RPCError
 func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.ForwardStartParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"name", p.Name}); err != nil {
 		return nil, err
 	}
 
@@ -104,6 +119,9 @@ func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *p
 func (h *Handler) forwardStop(params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.ForwardStopParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"name", p.Name}); err != nil {
 		return nil, err
 	}
 

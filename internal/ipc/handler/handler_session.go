@@ -23,6 +23,9 @@ func (h *Handler) sessionGet(params json.RawMessage) (any, *protocol.RPCError) {
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(requiredField{"name", p.Name}); err != nil {
+		return nil, err
+	}
 
 	session, err := h.fwdMgr.GetSession(p.Name)
 	if err != nil {

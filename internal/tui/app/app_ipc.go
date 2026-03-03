@@ -21,6 +21,8 @@ const (
 	ipcReadTimeout = 5 * time.Second
 	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
 	ipcWriteTimeout = 10 * time.Second
+	// ipcCredentialTimeout はクレデンシャル待ちを含む操作のタイムアウト。
+	ipcCredentialTimeout = 40 * time.Second
 	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
 	ipcShutdownTimeout = 2 * time.Second
 )
