@@ -16,6 +16,7 @@ import (
 
 type mockSSHManager struct {
 	hosts           []core.SSHHost
+	reloadHosts     []core.SSHHost // ReloadHosts 用の別ホストリスト（設定時のみ使用）
 	loadErr         error
 	reloadErr       error
 	connectFn       func(hostName string) error
@@ -34,6 +35,9 @@ func (m *mockSSHManager) LoadHosts() ([]core.SSHHost, error) {
 func (m *mockSSHManager) ReloadHosts() ([]core.SSHHost, error) {
 	if m.reloadErr != nil {
 		return nil, m.reloadErr
+	}
+	if m.reloadHosts != nil {
+		m.hosts = m.reloadHosts
 	}
 	return m.hosts, nil
 }
