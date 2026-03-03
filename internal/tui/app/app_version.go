@@ -8,7 +8,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -81,6 +80,7 @@ func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cm
 func (m *MainModel) restartDaemon() tea.Cmd {
 	c := m.client                        // capture for goroutine
 	configDir := m.configDir             // capture for goroutine
+	dm := m.daemonMgr                    // capture for goroutine
 	credHandler := c.CredentialHandler() // save before shutdown
 	return func() tea.Msg {
 		// 1. デーモンをシャットダウン（失敗してもリスタートを続行する）
@@ -95,12 +95,12 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 		_ = c.Close()
 
 		// 3. 新しいデーモンプロセスを起動
-		if _, err := daemon.StartDaemonProcess(configDir); err != nil {
+		if _, err := dm.StartDaemonProcess(configDir); err != nil {
 			return daemonRestartDoneMsg{err: fmt.Errorf("%s: %w", i18n.T("tui.log.daemon_start_failed"), err)}
 		}
 
 		// 4. 新しいデーモンに接続
-		newClient, err := daemon.EnsureDaemonWithRetry(configDir, 5*time.Second)
+		newClient, err := dm.EnsureDaemonWithRetry(configDir, 5*time.Second)
 		if err != nil {
 			return daemonRestartDoneMsg{err: fmt.Errorf("%s: %w", i18n.T("tui.log.daemon_connect_failed"), err)}
 		}
