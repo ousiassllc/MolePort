@@ -51,7 +51,7 @@ func RunList(configDir string, args []string) {
 	// ホスト数と接続数をカウント
 	connectedCount := 0
 	for _, h := range hosts.Hosts {
-		if h.State == "connected" {
+		if h.State == protocol.StateConnected {
 			connectedCount++
 		}
 	}
@@ -72,9 +72,9 @@ func RunList(configDir string, args []string) {
 
 		icon := "○"
 		switch h.State {
-		case "connected":
+		case protocol.StateConnected:
 			icon = "●"
-		case "pending_auth":
+		case protocol.StatePendingAuth:
 			icon = "◎"
 		}
 
@@ -95,13 +95,13 @@ func RunList(configDir string, args []string) {
 func printForwardLine(f protocol.ForwardInfo) {
 	typeChar := "L"
 	switch f.Type {
-	case "remote":
+	case protocol.ForwardTypeRemote:
 		typeChar = "R"
-	case "dynamic":
+	case protocol.ForwardTypeDynamic:
 		typeChar = "D"
 	}
 
-	if f.Type == "dynamic" {
+	if f.Type == protocol.ForwardTypeDynamic {
 		fmt.Printf("  %s  :%d\n", typeChar, f.LocalPort)
 	} else {
 		fmt.Printf("  %s  :%d  ->  %s:%d\n", typeChar, f.LocalPort, f.RemoteHost, f.RemotePort)

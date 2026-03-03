@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,7 @@ import (
 
 // CredentialHandler はクレデンシャル要求を処理するコールバック関数の型。
 // CLI や TUI がそれぞれの方法で実装する。
-// Connect() の前に SetCredentialHandler で設定すること。
+// SetCredentialHandler でいつでも安全に設定・変更できる。
 type CredentialHandler func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error)
 
 // IPCClient は Unix ドメインソケット経由でデーモンと通信するクライアント。
@@ -32,6 +33,7 @@ type IPCClient struct {
 	eventCh     chan *protocol.Notification
 	done        chan struct{}
 	connected   atomic.Bool
+	credMu      sync.RWMutex
 	credHandler CredentialHandler
 }
 
@@ -184,14 +186,19 @@ func (c *IPCClient) IsConnected() bool {
 }
 
 // SetCredentialHandler はクレデンシャル要求を処理するハンドラーを設定する。
-// Connect() の前に呼び出すこと。
+// いつでも安全に呼び出せる。
 func (c *IPCClient) SetCredentialHandler(handler CredentialHandler) {
+	c.credMu.Lock()
 	c.credHandler = handler
+	c.credMu.Unlock()
 }
 
 // CredentialHandler は現在設定されているクレデンシャルハンドラーを返す。
 func (c *IPCClient) CredentialHandler() CredentialHandler {
-	return c.credHandler
+	c.credMu.RLock()
+	h := c.credHandler
+	c.credMu.RUnlock()
+	return h
 }
 
 func (c *IPCClient) readLoop() {
@@ -250,7 +257,7 @@ func (c *IPCClient) readLoop() {
 
 // handleCredentialRequest は credential.request 通知を処理し、credential.response を送信する。
 func (c *IPCClient) handleCredentialRequest(notif protocol.Notification) {
-	handler := c.credHandler
+	handler := c.CredentialHandler()
 	if handler == nil {
 		// ハンドラー未設定の場合、パラメータからリクエスト ID を取得してキャンセルを送信
 		var req protocol.CredentialRequestNotification
@@ -285,7 +292,9 @@ func (c *IPCClient) sendCredentialCancel(requestID string) {
 		Cancelled: true,
 	}
 	var result protocol.CredentialResponseResult
-	_ = c.Call(ctx, "credential.response", params, &result)
+	if err := c.Call(ctx, "credential.response", params, &result); err != nil {
+		slog.Warn("failed to send credential cancel", "request_id", requestID, "error", err)
+	}
 }
 
 // sendCredentialResult はクレデンシャル応答を credential.response で送信する。
@@ -293,5 +302,7 @@ func (c *IPCClient) sendCredentialResult(resp *protocol.CredentialResponseParams
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var result protocol.CredentialResponseResult
-	_ = c.Call(ctx, "credential.response", resp, &result)
+	if err := c.Call(ctx, "credential.response", resp, &result); err != nil {
+		slog.Warn("failed to send credential response", "request_id", resp.RequestID, "error", err)
+	}
 }

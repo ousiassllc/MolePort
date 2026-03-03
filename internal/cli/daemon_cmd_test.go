@@ -58,6 +58,30 @@ func TestSetupDaemonLogging_CustomLogPath(t *testing.T) {
 	}
 }
 
+func TestRunDaemon_SubcommandRequired(t *testing.T) {
+	stubExit(t)
+
+	code, _ := captureExit(t, func() {
+		RunDaemon("/tmp", []string{})
+	})
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+}
+
+func TestRunDaemon_UnknownSubcommand(t *testing.T) {
+	stubExit(t)
+
+	code, _ := captureExit(t, func() {
+		RunDaemon("/tmp", []string{"unknown"})
+	})
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+}
+
 func TestParseSlogLevel(t *testing.T) {
 	tests := []struct {
 		input string

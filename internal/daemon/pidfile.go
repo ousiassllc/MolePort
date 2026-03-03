@@ -68,23 +68,23 @@ func (p *PIDFile) Release() error {
 func KillProcess(pidPath string) error {
 	data, err := os.ReadFile(pidPath) //nolint:gosec // pidPath は内部で生成された PID ファイルパス
 	if err != nil {
-		return fmt.Errorf("PID ファイルの読み取りに失敗: %w", err)
+		return fmt.Errorf("read pid file: %w", err)
 	}
 
 	pidStr := strings.TrimSpace(string(data))
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil || pid <= 0 {
 		_ = os.Remove(pidPath)
-		return fmt.Errorf("PID ファイルの内容が不正です: %q", pidStr)
+		return fmt.Errorf("invalid pid file content: %q", pidStr)
 	}
 
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
 		_ = os.Remove(pidPath)
-		return fmt.Errorf("プロセス %d の強制終了に失敗: %w", pid, err)
+		return fmt.Errorf("kill process %d: %w", pid, err)
 	}
 
 	if err := os.Remove(pidPath); err != nil {
-		return fmt.Errorf("PID ファイルの削除に失敗: %w", err)
+		return fmt.Errorf("remove pid file: %w", err)
 	}
 
 	return nil

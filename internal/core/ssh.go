@@ -15,7 +15,6 @@ type SSHConfigParser interface {
 }
 
 // SSHConnection は SSH 接続とポートフォワーディングの低レベル操作を提供する。
-// infra.SSHConnection と同じインターフェースで、import cycle を回避するために core で定義する。
 type SSHConnection interface {
 	// Dial はホスト情報を使って SSH 接続を確立し、クライアントを返す。
 	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。

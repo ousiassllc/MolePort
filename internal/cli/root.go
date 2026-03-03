@@ -52,11 +52,15 @@ func callCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 10*time.Second)
 }
 
+// exitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。
+// NOTE: stubExit/captureExit を使用するテストは t.Parallel() と併用不可。
+var exitFunc = os.Exit
+
 // exitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
 func exitError(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "%s: %s\n", i18n.T("cli.error.prefix"), msg)
-	os.Exit(1)
+	exitFunc(1)
 }
 
 // printJSON は値を整形された JSON として stdout に出力する。

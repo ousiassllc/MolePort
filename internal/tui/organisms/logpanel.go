@@ -80,13 +80,43 @@ func styleLogLine(line string) string {
 	if line == "" {
 		return ""
 	}
-	// エラー行
-	if strings.Contains(line, "エラー") || strings.Contains(line, "Error") || strings.Contains(line, "失敗") {
+	if isErrorLine(line) {
 		return tui.ErrorStyle().Render("✗") + " " + tui.MutedStyle().Render(line)
 	}
-	// 成功行（「しました」「完了」等）
-	if strings.Contains(line, "しました") || strings.Contains(line, "完了") || strings.Contains(line, "復元") {
+	if isSuccessLine(line) {
 		return tui.ActiveStyle().Render("✓") + " " + tui.MutedStyle().Render(line)
 	}
 	return tui.MutedStyle().Render(line)
+}
+
+// エラー判定キーワード（日本語 + 英語 + slog レベルプレフィックス）。
+var errorKeywords = []string{
+	"エラー", "失敗",
+	"error", "Error", "ERROR",
+	"failed", "Failed",
+}
+
+// 成功判定キーワード（日本語 + 英語）。
+var successKeywords = []string{
+	"しました", "完了", "復元",
+	"started", "stopped", "added", "deleted",
+	"loaded", "reloaded", "restarted", "saved",
+}
+
+func isErrorLine(line string) bool {
+	for _, kw := range errorKeywords {
+		if strings.Contains(line, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSuccessLine(line string) bool {
+	for _, kw := range successKeywords {
+		if strings.Contains(line, kw) {
+			return true
+		}
+	}
+	return false
 }

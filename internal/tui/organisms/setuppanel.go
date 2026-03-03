@@ -32,6 +32,7 @@ type SetupPanel struct {
 	step        WizardStep
 	typeCursor  int
 	typeOptions []string
+	keys        tui.KeyMap
 
 	portInput textinput.Model
 	hostInput textinput.Model
@@ -66,6 +67,7 @@ func NewSetupPanel() SetupPanel {
 
 	return SetupPanel{
 		typeOptions: []string{"Local (-L)", "Remote (-R)", "Dynamic (-D)"},
+		keys:        tui.DefaultKeyMap(),
 		portInput:   portIn,
 		hostInput:   hostIn,
 		nameInput:   nameIn,
@@ -131,23 +133,21 @@ func (p SetupPanel) Update(msg tea.Msg) (SetupPanel, tea.Cmd) {
 		return p.updateTextInputs(msg)
 	}
 
-	keys := tui.DefaultKeyMap()
-
 	// Esc でウィザードをキャンセルして StepIdle に戻る
-	if key.Matches(keyMsg, keys.Escape) && p.step != StepIdle {
+	if key.Matches(keyMsg, p.keys.Escape) && p.step != StepIdle {
 		p.resetWizard()
 		return p, nil
 	}
 
 	switch p.step {
 	case StepIdle:
-		return p.updateIdle(keyMsg, keys)
+		return p.updateIdle(keyMsg, p.keys)
 	case StepSelectType:
-		return p.updateSelectType(keyMsg, keys)
+		return p.updateSelectType(keyMsg, p.keys)
 	case StepLocalPort, StepRemoteHost, StepRemotePort, StepRuleName:
 		return p.updateTextInput(msg)
 	case StepConfirm:
-		return p.updateConfirm(keyMsg, keys)
+		return p.updateConfirm(keyMsg, p.keys)
 	}
 
 	return p, nil

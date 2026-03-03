@@ -14,6 +14,7 @@ import (
 type ThemeGrid struct {
 	darkPresets  []theme.Preset
 	lightPresets []theme.Preset
+	keys         tui.KeyMap
 	baseIndex    int // 0=Dark, 1=Light
 	accentIndex  int // 各カラム内のインデックス
 	width        int
@@ -25,6 +26,7 @@ func NewThemeGrid(currentPresetID string) ThemeGrid {
 	g := ThemeGrid{
 		darkPresets:  theme.PresetsByBase("dark"),
 		lightPresets: theme.PresetsByBase("light"),
+		keys:         tui.DefaultKeyMap(),
 	}
 
 	p, ok := theme.FindPreset(currentPresetID)
@@ -49,7 +51,6 @@ func NewThemeGrid(currentPresetID string) ThemeGrid {
 
 // Update はキー入力に応じてカーソルを移動し、リアルタイムプレビューを適用する。
 func (g ThemeGrid) Update(msg tea.Msg) (ThemeGrid, tea.Cmd) {
-	km := tui.DefaultKeyMap()
 	leftKey := key.NewBinding(key.WithKeys("left", "h"))
 	rightKey := key.NewBinding(key.WithKeys("right", "l"))
 
@@ -59,12 +60,12 @@ func (g ThemeGrid) Update(msg tea.Msg) (ThemeGrid, tea.Cmd) {
 	}
 
 	switch {
-	case key.Matches(keyMsg, km.Up):
+	case key.Matches(keyMsg, g.keys.Up):
 		if g.accentIndex > 0 {
 			g.accentIndex--
 			g.applySelected()
 		}
-	case key.Matches(keyMsg, km.Down):
+	case key.Matches(keyMsg, g.keys.Down):
 		if g.accentIndex < g.activeColumnLen()-1 {
 			g.accentIndex++
 			g.applySelected()

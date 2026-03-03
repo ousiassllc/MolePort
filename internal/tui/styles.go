@@ -9,14 +9,11 @@ import (
 
 // カラーパレット（テーマから動的取得）
 
-func AccentColor() lipgloss.Color      { return theme.Current().Accent }
-func AccentDimColor() lipgloss.Color   { return theme.Current().AccentDim }
-func TextColor() lipgloss.Color        { return theme.Current().Text }
-func MutedColor() lipgloss.Color       { return theme.Current().Muted }
-func DimColor() lipgloss.Color         { return theme.Current().Dim }
-func ErrorColor() lipgloss.Color       { return theme.Current().Error }
-func WarningColor() lipgloss.Color     { return theme.Current().Warning }
-func BgHighlightColor() lipgloss.Color { return theme.Current().BgHighlight }
+func AccentColor() lipgloss.Color  { return theme.Current().Accent }
+func TextColor() lipgloss.Color    { return theme.Current().Text }
+func MutedColor() lipgloss.Color   { return theme.Current().Muted }
+func ErrorColor() lipgloss.Color   { return theme.Current().Error }
+func WarningColor() lipgloss.Color { return theme.Current().Warning }
 
 // テキストスタイル
 
@@ -63,12 +60,6 @@ func DividerStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme
 // ヘッダースタイル
 
 func HeaderStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
-}
-
-// セクションタイトルスタイル
-
-func SectionTitleStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
 }
 

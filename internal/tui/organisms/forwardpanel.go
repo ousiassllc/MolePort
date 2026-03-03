@@ -16,6 +16,7 @@ import (
 type ForwardPanel struct {
 	sessions []core.ForwardSession
 	cursor   int
+	keys     tui.KeyMap
 	focused  bool
 	width    int
 	height   int
@@ -23,7 +24,9 @@ type ForwardPanel struct {
 
 // NewForwardPanel は新しい ForwardPanel を生成する。
 func NewForwardPanel() ForwardPanel {
-	return ForwardPanel{}
+	return ForwardPanel{
+		keys: tui.DefaultKeyMap(),
+	}
 }
 
 // SetFocused はフォーカス状態を設定する。
@@ -60,30 +63,28 @@ func (p ForwardPanel) Update(msg tea.Msg) (ForwardPanel, tea.Cmd) {
 		return p, nil
 	}
 
-	keys := tui.DefaultKeyMap()
-
 	switch {
-	case key.Matches(keyMsg, keys.Up):
+	case key.Matches(keyMsg, p.keys.Up):
 		if p.cursor > 0 {
 			p.cursor--
 		}
-	case key.Matches(keyMsg, keys.Down):
+	case key.Matches(keyMsg, p.keys.Down):
 		if p.cursor < len(p.sessions)-1 {
 			p.cursor++
 		}
-	case key.Matches(keyMsg, keys.Enter):
+	case key.Matches(keyMsg, p.keys.Enter):
 		if s := p.selectedSession(); s != nil {
 			return p, func() tea.Msg {
 				return tui.ForwardToggleMsg{RuleName: s.Rule.Name}
 			}
 		}
-	case key.Matches(keyMsg, keys.Disconnect):
+	case key.Matches(keyMsg, p.keys.Disconnect):
 		if s := p.selectedSession(); s != nil && s.Status == core.Active {
 			return p, func() tea.Msg {
 				return tui.ForwardToggleMsg{RuleName: s.Rule.Name}
 			}
 		}
-	case key.Matches(keyMsg, keys.Delete):
+	case key.Matches(keyMsg, p.keys.Delete):
 		if s := p.selectedSession(); s != nil {
 			return p, func() tea.Msg {
 				return tui.ForwardDeleteRequestMsg{RuleName: s.Rule.Name}

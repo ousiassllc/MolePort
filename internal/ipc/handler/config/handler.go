@@ -2,11 +2,25 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
+
+func validateDuration(value *string, fieldName string) *protocol.RPCError {
+	if value == nil {
+		return nil
+	}
+	if _, err := time.ParseDuration(*value); err != nil {
+		return &protocol.RPCError{
+			Code:    protocol.InvalidParams,
+			Message: fmt.Sprintf("invalid %s: %s", fieldName, err),
+		}
+	}
+	return nil
+}
 
 // Handler は設定関連の JSON-RPC メソッドを処理する。
 type Handler struct {
@@ -81,6 +95,30 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "invalid params: " + err.Error()}
+	}
+
+	// Duration フィールドのバリデーション
+	if p.Reconnect != nil {
+		if err := validateDuration(p.Reconnect.InitialDelay, "reconnect.initial_delay"); err != nil {
+			return nil, err
+		}
+		if err := validateDuration(p.Reconnect.MaxDelay, "reconnect.max_delay"); err != nil {
+			return nil, err
+		}
+		if err := validateDuration(p.Reconnect.KeepAliveInterval, "reconnect.keepalive_interval"); err != nil {
+			return nil, err
+		}
+	}
+	for name, update := range p.Hosts {
+		if update == nil || update.Reconnect == nil {
+			continue
+		}
+		if err := validateDuration(update.Reconnect.InitialDelay, "hosts."+name+".reconnect.initial_delay"); err != nil {
+			return nil, err
+		}
+		if err := validateDuration(update.Reconnect.MaxDelay, "hosts."+name+".reconnect.max_delay"); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := h.cfgMgr.UpdateConfig(func(cfg *core.Config) {

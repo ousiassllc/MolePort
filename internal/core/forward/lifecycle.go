@@ -24,22 +24,37 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		m.mu.Unlock()
 		return fmt.Errorf("forward %q is already active", ruleName)
 	}
+
+	// 起動中プレースホルダーを挿入（並行 StartForward を防ぐ）
+	m.active[ruleName] = &activeForward{starting: true}
 	m.mu.Unlock()
+
+	// エラー時にプレースホルダーをクリーンアップするヘルパー
+	cleanup := func() {
+		m.mu.Lock()
+		if af, ok := m.active[ruleName]; ok && af.starting {
+			delete(m.active, ruleName)
+		}
+		m.mu.Unlock()
+	}
 
 	// SSH 接続を確認（必要に応じてコールバック付きで接続）
 	if !m.sshManager.IsConnected(rule.Host) {
 		if err := m.sshManager.ConnectWithCallback(rule.Host, cb); err != nil {
+			cleanup()
 			return fmt.Errorf("failed to connect to host %s: %w", rule.Host, err)
 		}
 	}
 
 	sshConn, err := m.sshManager.GetSSHConnection(rule.Host)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("failed to get SSH connection: %w", err)
 	}
 
 	sshClient, err := m.sshManager.GetConnection(rule.Host)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("failed to get SSH client: %w", err)
 	}
 
@@ -57,11 +72,13 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		listener, err = sshConn.DynamicForward(ctx, rule.LocalPort)
 	default:
 		cancel()
+		cleanup()
 		return fmt.Errorf("unsupported forward type: %v", rule.Type)
 	}
 
 	if err != nil {
 		cancel()
+		cleanup()
 		return fmt.Errorf("failed to create listener: %w", err)
 	}
 
@@ -134,6 +151,12 @@ func (m *forwardManager) StopAllForwards() error {
 func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession {
 	af, exists := m.active[ruleName]
 	if !exists {
+		return nil
+	}
+
+	// 起動中プレースホルダーの場合はエントリを削除するのみ
+	if af.starting {
+		delete(m.active, ruleName)
 		return nil
 	}
 

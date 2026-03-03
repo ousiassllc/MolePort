@@ -173,6 +173,23 @@ func TestToHostInfo(t *testing.T) {
 				ActiveForwardCount: 0,
 			},
 		},
+		{
+			name: "pending_auth host uses snake_case wire format",
+			host: core.SSHHost{
+				Name:     "auth-host",
+				HostName: "10.0.0.2",
+				Port:     22,
+				User:     "user",
+				State:    core.PendingAuth,
+			},
+			want: HostInfo{
+				Name:     "auth-host",
+				HostName: "10.0.0.2",
+				Port:     22,
+				User:     "user",
+				State:    "pending_auth",
+			},
+		},
 	}
 
 	for _, tt := range tests {

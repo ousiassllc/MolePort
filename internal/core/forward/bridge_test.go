@@ -4,11 +4,39 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
+
+// halfCloseConn は net.Conn をラップし、CloseWrite の呼び出しを記録する。
+type halfCloseConn struct {
+	net.Conn
+	closeWriteCalled atomic.Bool
+}
+
+func (c *halfCloseConn) CloseWrite() error {
+	c.closeWriteCalled.Store(true)
+	return nil
+}
+
+// plainConn は CloseWrite を持たない net.Conn ラッパー。
+// Close の呼び出しを記録する。
+type plainConn struct {
+	net.Conn
+	mu          sync.Mutex
+	closeCalled int
+}
+
+func (c *plainConn) Close() error {
+	c.mu.Lock()
+	c.closeCalled++
+	c.mu.Unlock()
+	return c.Conn.Close()
+}
 
 // doSOCKS5Connect はSOCKS5グリーティング・リクエストを送信し、接続先アドレスを返す。
 func doSOCKS5Connect(t *testing.T, request []byte) string {
@@ -153,5 +181,70 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for dial")
+	}
+}
+
+func TestCopyBidirectional_HalfClose(t *testing.T) {
+	aClient, aServer := net.Pipe()
+	bClient, bServer := net.Pipe()
+	defer func() { _ = aClient.Close() }()
+	defer func() { _ = bClient.Close() }()
+	hcA := &halfCloseConn{Conn: aServer}
+	hcB := &halfCloseConn{Conn: bServer}
+	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "hc-test"}}}
+	done := make(chan struct{})
+	go func() { defer close(done); fm.copyBidirectional(af, hcA, hcB) }()
+
+	_, _ = aClient.Write([]byte("hello"))
+	_ = aClient.Close()
+	buf := make([]byte, 5)
+	if _, err := io.ReadFull(bClient, buf); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	_ = bClient.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+	if !hcB.closeWriteCalled.Load() {
+		t.Error("CloseWrite not called on b")
+	}
+	if !hcA.closeWriteCalled.Load() {
+		t.Error("CloseWrite not called on a")
+	}
+}
+
+func TestCopyBidirectional_FallbackClose(t *testing.T) {
+	aClient, aServer := net.Pipe()
+	bClient, bServer := net.Pipe()
+	defer func() { _ = aClient.Close() }()
+	defer func() { _ = bClient.Close() }()
+	pcA := &plainConn{Conn: aServer}
+	pcB := &plainConn{Conn: bServer}
+	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "fb-test"}}}
+	done := make(chan struct{})
+	go func() { defer close(done); fm.copyBidirectional(af, pcA, pcB) }()
+
+	_ = aClient.Close()
+	_ = bClient.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+	pcA.mu.Lock()
+	ac := pcA.closeCalled
+	pcA.mu.Unlock()
+	pcB.mu.Lock()
+	bc := pcB.closeCalled
+	pcB.mu.Unlock()
+	if ac < 1 {
+		t.Error("Close not called on a")
+	}
+	if bc < 1 {
+		t.Error("Close not called on b")
 	}
 }

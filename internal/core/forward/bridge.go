@@ -11,6 +11,22 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// halfCloser は TCP half-close をサポートする接続を表す。
+// net.TCPConn はこのインターフェースを満たすが、SSH チャネル経由の接続は
+// 満たさない場合がある。
+type halfCloser interface {
+	CloseWrite() error
+}
+
+// bufPool は io.CopyBuffer で使用するバッファの再利用プール。
+// バッファサイズは io.Copy のデフォルト (32KB) と同じ。
+var bufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 32*1024)
+		return &buf
+	},
+}
+
 // acceptLoop はリスナーで接続を受け付け、ブリッジを作成する。
 func (m *forwardManager) acceptLoop(af *activeForward, rule core.ForwardRule, sshClient interface {
 	Dial(n, addr string) (net.Conn, error)
@@ -100,27 +116,45 @@ func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClien
 }
 
 // copyBidirectional は二つの接続間でデータを双方向にコピーする。
+// コピー完了後、half-close (CloseWrite) で EOF を相手側に伝播する。
 func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		n, err := io.Copy(b, a)
+		bufp := bufPool.Get().(*[]byte)
+		defer bufPool.Put(bufp)
+		n, err := io.CopyBuffer(b, a, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
 		}
 		af.sent.Add(n)
+		closeWrite(b)
 	}()
 
 	go func() {
 		defer wg.Done()
-		n, err := io.Copy(a, b)
+		bufp := bufPool.Get().(*[]byte)
+		defer bufPool.Put(bufp)
+		n, err := io.CopyBuffer(a, b, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
 		}
 		af.received.Add(n)
+		closeWrite(a)
 	}()
 
 	wg.Wait()
+}
+
+// closeWrite は接続の書き込み側を閉じる。
+// halfCloser をサポートする場合は CloseWrite で half-close を行い、
+// サポートしない場合は Close でフォールバックする。
+func closeWrite(c net.Conn) {
+	if hc, ok := c.(halfCloser); ok {
+		_ = hc.CloseWrite()
+	} else {
+		_ = c.Close()
+	}
 }

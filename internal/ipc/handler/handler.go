@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -122,3 +123,20 @@ func parseParams(params json.RawMessage, target any) *protocol.RPCError {
 
 // credentialTimeout はクレデンシャル応答のタイムアウト。
 const credentialTimeout = 30 * time.Second
+
+type requiredField struct {
+	name  string
+	value string
+}
+
+func validateRequired(fields ...requiredField) *protocol.RPCError {
+	for _, f := range fields {
+		if f.value == "" {
+			return &protocol.RPCError{
+				Code:    protocol.InvalidParams,
+				Message: fmt.Sprintf("%s is required", f.name),
+			}
+		}
+	}
+	return nil
+}
