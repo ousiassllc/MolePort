@@ -51,7 +51,7 @@ func ToHostInfo(host core.SSHHost) HostInfo {
 		HostName:           host.HostName,
 		Port:               host.Port,
 		User:               host.User,
-		State:              strings.ToLower(host.State.String()),
+		State:              connectionStateToWire(host.State),
 		ActiveForwardCount: host.ActiveForwardCount,
 	}
 }
@@ -61,7 +61,7 @@ func ToForwardInfo(rule core.ForwardRule) ForwardInfo {
 	return ForwardInfo{
 		Name:        rule.Name,
 		Host:        rule.Host,
-		Type:        strings.ToLower(rule.Type.String()),
+		Type:        forwardTypeToWire(rule.Type),
 		LocalPort:   rule.LocalPort,
 		RemoteHost:  rule.RemoteHost,
 		RemotePort:  rule.RemotePort,
@@ -75,11 +75,11 @@ func ToSessionInfo(s core.ForwardSession) SessionInfo {
 		ID:             s.ID,
 		Name:           s.Rule.Name,
 		Host:           s.Rule.Host,
-		Type:           strings.ToLower(s.Rule.Type.String()),
+		Type:           forwardTypeToWire(s.Rule.Type),
 		LocalPort:      s.Rule.LocalPort,
 		RemoteHost:     s.Rule.RemoteHost,
 		RemotePort:     s.Rule.RemotePort,
-		Status:         strings.ToLower(s.Status.String()),
+		Status:         sessionStatusToWire(s.Status),
 		BytesSent:      s.BytesSent,
 		BytesReceived:  s.BytesReceived,
 		ReconnectCount: s.ReconnectCount,
@@ -89,4 +89,52 @@ func ToSessionInfo(s core.ForwardSession) SessionInfo {
 		info.ConnectedAt = s.ConnectedAt.Format(time.RFC3339)
 	}
 	return info
+}
+
+// connectionStateToWire は core.ConnectionState を IPC ワイヤー文字列に変換する。
+func connectionStateToWire(s core.ConnectionState) string {
+	switch s {
+	case core.Connected:
+		return StateConnected
+	case core.Connecting:
+		return StateConnecting
+	case core.Reconnecting:
+		return StateReconnecting
+	case core.PendingAuth:
+		return StatePendingAuth
+	case core.ConnectionError:
+		return StateError
+	default:
+		return StateDisconnected
+	}
+}
+
+// sessionStatusToWire は core.SessionStatus を IPC ワイヤー文字列に変換する。
+func sessionStatusToWire(s core.SessionStatus) string {
+	switch s {
+	case core.Active:
+		return SessionActive
+	case core.Starting:
+		return SessionStarting
+	case core.SessionReconnecting:
+		return SessionReconnecting
+	case core.SessionError:
+		return SessionError
+	default:
+		return SessionStopped
+	}
+}
+
+// forwardTypeToWire は core.ForwardType を IPC ワイヤー文字列に変換する。
+func forwardTypeToWire(t core.ForwardType) string {
+	switch t {
+	case core.Local:
+		return ForwardTypeLocal
+	case core.Remote:
+		return ForwardTypeRemote
+	case core.Dynamic:
+		return ForwardTypeDynamic
+	default:
+		return ForwardTypeLocal
+	}
 }

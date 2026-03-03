@@ -27,7 +27,7 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 
 	return protocol.SSHConnectResult{
 		Host:   p.Host,
-		Status: "connected",
+		Status: protocol.StateConnected,
 	}, nil
 }
 
@@ -137,6 +137,6 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 
 	return protocol.SSHDisconnectResult{
 		Host:   p.Host,
-		Status: "disconnected",
+		Status: protocol.StateDisconnected,
 	}, nil
 }

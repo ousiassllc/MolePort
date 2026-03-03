@@ -3,7 +3,6 @@ package ipc
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -162,15 +161,40 @@ func (b *EventBroker) distribute(eventType string, method string, payload any) {
 	}
 }
 
-// sshEventTypeToString は SSHEventType をイベント通知用の文字列に変換する。
+// sshEventTypeToString は SSHEventType をイベント通知用のワイヤー文字列に変換する。
 func sshEventTypeToString(t core.SSHEventType) string {
-	if t == core.SSHEventPendingAuth {
-		return "pending_auth"
+	switch t {
+	case core.SSHEventConnected:
+		return protocol.StateConnected
+	case core.SSHEventDisconnected:
+		return protocol.StateDisconnected
+	case core.SSHEventReconnecting:
+		return protocol.StateReconnecting
+	case core.SSHEventPendingAuth:
+		return protocol.StatePendingAuth
+	case core.SSHEventError:
+		return protocol.StateError
+	default:
+		return protocol.StateDisconnected
 	}
-	return strings.ToLower(t.String())
 }
 
-// forwardEventTypeToString は ForwardEventType を小文字の文字列に変換する。
+// forwardEventTypeToString は ForwardEventType をワイヤー文字列に変換する。
 func forwardEventTypeToString(t core.ForwardEventType) string {
-	return strings.ToLower(t.String())
+	switch t {
+	case core.ForwardEventStarted:
+		return "started"
+	case core.ForwardEventStopped:
+		return "stopped"
+	case core.ForwardEventError:
+		return "error"
+	case core.ForwardEventMetricsUpdated:
+		return "metrics_updated"
+	case core.ForwardEventReconnecting:
+		return "reconnecting"
+	case core.ForwardEventRestored:
+		return "restored"
+	default:
+		return "unknown"
+	}
 }

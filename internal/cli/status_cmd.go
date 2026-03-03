@@ -121,9 +121,9 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	pendingAuthHosts := 0
 	for _, h := range hosts.Hosts {
 		switch h.State {
-		case "connected":
+		case protocol.StateConnected:
 			connectedHosts++
-		case "pending_auth":
+		case protocol.StatePendingAuth:
 			pendingAuthHosts++
 		}
 	}
@@ -132,7 +132,7 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	stoppedSessions := 0
 	var totalSent, totalRecv int64
 	for _, s := range sessions.Sessions {
-		if s.Status == "active" {
+		if s.Status == protocol.SessionActive {
 			activeSessions++
 		} else {
 			stoppedSessions++

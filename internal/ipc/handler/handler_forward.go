@@ -112,7 +112,7 @@ func (h *Handler) forwardStart(clientID string, params json.RawMessage) (any, *p
 
 	return protocol.ForwardStartResult{
 		Name:   p.Name,
-		Status: "active",
+		Status: protocol.SessionActive,
 	}, nil
 }
 
@@ -131,7 +131,7 @@ func (h *Handler) forwardStop(params json.RawMessage) (any, *protocol.RPCError) 
 
 	return protocol.ForwardStopResult{
 		Name:   p.Name,
-		Status: "stopped",
+		Status: protocol.SessionStopped,
 	}, nil
 }
 

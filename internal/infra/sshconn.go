@@ -18,40 +18,14 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// SSHConnection は SSH 接続とポートフォワーディングの低レベル操作を提供する。
-type SSHConnection interface {
-	// Dial はホストへ SSH 接続を確立する。
-	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。
-	// cb が非 nil の場合、パスワード・パスフレーズ・keyboard-interactive 認証も試行する。
-	Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error)
-
-	// Close は接続を閉じる。
-	Close() error
-
-	// LocalForward はローカルポートフォワーディングのリスナーを開始する。
-	LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
-
-	// RemoteForward はリモートポートフォワーディングのリスナーを開始する。
-	RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
-
-	// DynamicForward はダイナミックフォワーディング（SOCKS）のリスナーを開始する。
-	DynamicForward(ctx context.Context, localPort int) (net.Listener, error)
-
-	// IsAlive は接続が生きているかを返す。
-	IsAlive() bool
-
-	// KeepAlive はキープアライブのティッカーループを実行する。
-	KeepAlive(ctx context.Context, interval time.Duration)
-}
-
 type sshConnection struct {
 	mu          sync.Mutex
 	client      *ssh.Client
 	agentCloser io.Closer
 }
 
-// NewSSHConnection は SSHConnection の実装を返す。
-func NewSSHConnection() SSHConnection {
+// NewSSHConnection は core.SSHConnection の実装を返す。
+func NewSSHConnection() core.SSHConnection {
 	return &sshConnection{}
 }
 

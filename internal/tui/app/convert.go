@@ -48,15 +48,15 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 
 func parseConnectionState(s string) core.ConnectionState {
 	switch s {
-	case "connected":
+	case protocol.StateConnected:
 		return core.Connected
-	case "connecting":
+	case protocol.StateConnecting:
 		return core.Connecting
-	case "reconnecting":
+	case protocol.StateReconnecting:
 		return core.Reconnecting
-	case "pending_auth":
+	case protocol.StatePendingAuth:
 		return core.PendingAuth
-	case "error":
+	case protocol.StateError:
 		return core.ConnectionError
 	default:
 		return core.Disconnected
@@ -65,13 +65,13 @@ func parseConnectionState(s string) core.ConnectionState {
 
 func parseSessionStatus(s string) core.SessionStatus {
 	switch s {
-	case "active":
+	case protocol.SessionActive:
 		return core.Active
-	case "starting":
+	case protocol.SessionStarting:
 		return core.Starting
-	case "reconnecting":
+	case protocol.SessionReconnecting:
 		return core.SessionReconnecting
-	case "error":
+	case protocol.SessionError:
 		return core.SessionError
 	default:
 		return core.Stopped

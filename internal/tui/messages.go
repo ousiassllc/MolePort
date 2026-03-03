@@ -45,11 +45,6 @@ type ForwardDeleteConfirmedMsg struct {
 	RuleName string
 }
 
-// ForwardUpdatedMsg はフォワーディングイベントの通知。
-type ForwardUpdatedMsg struct {
-	Event core.ForwardEvent
-}
-
 // SSHEventMsg は SSH イベントの通知。
 type SSHEventMsg struct {
 	Event core.SSHEvent
