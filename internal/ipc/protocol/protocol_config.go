@@ -13,7 +13,14 @@ type ConfigGetResult struct {
 	Session       SessionCfgInfo            `json:"session"`
 	Log           LogInfo                   `json:"log"`
 	Language      string                    `json:"language"`
+	UpdateCheck   UpdateCheckInfo           `json:"update_check"`
 	TUI           TUIInfo                   `json:"tui"`
+}
+
+// UpdateCheckInfo はアップデートチェック設定の情報を表す。
+type UpdateCheckInfo struct {
+	Enabled  bool   `json:"enabled"`
+	Interval string `json:"interval"`
 }
 
 // HostConfigInfo はホスト別設定の情報を表す。
@@ -69,7 +76,14 @@ type ConfigUpdateParams struct {
 	Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
 	Log           *LogUpdateInfo                   `json:"log,omitempty"`
 	Language      *string                          `json:"language,omitempty"`
+	UpdateCheck   *UpdateCheckUpdateInfo           `json:"update_check,omitempty"`
 	TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
+}
+
+// UpdateCheckUpdateInfo はアップデートチェック設定の部分更新パラメータ。
+type UpdateCheckUpdateInfo struct {
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Interval *string `json:"interval,omitempty"`
 }
 
 // HostConfigUpdateInfo はホスト別設定の部分更新パラメータ。

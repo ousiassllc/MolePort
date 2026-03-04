@@ -138,3 +138,12 @@ type VersionCheckDoneMsg struct {
 	TUIVersion    string
 	Err           error
 }
+
+// UpdateCheckDoneMsg は最新バージョンチェック結果を通知するメッセージ。
+type UpdateCheckDoneMsg struct {
+	UpdateAvailable bool
+	CurrentVersion  string
+	LatestVersion   string
+	ReleaseURL      string
+	Err             error
+}

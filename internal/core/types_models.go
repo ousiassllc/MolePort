@@ -46,6 +46,14 @@ type ForwardRestoreResult struct {
 	Error    string
 }
 
+// VersionCheckResult はバージョンチェックの結果を保持する。
+type VersionCheckResult struct {
+	LatestVersion   string
+	ReleaseURL      string
+	CheckedAt       time.Time
+	UpdateAvailable bool
+}
+
 // Config はアプリケーション設定。
 type Config struct {
 	SSHConfigPath string                `yaml:"ssh_config_path"`
@@ -55,7 +63,14 @@ type Config struct {
 	Log           LogConfig             `yaml:"log"`
 	Forwards      []ForwardRule         `yaml:"forwards"`
 	Language      string                `yaml:"language"`
+	UpdateCheck   UpdateCheckConfig     `yaml:"update_check"`
 	TUI           TUIConfig             `yaml:"tui"`
+}
+
+// UpdateCheckConfig は自動アップデートチェックの設定。
+type UpdateCheckConfig struct {
+	Enabled  bool     `yaml:"enabled"`
+	Interval Duration `yaml:"interval"`
 }
 
 // ReconnectConfig は自動再接続の設定。
@@ -127,6 +142,10 @@ func DefaultConfig() Config {
 		Log: LogConfig{
 			Level: "info",
 			File:  "~/.config/moleport/moleport.log",
+		},
+		UpdateCheck: UpdateCheckConfig{
+			Enabled:  true,
+			Interval: Duration{Duration: 24 * time.Hour},
 		},
 	}
 }

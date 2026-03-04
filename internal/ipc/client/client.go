@@ -15,12 +15,8 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
-// CredentialHandler はクレデンシャル要求を処理するコールバック関数の型。
-// CLI や TUI がそれぞれの方法で実装する。
-// SetCredentialHandler でいつでも安全に設定・変更できる。
 type CredentialHandler func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error)
 
-// IPCClient は Unix ドメインソケット経由でデーモンと通信するクライアント。
 type IPCClient struct {
 	socketPath  string
 	conn        net.Conn
@@ -37,7 +33,6 @@ type IPCClient struct {
 	credHandler CredentialHandler
 }
 
-// NewIPCClient は新しい IPCClient を生成する。
 func NewIPCClient(socketPath string) *IPCClient {
 	return &IPCClient{
 		socketPath: socketPath,
@@ -257,33 +252,24 @@ func (c *IPCClient) readLoop() {
 
 // handleCredentialRequest は credential.request 通知を処理し、credential.response を送信する。
 func (c *IPCClient) handleCredentialRequest(notif protocol.Notification) {
-	handler := c.CredentialHandler()
-	if handler == nil {
-		// ハンドラー未設定の場合、パラメータからリクエスト ID を取得してキャンセルを送信
-		var req protocol.CredentialRequestNotification
-		if err := json.Unmarshal(notif.Params, &req); err != nil {
-			return
-		}
-		c.sendCredentialCancel(req.RequestID)
-		return
-	}
-
 	var req protocol.CredentialRequestNotification
 	if err := json.Unmarshal(notif.Params, &req); err != nil {
 		return
 	}
-
-	resp, err := handler(req)
-	if err != nil || resp == nil {
-		// エラー or nil の場合、キャンセルを送信
+	handler := c.CredentialHandler()
+	if handler == nil {
 		c.sendCredentialCancel(req.RequestID)
 		return
 	}
-
+	resp, err := handler(req)
+	if err != nil || resp == nil {
+		c.sendCredentialCancel(req.RequestID)
+		return
+	}
 	c.sendCredentialResult(resp)
 }
 
-// sendCredentialCancel はクレデンシャル要求をキャンセルする credential.response を送信する。
+// sendCredentialCancel はキャンセル応答を送信する。
 func (c *IPCClient) sendCredentialCancel(requestID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -297,7 +283,7 @@ func (c *IPCClient) sendCredentialCancel(requestID string) {
 	}
 }
 
-// sendCredentialResult はクレデンシャル応答を credential.response で送信する。
+// sendCredentialResult はクレデンシャル応答を送信する。
 func (c *IPCClient) sendCredentialResult(resp *protocol.CredentialResponseParams) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/core/forward"
 	"github.com/ousiassllc/moleport/internal/core/ssh"
+	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/infra/sshconfig"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
@@ -38,9 +39,10 @@ type Daemon struct {
 	version   string
 	startedAt time.Time
 
-	cfgMgr core.ConfigManager
-	sshMgr core.SSHManager
-	fwdMgr core.ForwardManager
+	cfgMgr         core.ConfigManager
+	sshMgr         core.SSHManager
+	fwdMgr         core.ForwardManager
+	versionChecker *update.VersionChecker
 
 	broker  *ipc.EventBroker
 	handler *ipchandler.Handler
@@ -93,15 +95,17 @@ func New(configDir string, version string) (*Daemon, error) {
 	}
 
 	pidFile := NewPIDFile(PIDFilePath(configDir))
+	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, cfg.UpdateCheck.Interval.Duration)
 
 	// Daemon を先に生成し、IPC コンポーネントに渡す
 	d := &Daemon{
-		configDir: configDir,
-		version:   version,
-		cfgMgr:    cfgMgr,
-		sshMgr:    sshMgr,
-		fwdMgr:    fwdMgr,
-		pidFile:   pidFile,
+		configDir:      configDir,
+		version:        version,
+		cfgMgr:         cfgMgr,
+		sshMgr:         sshMgr,
+		fwdMgr:         fwdMgr,
+		versionChecker: versionChecker,
+		pidFile:        pidFile,
 	}
 
 	// EventBroker: server.SendNotification をクロージャで渡す
@@ -110,7 +114,7 @@ func New(configDir string, version string) (*Daemon, error) {
 		return d.server.SendNotification(clientID, notification)
 	})
 
-	handler := ipchandler.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d)
+	handler := ipchandler.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d, versionChecker)
 	server := ipc.NewIPCServer(SocketPath(configDir), handler.Handle)
 
 	// クライアント切断時にブローカーから購読を削除する
@@ -151,6 +155,8 @@ func (d *Daemon) Start(ctx context.Context) error {
 		slog.Warn("failed to load SSH hosts", "error", err)
 	}
 
+	d.versionChecker.Start(d.ctx, 10*time.Second)
+
 	d.startEventRouting()
 	d.restoreState()
 	d.autoStartForwards()
@@ -170,6 +176,8 @@ func (d *Daemon) Stop() error {
 	d.stopped = true
 
 	slog.Info("daemon stopping")
+
+	d.versionChecker.Stop()
 
 	// コンテキストを最初にキャンセルして全コンポーネントに停止を通知
 	if d.cancel != nil {

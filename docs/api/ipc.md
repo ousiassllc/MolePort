@@ -544,6 +544,10 @@ SSH config を再読み込みし、ホスト一覧を更新する。
       "file": "~/.config/moleport/moleport.log"
     },
     "language": "ja",
+    "update_check": {
+      "enabled": true,
+      "interval": "24h"
+    },
     "tui": {
       "theme": {
         "base": "dark",
@@ -553,6 +557,13 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   }
 }
 ```
+
+**`update_check` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `enabled` | boolean | アップデートチェックの有効/無効（デフォルト: `true`） |
+| `interval` | string | チェック間隔（デフォルト: `"24h"`、最小: `"1h"`） |
 
 **`language` フィールド**:
 
@@ -595,6 +606,21 @@ SSH config を再読み込みし、ホスト一覧を更新する。
       }
     },
     "language": "en"
+  }
+}
+```
+
+**アップデートチェック設定の更新例**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "config.update",
+  "params": {
+    "update_check": {
+      "enabled": false
+    }
   }
 }
 ```
@@ -712,6 +738,80 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   }
 }
 ```
+
+---
+
+### version.check
+
+最新バージョン情報を取得する。デーモンがキャッシュしている結果を返す。キャッシュがない場合は即座に GitHub Releases API にチェックを実行する。
+
+**リクエスト**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "version.check",
+  "params": {}
+}
+```
+
+**レスポンス（更新あり）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "v0.1.0",
+    "latest_version": "v0.2.0",
+    "update_available": true,
+    "release_url": "https://github.com/ousiassllc/moleport/releases/tag/v0.2.0",
+    "checked_at": "2026-03-04T10:00:00+09:00"
+  }
+}
+```
+
+**レスポンス（最新）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "v0.2.0",
+    "latest_version": "v0.2.0",
+    "update_available": false,
+    "release_url": "https://github.com/ousiassllc/moleport/releases/tag/v0.2.0",
+    "checked_at": "2026-03-04T10:00:00+09:00"
+  }
+}
+```
+
+**レスポンス（チェック無効 / dev ビルド）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "dev",
+    "update_available": false
+  }
+}
+```
+
+**レスポンスフィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `current_version` | string | デーモンのビルドバージョン |
+| `latest_version` | string | 最新リリースバージョン（チェック無効/未実行時は空） |
+| `update_available` | boolean | 更新が利用可能か |
+| `release_url` | string | GitHub リリースページ URL（チェック無効/未実行時は空） |
+| `checked_at` | string | チェック日時（RFC3339、チェック無効/未実行時は空） |
+
+> **Note**: `update_check.enabled` が `false` の場合、または現在のバージョンが `"dev"` の場合、`update_available` は常に `false` を返し、`latest_version`・`release_url`・`checked_at` は空になる。
 
 ---
 
@@ -1057,3 +1157,4 @@ SSH 接続状態の変化。
 | 1.4 | 2026-03-01 | config.get レスポンスに `tui.theme` セクション追加、config.update にテーマ更新例追加 | #34 TUI カラーテーマ機能 |
 | 1.5 | 2026-03-01 | daemon.status レスポンスに `version` フィールド追加、レスポンスフィールド表を追加 | #36 バージョン不一致検出 |
 | 1.6 | 2026-03-01 | config.get/update に `language` フィールド追加、event.metrics に未実装注記追加 | ドキュメント乖離修正 (#40) |
+| 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |

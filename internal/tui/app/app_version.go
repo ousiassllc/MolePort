@@ -67,11 +67,18 @@ func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cm
 	m.showVersionConfirm = false
 	if confirmed {
 		m.restarting = true
+		m.pendingUpdateCheck = nil // 再起動するのでアップデート通知は不要
 		m.dashboard.AppendLog(i18n.T("tui.version.restarting"))
 		return m, m.restartDaemon()
 	}
 	m.dashboard.SetVersionWarning(true)
 	m.dashboard.AppendLog(i18n.T("tui.version.mismatch_continue"))
+	// バッファリングされたアップデート通知があれば表示する
+	if m.pendingUpdateCheck != nil {
+		pending := *m.pendingUpdateCheck
+		m.pendingUpdateCheck = nil
+		m = m.showUpdateNotifyDialog(pending)
+	}
 	return m, nil
 }
 

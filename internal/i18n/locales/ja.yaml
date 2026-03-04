@@ -81,6 +81,10 @@ cli:
     host_added: "  + {{.Name}} が追加されました"
     host_removed: "  - {{.Name}} が削除されました"
     failed: "SSH config の再読み込みに失敗しました: {{.Error}}"
+  version:
+    update_available: "アップデートがあります: {{.Latest}} (現在: {{.Current}})"
+    release_url: "リリース: {{.URL}}"
+    check_failed: "バージョンチェックに失敗しました: {{.Error}}"
   tui:
     daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
     daemon_started: "デーモンを起動しました (PID: {{.PID}})"
@@ -165,6 +169,9 @@ tui:
     restarted: "デーモンを再起動しました"
     mismatch_continue: "バージョン不一致のまま続行します"
     mismatch_warning: "バージョン不一致"
+  update:
+    available: "MolePort {{.Latest}} が利用可能です（現在 {{.Current}}）"
+    ok: "OK"
   theme:
     header: "テーマ選択"
     help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"

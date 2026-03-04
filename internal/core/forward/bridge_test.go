@@ -46,13 +46,11 @@ func doSOCKS5Connect(t *testing.T, request []byte) string {
 	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{
-		dialF: func(_, addr string) (net.Conn, error) {
-			dialedAddr <- addr
-			rc, _ := net.Pipe()
-			return rc, nil
-		},
-	}
+	dialer := &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
+		dialedAddr <- addr
+		rc, _ := net.Pipe()
+		return rc, nil
+	}}
 	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
 	go fm.handleSOCKS5(&activeForward{}, serverConn, dialer)
 
@@ -145,13 +143,11 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 	defer func() { _ = serverConn.Close() }()
 
 	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{
-		dialF: func(_, addr string) (net.Conn, error) {
-			dialedAddr <- addr
-			rc, _ := net.Pipe()
-			return rc, nil
-		},
-	}
+	dialer := &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
+		dialedAddr <- addr
+		rc, _ := net.Pipe()
+		return rc, nil
+	}}
 	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "test"}}}
 	go fm.handleSOCKS5(af, serverConn, dialer)

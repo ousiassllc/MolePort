@@ -8,9 +8,7 @@ import (
 )
 
 func TestForwardManager_GetRules_Order(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	names := []string{"alpha", "beta", "gamma"}
 	for _, name := range names {
 		if _, err := fm.AddRule(core.ForwardRule{
@@ -19,7 +17,6 @@ func TestForwardManager_GetRules_Order(t *testing.T) {
 			t.Fatalf("AddRule(%q) error = %v", name, err)
 		}
 	}
-
 	rules := fm.GetRules()
 	if len(rules) != 3 {
 		t.Fatalf("len(rules) = %d, want 3", len(rules))
@@ -32,13 +29,10 @@ func TestForwardManager_GetRules_Order(t *testing.T) {
 }
 
 func TestForwardManager_GetRulesByHost(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web2", Host: "server2", Type: core.Dynamic, LocalPort: 1081})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web3", Host: "server1", Type: core.Dynamic, LocalPort: 1082})
-
 	rules := fm.GetRulesByHost("server1")
 	if len(rules) != 2 {
 		t.Fatalf("len(rules) = %d, want 2", len(rules))
@@ -52,10 +46,7 @@ func TestForwardManager_GetRulesByHost(t *testing.T) {
 }
 
 func TestForwardManager_GetRulesByHost_Empty(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	rules := fm.GetRulesByHost("nonexistent")
+	rules := NewForwardManager(newMockSSHManager()).GetRulesByHost("nonexistent")
 	if len(rules) != 0 {
 		t.Errorf("len(rules) = %d, want 0", len(rules))
 	}
@@ -65,42 +56,30 @@ func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockDynamicDefaultConn())
 	fm := NewForwardManager(sm)
-
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
-
 	var wg sync.WaitGroup
 	wg.Add(2)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		go func() {
 			defer wg.Done()
 			_ = fm.DeleteRule("web")
 		}()
 	}
 	wg.Wait()
-
-	rules := fm.GetRules()
-	if len(rules) != 0 {
+	if rules := fm.GetRules(); len(rules) != 0 {
 		t.Errorf("len(rules) = %d, want 0 after concurrent delete", len(rules))
 	}
 }
 
 func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(newMockSSHManager())
 
 	// Local タイプで RemoteHost を指定しない場合、"localhost" がデフォルトになる
-	_, err := fm.AddRule(core.ForwardRule{
-		Name:       "web-local",
-		Host:       "server1",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemotePort: 80,
-	})
+	_, err := fm.AddRule(core.ForwardRule{Name: "web-local", Host: "server1", Type: core.Local, LocalPort: 8080, RemotePort: 80})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
-
 	rules := fm.GetRules()
 	if len(rules) != 1 {
 		t.Fatalf("len(rules) = %d, want 1", len(rules))
@@ -110,33 +89,20 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	}
 
 	// Remote タイプでも同様
-	_, err = fm.AddRule(core.ForwardRule{
-		Name:       "web-remote",
-		Host:       "server1",
-		Type:       core.Remote,
-		LocalPort:  3000,
-		RemotePort: 80,
-	})
+	_, err = fm.AddRule(core.ForwardRule{Name: "web-remote", Host: "server1", Type: core.Remote, LocalPort: 3000, RemotePort: 80})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
-
 	rules = fm.GetRules()
 	if rules[1].RemoteHost != "localhost" {
 		t.Errorf("RemoteHost = %q, want %q", rules[1].RemoteHost, "localhost")
 	}
 
 	// Dynamic タイプでは RemoteHost はそのまま空
-	_, err = fm.AddRule(core.ForwardRule{
-		Name:      "socks",
-		Host:      "server1",
-		Type:      core.Dynamic,
-		LocalPort: 1080,
-	})
+	_, err = fm.AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
-
 	rules = fm.GetRules()
 	if rules[2].RemoteHost != "" {
 		t.Errorf("Dynamic RemoteHost = %q, want empty", rules[2].RemoteHost)
