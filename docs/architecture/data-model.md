@@ -792,7 +792,7 @@ type DaemonShutdownResult struct {
 ```go
 // version.check
 type VersionCheckParams struct{}
-type VersionCheckRPCResult struct {
+type VersionCheckResult struct {
     CurrentVersion  string `json:"current_version"`            // 現在のバージョン（デーモンのビルドバージョン）
     LatestVersion   string `json:"latest_version,omitempty"`   // 最新リリースバージョン
     UpdateAvailable bool   `json:"update_available"`           // 更新があるか
@@ -915,4 +915,4 @@ type CredentialResponseResult struct {
 | 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |
 | 2.6 | 2026-03-01 | DaemonStatusResult に Version フィールドを追加 | #36 バージョン不一致検出 |
 | 2.7 | 2026-03-01 | Config/ConfigGetResult/ConfigUpdateParams に Language フィールド追加、DaemonShutdownParams に Purge フィールド追加、PromptInfo→PromptData 型名統一、CredentialRequestNotification.Type を string 型に修正、forward.stopAll 型定義追加 | ドキュメント乖離修正 (#40) |
-| 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckRPCResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |
+| 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |

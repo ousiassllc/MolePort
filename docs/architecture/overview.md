@@ -323,6 +323,7 @@ graph TD
         PI["PromptInput"]
         CD["ConfirmDialog"]
         PW["PasswordInput"]
+        ID["InfoDialog"]
     end
 
     subgraph Atoms
@@ -489,7 +490,7 @@ moleport/
 │   ├── ipc/                           # IPC 通信層（ベース）
 │   │   ├── server.go                  # IPCServer（JSON-RPC サーバー）
 │   │   ├── broker.go                  # EventBroker（イベント配信）
-│   │   ├── protocol/                  # JSON-RPC メッセージ型定義（9 ファイル）
+│   │   ├── protocol/                  # JSON-RPC メッセージ型定義（10 ファイル）
 │   │   │   ├── protocol.go            # コアプロトコル（Request/Response/Error）
 │   │   │   ├── convert.go             # コアエラー・型の RPC 変換
 │   │   │   ├── protocol_host.go       # ホスト管理メッセージ型
@@ -499,7 +500,8 @@ moleport/
 │   │   │   ├── protocol_config.go     # 設定メッセージ型
 │   │   │   ├── protocol_daemon.go     # デーモンメッセージ型
 │   │   │   ├── protocol_version.go   # バージョンチェックメッセージ型
-│   │   │   └── protocol_events.go     # イベント・通知メッセージ型
+│   │   │   ├── protocol_events.go     # イベント・通知メッセージ型
+│   │   │   └── wire_constants.go      # IPC ワイヤーフォーマット定数
 │   │   ├── handler/                   # RPC メソッドハンドラ
 │   │   │   ├── handler.go             # ディスパッチャ・初期化
 │   │   │   ├── handler_host.go        # host.list, host.reload
@@ -545,6 +547,8 @@ moleport/
 │   │   │   ├── app_lifecycle.go       # ライフサイクル管理
 │   │   │   ├── app_theme.go           # テーマ選択コマンド
 │   │   │   ├── app_version.go         # バージョンチェック
+│   │   │   ├── app_update.go          # アップデート通知 UI メッセージハンドラ
+│   │   │   ├── app_update_check.go    # 最新バージョンチェック Cmd
 │   │   │   └── convert.go             # IPC/コア型変換
 │   │   ├── theme/                     # テーマシステム
 │   │   │   ├── theme.go               # Theme 型定義、Current()/Apply()
@@ -560,7 +564,8 @@ moleport/
 │   │   │   ├── setuppanel_view.go     # SetupPanel View レンダリング
 │   │   │   ├── forwardpanel.go
 │   │   │   ├── logpanel.go
-│   │   │   └── statusbar.go
+│   │   │   ├── statusbar.go
+│   │   │   └── themegrid.go           # ThemeGrid コンポーネント
 │   │   └── pages/
 │   │       ├── dashboard.go           # DashboardPage（Init/Update/View）
 │   │       ├── dashboard_layout.go    # レイアウト計算・フォーカス管理
