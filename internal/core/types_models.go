@@ -46,6 +46,14 @@ type ForwardRestoreResult struct {
 	Error    string
 }
 
+// VersionCheckResult はバージョンチェックの結果を保持する。
+type VersionCheckResult struct {
+	LatestVersion   string
+	ReleaseURL      string
+	CheckedAt       time.Time
+	UpdateAvailable bool
+}
+
 // Config はアプリケーション設定。
 type Config struct {
 	SSHConfigPath string                `yaml:"ssh_config_path"`
