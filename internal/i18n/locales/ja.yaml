@@ -41,6 +41,13 @@ cli:
     killed: "デーモンを強制終了しました (PID: {{.PID}})"
     kill_failed: "デーモンの強制終了に失敗しました: {{.Error}}"
     status_failed: "ステータスの取得に失敗しました: {{.Error}}"
+    status_header: "MolePort デーモン:"
+    status_version: "  バージョン: {{.Version}}"
+    status_pid: "  PID:        {{.PID}}"
+    status_uptime: "  稼働時間:   {{.Uptime}}"
+    status_clients: "  クライアント: {{.Count}} 接続中"
+    status_ssh: "  SSH:        {{.Count}} 接続"
+    status_forwards: "  フォワード:  {{.Count}} アクティブ"
   connect:
     success: "{{.Host}} に接続しました"
     host_required: "ホスト名を指定してください: moleport connect <host>"
@@ -73,6 +80,21 @@ cli:
     get_failed: "ステータスの取得に失敗しました: {{.Error}}"
     get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
     get_sessions_failed: "セッション一覧の取得に失敗しました: {{.Error}}"
+    header: "MolePort ステータス:"
+    daemon_running: "  デーモン:    稼働中 (PID: {{.PID}}, 稼働時間: {{.Uptime}})"
+    hosts_summary: "  ホスト:      {{.Total}} 件, {{.Connected}} 件接続中"
+    hosts_summary_auth: "  ホスト:      {{.Total}} 件, {{.Connected}} 件接続中, {{.PendingAuth}} 件認証待ち"
+    forwards_summary: "  フォワード:  {{.Total}} 件, {{.Active}} 件アクティブ, {{.Stopped}} 件停止"
+    traffic_summary: "  トラフィック: 送信 {{.Sent}}, 受信 {{.Received}}"
+    session_header: "セッション: {{.Name}}"
+    session_host: "  ホスト:          {{.Host}}"
+    session_type: "  タイプ:          {{.Type}}"
+    session_local_port: "  ローカルポート:  {{.Port}}"
+    session_remote: "  リモート:        {{.Remote}}"
+    session_status: "  ステータス:      {{.Status}}"
+    session_connected_at: "  接続日時:        {{.Time}}"
+    session_bytes_sent: "  送信バイト:      {{.Bytes}}"
+    session_bytes_received: "  受信バイト:      {{.Bytes}}"
   config:
     get_failed: "設定の取得に失敗しました: {{.Error}}"
   reload:
@@ -118,6 +140,10 @@ tui:
     port_required: "ポート番号を入力してください"
     port_not_number: "数値を入力してください"
     port_out_of_range: "ポート番号は 1-65535 の範囲で指定してください"
+    label_local_port: "ローカルポート"
+    label_remote_host: "リモートホスト"
+    label_remote_port: "リモートポート"
+    label_rule_name: "ルール名"
   keys:
     switch_pane: "ペイン切替"
     help: "ヘルプ"
@@ -161,6 +187,7 @@ tui:
     switch_hint: "切替"
   password:
     prompt: "{{.Host}} のパスワードを入力:"
+    hint: "[Enter] 送信  [Esc] キャンセル"
   version:
     check_error: "バージョンチェックエラー: {{.Error}}"
     mismatch: "デーモンのバージョン ({{.DaemonVersion}}) が TUI のバージョン ({{.TUIVersion}}) と一致しません。デーモンを再起動しますか？"
@@ -178,6 +205,7 @@ tui:
   lang:
     help: "[↑↓] Select  [Enter] Apply  [Esc] Cancel/Skip"
   log:
+    title: "ログ"
     hosts_loaded: "{{.Count}} 件のホストを読み込みました"
     hosts_reloaded: "{{.Count}} 件のホストを再読み込みしました"
     hosts_load_error: "ホスト読み込みエラー: {{.Error}}"
@@ -210,3 +238,5 @@ tui:
     credential_password_prompt: "{{.Host}} のパスワードを入力:"
     daemon_start_failed: "新しいデーモンの起動に失敗"
     daemon_connect_failed: "新しいデーモンへの接続に失敗"
+  prompt:
+    placeholder: "コマンドを入力..."

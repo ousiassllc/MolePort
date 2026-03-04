@@ -36,16 +36,16 @@ func (p SetupPanel) View() string {
 		rows = p.viewSelectType()
 	case StepLocalPort:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Local port", &p.portInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_local_port"), &p.portInput)
 	case StepRemoteHost:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Remote host", &p.hostInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_remote_host"), &p.hostInput)
 	case StepRemotePort:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Remote port", &p.portInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_remote_port"), &p.portInput)
 	case StepRuleName:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Rule name", &p.nameInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_rule_name"), &p.nameInput)
 	case StepConfirm:
 		title = p.wizardTitleText()
 		rows = p.viewConfirm()

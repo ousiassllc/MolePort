@@ -3,6 +3,7 @@ package organisms
 import (
 	"strings"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
@@ -72,7 +73,7 @@ func (p LogPanel) View() string {
 	}
 
 	content := strings.Join(rows, "\n")
-	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, "Log", content)
+	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, i18n.T("tui.log.title"), content)
 }
 
 // styleLogLine はログ行にスタイルを適用する。

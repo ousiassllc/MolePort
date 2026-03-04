@@ -131,13 +131,13 @@ func runDaemonStatus(configDir string) {
 		exitError("%s", i18n.T("cli.daemon.status_failed", map[string]any{"Error": err}))
 	}
 
-	fmt.Println("MolePort Daemon:")
-	fmt.Printf("  Version:    %s\n", status.Version)
-	fmt.Printf("  PID:        %d\n", status.PID)
-	fmt.Printf("  Uptime:     %s\n", status.Uptime)
-	fmt.Printf("  Clients:    %d connected\n", status.ConnectedClients)
-	fmt.Printf("  SSH:        %d connections\n", status.ActiveSSHConnections)
-	fmt.Printf("  Forwards:   %d active\n", status.ActiveForwards)
+	fmt.Println(i18n.T("cli.daemon.status_header"))
+	fmt.Println(i18n.T("cli.daemon.status_version", map[string]any{"Version": status.Version}))
+	fmt.Println(i18n.T("cli.daemon.status_pid", map[string]any{"PID": status.PID}))
+	fmt.Println(i18n.T("cli.daemon.status_uptime", map[string]any{"Uptime": status.Uptime}))
+	fmt.Println(i18n.T("cli.daemon.status_clients", map[string]any{"Count": status.ConnectedClients}))
+	fmt.Println(i18n.T("cli.daemon.status_ssh", map[string]any{"Count": status.ActiveSSHConnections}))
+	fmt.Println(i18n.T("cli.daemon.status_forwards", map[string]any{"Count": status.ActiveForwards}))
 }
 
 // RunDaemonMode はデーモンモードで起動する。

@@ -3,6 +3,8 @@ package i18n
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func resetLang(t *testing.T) {
@@ -183,6 +185,39 @@ func TestFlattenYAML_WithPrefix(t *testing.T) {
 	}
 	if got != "value" {
 		t.Errorf("result[\"prefix.key\"] = %q, want %q", got, "value")
+	}
+}
+
+func TestLocaleKeyConsistency(t *testing.T) {
+	// ja.yaml と en.yaml のキーが一致することを確認する。
+	// 翻訳漏れがあればこのテストが失敗する。
+	loadKeys := func(lang Lang) map[string]string {
+		t.Helper()
+		data, err := localeFS.ReadFile("locales/" + string(lang) + ".yaml")
+		if err != nil {
+			t.Fatalf("failed to read %s.yaml: %v", lang, err)
+		}
+		var raw map[string]any
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			t.Fatalf("failed to parse %s.yaml: %v", lang, err)
+		}
+		m := make(map[string]string)
+		flattenYAML(raw, "", m)
+		return m
+	}
+
+	enKeys := loadKeys(LangEN)
+	jaKeys := loadKeys(LangJA)
+
+	for k := range enKeys {
+		if _, ok := jaKeys[k]; !ok {
+			t.Errorf("key %q exists in en.yaml but missing in ja.yaml", k)
+		}
+	}
+	for k := range jaKeys {
+		if _, ok := enKeys[k]; !ok {
+			t.Errorf("key %q exists in ja.yaml but missing in en.yaml", k)
+		}
 	}
 }
 
