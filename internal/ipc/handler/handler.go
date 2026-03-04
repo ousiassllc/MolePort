@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -24,15 +25,21 @@ type NotificationSender interface {
 	SendNotification(clientID string, notification protocol.Notification) error
 }
 
+// VersionChecker はバージョンチェック機能を提供するインターフェース。
+type VersionChecker interface {
+	LatestVersion(ctx context.Context) (*core.VersionCheckResult, error)
+}
+
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
 type Handler struct {
-	sshMgr  core.SSHManager
-	fwdMgr  core.ForwardManager
-	cfgMgr  core.ConfigManager
-	configH *cfghandler.Handler
-	broker  *ipc.EventBroker
-	daemon  DaemonInfo
-	sender  NotificationSender
+	sshMgr         core.SSHManager
+	fwdMgr         core.ForwardManager
+	cfgMgr         core.ConfigManager
+	configH        *cfghandler.Handler
+	broker         *ipc.EventBroker
+	daemon         DaemonInfo
+	sender         NotificationSender
+	versionChecker VersionChecker
 
 	credMu      sync.Mutex
 	credPending map[string]chan protocol.CredentialResponseParams
@@ -46,15 +53,17 @@ func NewHandler(
 	cfgMgr core.ConfigManager,
 	broker *ipc.EventBroker,
 	daemon DaemonInfo,
+	versionChecker VersionChecker,
 ) *Handler {
 	return &Handler{
-		sshMgr:      sshMgr,
-		fwdMgr:      fwdMgr,
-		cfgMgr:      cfgMgr,
-		configH:     cfghandler.New(cfgMgr),
-		broker:      broker,
-		daemon:      daemon,
-		credPending: make(map[string]chan protocol.CredentialResponseParams),
+		sshMgr:         sshMgr,
+		fwdMgr:         fwdMgr,
+		cfgMgr:         cfgMgr,
+		configH:        cfghandler.New(cfgMgr),
+		broker:         broker,
+		daemon:         daemon,
+		versionChecker: versionChecker,
+		credPending:    make(map[string]chan protocol.CredentialResponseParams),
 	}
 }
 
@@ -97,6 +106,8 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 		return h.configH.Get()
 	case "config.update":
 		return h.configH.Update(params)
+	case "version.check":
+		return h.versionCheck()
 	case "daemon.status":
 		return h.daemonStatus()
 	case "daemon.shutdown":

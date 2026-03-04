@@ -33,7 +33,7 @@ func TestHandler_DaemonStatus(t *testing.T) {
 func TestHandler_DaemonStatus_NilDaemon(t *testing.T) {
 	sender := func(_ string, _ protocol.Notification) error { return nil }
 	broker := ipc.NewEventBroker(sender)
-	h := NewHandler(&mockSSHManager{}, &mockForwardManager{}, &mockConfigManager{}, broker, nil)
+	h := NewHandler(&mockSSHManager{}, &mockForwardManager{}, &mockConfigManager{}, broker, nil, nil)
 
 	_, rpcErr := h.Handle("client-1", "daemon.status", nil)
 	if rpcErr == nil {
@@ -91,7 +91,7 @@ func TestHandler_DaemonShutdown_PurgeFlag(t *testing.T) {
 	broker := ipc.NewEventBroker(sender)
 	daemonMock := &mockDaemonInfo{}
 
-	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock)
+	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock, nil)
 
 	params := mustMarshal(t, protocol.DaemonShutdownParams{Purge: true})
 	_, rpcErr := handler.Handle("client-1", "daemon.shutdown", params)
