@@ -143,10 +143,12 @@ func runDaemonStatus(configDir string) {
 // RunDaemonMode はデーモンモードで起動する。
 // --daemon-mode フラグが検出された場合に呼び出される。
 func RunDaemonMode(configDir string) {
-	if err := setupDaemonLogging(configDir); err != nil {
+	logFile, err := setupDaemonLogging(configDir)
+	if err != nil {
 		slog.Error("failed to setup logging", "error", err)
 		exitFunc(1)
 	}
+	defer func() { _ = logFile.Close() }()
 
 	d, err := daemon.New(configDir, Version)
 	if err != nil {
@@ -169,7 +171,7 @@ func RunDaemonMode(configDir string) {
 // setupDaemonLogging はデーモンプロセス用のログ設定を行う。
 // 設定ファイルの log.file と log.level を参照する。
 // ログファイルの作成に失敗した場合はエラーを返す。
-func setupDaemonLogging(configDir string) error {
+func setupDaemonLogging(configDir string) (*os.File, error) {
 	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
 	cfg, err := cfgMgr.LoadConfig()
@@ -184,18 +186,18 @@ func setupDaemonLogging(configDir string) error {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(logPath), 0700); err != nil {
-		return fmt.Errorf("create log directory: %w", err)
+		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return fmt.Errorf("open log file: %w", err)
+		return nil, fmt.Errorf("open log file: %w", err)
 	}
 
 	level := parseSlogLevel(cfg.Log.Level)
 	handler := slog.NewTextHandler(f, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(handler))
-	return nil
+	return f, nil
 }
 
 // parseSlogLevel は文字列を slog.Level に変換する。
