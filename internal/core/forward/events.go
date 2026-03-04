@@ -1,8 +1,6 @@
 package forward
 
 import (
-	"fmt"
-
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
@@ -20,7 +18,7 @@ func (m *forwardManager) GetSession(ruleName string) (*core.ForwardSession, erro
 
 	rule, exists := m.rules[ruleName]
 	if !exists {
-		return nil, fmt.Errorf("rule %q not found", ruleName)
+		return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
 	}
 
 	return &core.ForwardSession{

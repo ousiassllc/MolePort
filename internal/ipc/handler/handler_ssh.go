@@ -84,7 +84,7 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 		select {
 		case resp := <-ch:
 			if resp.Cancelled {
-				return core.CredentialResponse{}, fmt.Errorf("credential cancelled")
+				return core.CredentialResponse{}, core.ErrCredentialCancelled
 			}
 			return core.CredentialResponse{
 				RequestID: resp.RequestID,
@@ -92,7 +92,7 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 				Answers:   resp.Answers,
 			}, nil
 		case <-time.After(credentialTimeout):
-			return core.CredentialResponse{}, fmt.Errorf("credential timeout")
+			return core.CredentialResponse{}, core.ErrCredentialTimeout
 		}
 	}
 }

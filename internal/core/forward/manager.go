@@ -57,7 +57,7 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 
 	// 名前の一意性チェック
 	if _, exists := m.rules[rule.Name]; exists {
-		return "", fmt.Errorf("rule %q already exists", rule.Name)
+		return "", &core.AlreadyExistsError{Resource: "rule", Name: rule.Name}
 	}
 
 	// バリデーション
@@ -88,7 +88,7 @@ func (m *forwardManager) DeleteRule(name string) error {
 	m.mu.Lock()
 	if _, exists := m.rules[name]; !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("rule %q not found", name)
+		return &core.NotFoundError{Resource: "rule", Name: name}
 	}
 
 	// アクティブな場合は停止（ロックを保持したまま）

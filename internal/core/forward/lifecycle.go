@@ -17,12 +17,12 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	rule, exists := m.rules[ruleName]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("rule %q not found", ruleName)
+		return &core.NotFoundError{Resource: "rule", Name: ruleName}
 	}
 
 	if _, active := m.active[ruleName]; active {
 		m.mu.Unlock()
-		return fmt.Errorf("forward %q is already active", ruleName)
+		return &core.AlreadyActiveError{Name: ruleName}
 	}
 
 	// 起動中プレースホルダーを挿入（並行 StartForward を防ぐ）

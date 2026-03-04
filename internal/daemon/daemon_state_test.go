@@ -53,7 +53,7 @@ func (m *mockForwardManagerForState) GetSession(ruleName string) (*core.ForwardS
 	if s, ok := m.sessions[ruleName]; ok {
 		return s, nil
 	}
-	return nil, fmt.Errorf("rule %q not found", ruleName)
+	return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
 }
 
 func (m *mockForwardManagerForState) GetAllSessions() []core.ForwardSession {

@@ -52,7 +52,7 @@ func (m *mockSSHManager) GetHost(name string) (*core.SSHHost, error) {
 			return &h, nil
 		}
 	}
-	return nil, fmt.Errorf("host %q not found", name)
+	return nil, &core.NotFoundError{Resource: "host", Name: name}
 }
 
 func (m *mockSSHManager) Connect(hostName string) error {
@@ -167,7 +167,7 @@ func (m *mockForwardManager) GetSession(ruleName string) (*core.ForwardSession, 
 			return &s, nil
 		}
 	}
-	return nil, fmt.Errorf("rule %q not found", ruleName)
+	return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
 }
 
 func (m *mockForwardManager) GetAllSessions() []core.ForwardSession {

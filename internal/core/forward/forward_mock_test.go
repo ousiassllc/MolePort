@@ -44,7 +44,7 @@ func (m *mockSSHManager) GetHost(name string) (*core.SSHHost, error) {
 	if h, ok := m.hosts[name]; ok {
 		return &h, nil
 	}
-	return nil, fmt.Errorf("host %q not found", name)
+	return nil, &core.NotFoundError{Resource: "host", Name: name}
 }
 
 func (m *mockSSHManager) Connect(hostName string) error {
@@ -81,7 +81,7 @@ func (m *mockSSHManager) GetConnection(hostName string) (*ssh.Client, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if !m.connected[hostName] {
-		return nil, fmt.Errorf("not connected")
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	return m.connections[hostName], nil
 }
@@ -90,7 +90,7 @@ func (m *mockSSHManager) GetSSHConnection(hostName string) (core.SSHConnection, 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if !m.connected[hostName] {
-		return nil, fmt.Errorf("not connected")
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	if conn, ok := m.sshConns[hostName]; ok {
 		return conn, nil
