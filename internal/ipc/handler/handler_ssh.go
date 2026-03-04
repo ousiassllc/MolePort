@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -34,6 +35,7 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 // buildCredentialCallback はクライアントへの通知とレスポンス待機を行うコールバックを構築する。
 func (h *Handler) buildCredentialCallback(clientID string, _ string) core.CredentialCallback {
 	if h.sender == nil {
+		slog.Warn("credential callback skipped: notification sender not set")
 		return nil
 	}
 	return func(req core.CredentialRequest) (core.CredentialResponse, error) {
@@ -117,6 +119,10 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPC
 	select {
 	case ch <- p:
 	default:
+		return nil, &protocol.RPCError{
+			Code:    protocol.InternalError,
+			Message: "credential response channel is full for id: " + p.RequestID,
+		}
 	}
 
 	return protocol.CredentialResponseResult{OK: true}, nil

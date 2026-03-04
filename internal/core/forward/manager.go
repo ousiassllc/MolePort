@@ -3,6 +3,7 @@ package forward
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -150,6 +151,7 @@ func (m *forwardManager) emit(event core.ForwardEvent) {
 		select {
 		case ch <- event:
 		default:
+			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
 		}
 	}
 }

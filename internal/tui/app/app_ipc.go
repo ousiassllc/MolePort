@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -155,6 +156,7 @@ func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	case "event.ssh":
 		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
 		state := parseConnectionState(evt.Type)
@@ -165,6 +167,7 @@ func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	case "event.forward":
 		var evt protocol.ForwardEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
 		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type))

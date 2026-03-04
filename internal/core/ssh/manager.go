@@ -2,6 +2,8 @@ package ssh
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -79,6 +81,7 @@ func (m *sshManager) emit(event core.SSHEvent) {
 		select {
 		case ch <- event:
 		default:
+			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
 		}
 	}
 }
