@@ -53,6 +53,10 @@ func (h *Handler) Get() (any, *protocol.RPCError) {
 			File:  cfg.Log.File,
 		},
 		Language: cfg.Language,
+		UpdateCheck: protocol.UpdateCheckInfo{
+			Enabled:  cfg.UpdateCheck.Enabled,
+			Interval: cfg.UpdateCheck.Interval.String(),
+		},
 		TUI: protocol.TUIInfo{
 			Theme: protocol.ThemeInfo{
 				Base:   cfg.TUI.Theme.Base,
@@ -107,6 +111,20 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 		}
 		if err := validateDuration(p.Reconnect.KeepAliveInterval, "reconnect.keepalive_interval"); err != nil {
 			return nil, err
+		}
+	}
+	if p.UpdateCheck != nil {
+		if err := validateDuration(p.UpdateCheck.Interval, "update_check.interval"); err != nil {
+			return nil, err
+		}
+		if p.UpdateCheck.Interval != nil {
+			d, _ := time.ParseDuration(*p.UpdateCheck.Interval)
+			if d < time.Hour {
+				return nil, &protocol.RPCError{
+					Code:    protocol.InvalidParams,
+					Message: "update_check.interval must be at least 1h",
+				}
+			}
 		}
 	}
 	for name, update := range p.Hosts {
@@ -195,6 +213,16 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 		}
 		if p.Language != nil {
 			cfg.Language = *p.Language
+		}
+		if p.UpdateCheck != nil {
+			if p.UpdateCheck.Enabled != nil {
+				cfg.UpdateCheck.Enabled = *p.UpdateCheck.Enabled
+			}
+			if p.UpdateCheck.Interval != nil {
+				if d, err := time.ParseDuration(*p.UpdateCheck.Interval); err == nil {
+					cfg.UpdateCheck.Interval = core.Duration{Duration: d}
+				}
+			}
 		}
 		if p.TUI != nil && p.TUI.Theme != nil {
 			if p.TUI.Theme.Base != nil {
