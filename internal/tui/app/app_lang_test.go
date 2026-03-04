@@ -6,142 +6,79 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
-	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
 
-func TestMainModel_ConfigLoaded_LangUnset_ShowsLangPage(t *testing.T) {
-	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
+func cleanupLang(t *testing.T) {
+	t.Helper()
 	t.Cleanup(func() { _ = i18n.SetLang(i18n.DefaultLang()) })
+}
 
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	// 言語未設定の ConfigLoadedMsg を送信
-	msg := tui.ConfigLoadedMsg{ThemeBase: "", ThemeAccent: "", Language: ""}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.currentPage != pageLang {
-		t.Errorf("currentPage = %q, want %q", updated.currentPage, pageLang)
-	}
-	if !updated.isFirstLaunch {
-		t.Error("isFirstLaunch should be true")
+func TestMainModel_ConfigLoaded_LangUnset(t *testing.T) {
+	cleanupTheme(t)
+	cleanupLang(t)
+	u := updModel(newTestModel("test"), tui.ConfigLoadedMsg{})
+	if u.currentPage != pageLang || !u.isFirstLaunch {
+		t.Errorf("page=%q first=%v", u.currentPage, u.isFirstLaunch)
 	}
 }
 
-func TestMainModel_LangSelected_FirstLaunch_ShowsThemePage(t *testing.T) {
-	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
-	t.Cleanup(func() { _ = i18n.SetLang(i18n.DefaultLang()) })
-
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.currentPage = pageLang
-	m.isFirstLaunch = true
-
-	msg := tui.LangSelectedMsg{Lang: "ja"}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.currentPage != pageTheme {
-		t.Errorf("currentPage = %q, want %q", updated.currentPage, pageTheme)
-	}
-	if updated.currentLang != "ja" {
-		t.Errorf("currentLang = %q, want %q", updated.currentLang, "ja")
-	}
-	if cmd == nil {
-		t.Error("LangSelectedMsg should return a save command")
-	}
+func TestMainModel_LangSelected(t *testing.T) {
+	t.Run("first_launch", func(t *testing.T) {
+		cleanupTheme(t)
+		cleanupLang(t)
+		m := newTestModel("test")
+		m.currentPage = pageLang
+		m.isFirstLaunch = true
+		result, cmd := m.Update(tui.LangSelectedMsg{Lang: "ja"})
+		u := result.(MainModel)
+		if u.currentPage != pageTheme || u.currentLang != "ja" || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		}
+	})
+	t.Run("normal", func(t *testing.T) {
+		cleanupLang(t)
+		m := newTestModel("test")
+		m.currentPage = pageLang
+		result, cmd := m.Update(tui.LangSelectedMsg{Lang: "en"})
+		u := result.(MainModel)
+		if u.currentPage != pageDashboard || u.currentLang != "en" || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		}
+	})
 }
 
-func TestMainModel_LangSelected_NormalMode_ReturnsToDashboard(t *testing.T) {
-	t.Cleanup(func() { _ = i18n.SetLang(i18n.DefaultLang()) })
-
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.currentPage = pageLang
-	m.isFirstLaunch = false
-
-	msg := tui.LangSelectedMsg{Lang: "en"}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.currentPage != pageDashboard {
-		t.Errorf("currentPage = %q, want %q", updated.currentPage, pageDashboard)
-	}
-	if updated.currentLang != "en" {
-		t.Errorf("currentLang = %q, want %q", updated.currentLang, "en")
-	}
-	if cmd == nil {
-		t.Error("LangSelectedMsg should return a save command")
-	}
+func TestMainModel_LangCancelled(t *testing.T) {
+	t.Run("first_launch", func(t *testing.T) {
+		cleanupTheme(t)
+		cleanupLang(t)
+		m := newTestModel("test")
+		m.currentPage = pageLang
+		m.isFirstLaunch = true
+		result, cmd := m.Update(tui.LangCancelledMsg{})
+		u := result.(MainModel)
+		if u.currentPage != pageTheme || u.currentLang != string(i18n.DefaultLang()) || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		}
+	})
+	t.Run("normal", func(t *testing.T) {
+		cleanupLang(t)
+		m := newTestModel("test")
+		m.currentPage = pageLang
+		result, cmd := m.Update(tui.LangCancelledMsg{})
+		u := result.(MainModel)
+		if u.currentPage != pageDashboard || cmd != nil {
+			t.Errorf("page=%q cmd=%v", u.currentPage, cmd)
+		}
+	})
 }
 
-func TestMainModel_LangCancelled_FirstLaunch_ShowsThemePage(t *testing.T) {
-	t.Cleanup(func() { theme.Apply(theme.DefaultPresetID()) })
-	t.Cleanup(func() { _ = i18n.SetLang(i18n.DefaultLang()) })
-
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.currentPage = pageLang
-	m.isFirstLaunch = true
-
-	msg := tui.LangCancelledMsg{}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.currentPage != pageTheme {
-		t.Errorf("currentPage = %q, want %q", updated.currentPage, pageTheme)
+func TestMainModel_LangSavedMsg(t *testing.T) {
+	u := updModel(newTestModel("test"), tui.LangSavedMsg{Err: fmt.Errorf("fail")})
+	if got := u.dashboard.LogLineCount(); got != 1 {
+		t.Errorf("error: LogLineCount() = %d, want 1", got)
 	}
-	if updated.currentLang != string(i18n.DefaultLang()) {
-		t.Errorf("currentLang = %q, want %q", updated.currentLang, string(i18n.DefaultLang()))
-	}
-	if cmd == nil {
-		t.Error("LangCancelledMsg on first launch should return a save command")
-	}
-}
-
-func TestMainModel_LangCancelled_NormalMode_ReturnsToDashboard(t *testing.T) {
-	t.Cleanup(func() { _ = i18n.SetLang(i18n.DefaultLang()) })
-
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.currentPage = pageLang
-	m.isFirstLaunch = false
-
-	msg := tui.LangCancelledMsg{}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.currentPage != pageDashboard {
-		t.Errorf("currentPage = %q, want %q", updated.currentPage, pageDashboard)
-	}
-	if cmd != nil {
-		t.Error("LangCancelledMsg (not first launch) should not return a command")
-	}
-}
-
-func TestMainModel_LangSavedMsg_Error_Logs(t *testing.T) {
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := tui.LangSavedMsg{Err: fmt.Errorf("save failed")}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (error should be logged)", got)
-	}
-}
-
-func TestMainModel_LangSavedMsg_Success_NoLog(t *testing.T) {
-	m := NewMainModel(nil, "test", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := tui.LangSavedMsg{}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if got := updated.dashboard.LogLineCount(); got != 0 {
-		t.Errorf("LogLineCount() = %d, want 0 (success should not log)", got)
+	u = updModel(newTestModel("test"), tui.LangSavedMsg{})
+	if got := u.dashboard.LogLineCount(); got != 0 {
+		t.Errorf("success: LogLineCount() = %d, want 0", got)
 	}
 }

@@ -7,16 +7,9 @@ import (
 )
 
 func TestForwardManager_AddRule(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	name, err := fm.AddRule(core.ForwardRule{
-		Name:       "web",
-		Host:       "server1",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemoteHost: "localhost",
-		RemotePort: 80,
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
@@ -24,7 +17,6 @@ func TestForwardManager_AddRule(t *testing.T) {
 	if name != "web" {
 		t.Errorf("AddRule() name = %q, want %q", name, "web")
 	}
-
 	rules := fm.GetRules()
 	if len(rules) != 1 {
 		t.Fatalf("len(rules) = %d, want 1", len(rules))
@@ -38,15 +30,9 @@ func TestForwardManager_AddRule(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_AutoName(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	name, err := fm.AddRule(core.ForwardRule{
-		Host:       "server1",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemoteHost: "localhost",
-		RemotePort: 80,
+		Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 	if err != nil {
 		t.Fatalf("AddRule() error = %v", err)
@@ -54,7 +40,6 @@ func TestForwardManager_AddRule_AutoName(t *testing.T) {
 	if name == "" {
 		t.Error("auto-generated name should not be empty")
 	}
-
 	rules := fm.GetRules()
 	if len(rules) != 1 {
 		t.Fatalf("len(rules) = %d, want 1", len(rules))
@@ -65,21 +50,13 @@ func TestForwardManager_AddRule_AutoName(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	rule := core.ForwardRule{
-		Name:       "web",
-		Host:       "server1",
-		Type:       core.Local,
-		LocalPort:  8080,
-		RemoteHost: "localhost",
-		RemotePort: 80,
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	}
 	if _, err := fm.AddRule(rule); err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
-
 	_, err := fm.AddRule(rule)
 	if err == nil {
 		t.Fatal("AddRule() should return error for duplicate name")
@@ -87,9 +64,7 @@ func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_Validation(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	tests := []struct {
 		name    string
 		rule    core.ForwardRule
@@ -115,47 +90,29 @@ func TestForwardManager_AddRule_Validation(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DynamicNoRemotePort(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
 	// Dynamic では RemotePort は不要
-	_, err := fm.AddRule(core.ForwardRule{
-		Name:      "socks",
-		Host:      "server1",
-		Type:      core.Dynamic,
-		LocalPort: 1080,
-	})
-	if err != nil {
+	if _, err := NewForwardManager(newMockSSHManager()).AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil {
 		t.Fatalf("AddRule() error = %v (Dynamic should not require remote port)", err)
 	}
 }
 
 func TestForwardManager_DeleteRule(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(newMockSSHManager())
 	if _, err := fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	}); err != nil {
 		t.Fatalf("AddRule() error = %v", err)
 	}
-
 	if err := fm.DeleteRule("web"); err != nil {
 		t.Fatalf("DeleteRule() error = %v", err)
 	}
-
-	rules := fm.GetRules()
-	if len(rules) != 0 {
+	if rules := fm.GetRules(); len(rules) != 0 {
 		t.Errorf("len(rules) = %d, want 0", len(rules))
 	}
 }
 
 func TestForwardManager_DeleteRule_NotFound(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	err := fm.DeleteRule("nonexistent")
-	if err == nil {
+	if err := NewForwardManager(newMockSSHManager()).DeleteRule("nonexistent"); err == nil {
 		t.Fatal("DeleteRule() should return error for nonexistent rule")
 	}
 }

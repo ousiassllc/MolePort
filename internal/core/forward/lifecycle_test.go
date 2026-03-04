@@ -5,18 +5,13 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
 func TestForwardManager_StartForward_RuleNotFound(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	err := fm.StartForward("nonexistent", nil)
-	if err == nil {
+	if err := NewForwardManager(newMockSSHManager()).StartForward("nonexistent", nil); err == nil {
 		t.Fatal("StartForward() should return error for nonexistent rule")
 	}
 }
@@ -25,13 +20,10 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.connectErr = fmt.Errorf("connection refused")
 	fm := NewForwardManager(sm)
-
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
-	err := fm.StartForward("web", nil)
-	if err == nil {
+	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error when SSH connect fails")
 	}
 }
@@ -44,10 +36,8 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	sm := newMockSSHManager()
 	mockConn := newMockLocalDefaultConn()
-
 	// Connect（コールバックなし）は認証エラーを返す
 	sm.connectErr = fmt.Errorf("authentication required: no authentication methods available")
-
 	// ConnectWithCallback はコールバック付きなら成功する
 	var receivedCb core.CredentialCallback
 	sm.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
@@ -58,12 +48,10 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 		sm.mu.Unlock()
 		return nil
 	}
-
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
 	// コールバック付きで StartForward を呼び出す
 	cb := func(req core.CredentialRequest) (core.CredentialResponse, error) {
 		return core.CredentialResponse{Value: "password123"}, nil
@@ -72,12 +60,10 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StartForward() with callback should succeed, got error: %v", err)
 	}
-
 	// ConnectWithCallback にコールバックが渡されたことを確認
 	if receivedCb == nil {
 		t.Fatal("ConnectWithCallback should have received a non-nil callback")
 	}
-
 	fm.Close()
 }
 
@@ -85,17 +71,14 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockLocalDefaultConn())
 	fm := NewForwardManager(sm)
-
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
 	events := fm.Subscribe()
 
 	if err := fm.StartForward("web", nil); err != nil {
 		t.Fatalf("StartForward() error = %v", err)
 	}
-
 	ev := drainEvent(t, events)
 	if ev.Type != core.ForwardEventStarted {
 		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
@@ -129,16 +112,13 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	sm := newMockSSHManager()
 	// ConnectWithCallback を遅延させて競合を発生しやすくする
-	var connectCount atomic.Int32
-	sm.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
-		connectCount.Add(1)
+	sm.connectWithCbFn = func(hostName string, _ core.CredentialCallback) error {
 		sm.mu.Lock()
 		sm.connected[hostName] = true
 		sm.sshConns[hostName] = newMockLocalDefaultConn()
 		sm.mu.Unlock()
 		return nil
 	}
-
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
@@ -148,7 +128,6 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	errs := make([]error, goroutines)
-
 	for i := range goroutines {
 		go func() {
 			defer wg.Done()
@@ -158,7 +137,7 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	wg.Wait()
 
 	// 成功は1つだけであること
-	successCount := 0
+	var successCount int
 	for _, err := range errs {
 		if err == nil {
 			successCount++
@@ -167,7 +146,6 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	if successCount != 1 {
 		t.Errorf("expected exactly 1 success, got %d", successCount)
 	}
-
 	fm.Close()
 }
 

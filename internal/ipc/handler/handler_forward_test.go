@@ -58,75 +58,31 @@ func TestHandler_ForwardAdd_Success(t *testing.T) {
 	}
 }
 
-func TestHandler_ForwardAdd_EmptyHost(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardAddParams{Host: "", Type: "local", LocalPort: 8080})
-	_, rpcErr := h.Handle("client-1", "forward.add", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for empty host")
+func TestHandler_ForwardParamValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		params any
+	}{
+		{"add_empty_host", "forward.add", protocol.ForwardAddParams{Host: "", Type: "local", LocalPort: 8080}},
+		{"add_empty_type", "forward.add", protocol.ForwardAddParams{Host: "prod", Type: "", LocalPort: 8080}},
+		{"add_zero_port", "forward.add", protocol.ForwardAddParams{Host: "prod", Type: "local", LocalPort: 0}},
+		{"delete_empty", "forward.delete", protocol.ForwardDeleteParams{Name: ""}},
+		{"start_empty", "forward.start", protocol.ForwardStartParams{Name: ""}},
+		{"stop_empty", "forward.stop", protocol.ForwardStopParams{Name: ""}},
 	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
-	}
-}
-
-func TestHandler_ForwardAdd_EmptyType(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardAddParams{Host: "prod", Type: "", LocalPort: 8080})
-	_, rpcErr := h.Handle("client-1", "forward.add", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for empty type")
-	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
-	}
-}
-
-func TestHandler_ForwardAdd_ZeroLocalPort(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardAddParams{Host: "prod", Type: "local", LocalPort: 0})
-	_, rpcErr := h.Handle("client-1", "forward.add", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for zero local_port")
-	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
-	}
-}
-
-func TestHandler_ForwardDelete_EmptyName(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: ""})
-	_, rpcErr := h.Handle("client-1", "forward.delete", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for empty name")
-	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
-	}
-}
-
-func TestHandler_ForwardStart_EmptyName(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardStartParams{Name: ""})
-	_, rpcErr := h.Handle("client-1", "forward.start", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for empty name")
-	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
-	}
-}
-
-func TestHandler_ForwardStop_EmptyName(t *testing.T) {
-	h, _, _, _ := newTestHandler()
-	params := mustMarshal(t, protocol.ForwardStopParams{Name: ""})
-	_, rpcErr := h.Handle("client-1", "forward.stop", params)
-	if rpcErr == nil {
-		t.Fatal("expected RPC error for empty name")
-	}
-	if rpcErr.Code != protocol.InvalidParams {
-		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, _, _, _ := newTestHandler()
+			params := mustMarshal(t, tt.params)
+			_, rpcErr := h.Handle("client-1", tt.method, params)
+			if rpcErr == nil {
+				t.Fatal("expected RPC error")
+			}
+			if rpcErr.Code != protocol.InvalidParams {
+				t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+			}
+		})
 	}
 }
 

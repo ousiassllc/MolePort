@@ -36,6 +36,7 @@ func newMockSSHManager() *mockSSHManager {
 func (m *mockSSHManager) LoadHosts() ([]core.SSHHost, error)   { return nil, nil }
 func (m *mockSSHManager) ReloadHosts() ([]core.SSHHost, error) { return nil, nil }
 func (m *mockSSHManager) GetHosts() []core.SSHHost             { return nil }
+func (m *mockSSHManager) GetPendingAuthHosts() []string        { return nil }
 
 func (m *mockSSHManager) GetHost(name string) (*core.SSHHost, error) {
 	m.mu.RLock()
@@ -62,8 +63,6 @@ func (m *mockSSHManager) ConnectWithCallback(hostName string, cb core.Credential
 	}
 	return m.Connect(hostName)
 }
-
-func (m *mockSSHManager) GetPendingAuthHosts() []string { return nil }
 
 func (m *mockSSHManager) Disconnect(hostName string) error {
 	m.mu.Lock()
@@ -133,7 +132,7 @@ type mockSSHConnection struct {
 	dynamicForwardF func(ctx context.Context, localPort int) (net.Listener, error)
 }
 
-func (m *mockSSHConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
+func (m *mockSSHConnection) Dial(_ core.SSHHost, _ core.CredentialCallback) (*ssh.Client, error) {
 	if m.dialErr != nil {
 		return nil, m.dialErr
 	}
@@ -147,29 +146,27 @@ func (m *mockSSHConnection) Close() error {
 	return nil
 }
 
-func (m *mockSSHConnection) LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error) {
+func (m *mockSSHConnection) IsAlive() bool { return m.isAlive }
+
+func (m *mockSSHConnection) LocalForward(ctx context.Context, p int, addr string) (net.Listener, error) {
 	if m.localForwardF != nil {
-		return m.localForwardF(ctx, localPort, remoteAddr)
+		return m.localForwardF(ctx, p, addr)
 	}
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockSSHConnection) RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error) {
+func (m *mockSSHConnection) RemoteForward(ctx context.Context, p int, addr string) (net.Listener, error) {
 	if m.remoteForwardF != nil {
-		return m.remoteForwardF(ctx, remotePort, localAddr)
+		return m.remoteForwardF(ctx, p, addr)
 	}
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockSSHConnection) DynamicForward(ctx context.Context, localPort int) (net.Listener, error) {
+func (m *mockSSHConnection) DynamicForward(ctx context.Context, p int) (net.Listener, error) {
 	if m.dynamicForwardF != nil {
-		return m.dynamicForwardF(ctx, localPort)
+		return m.dynamicForwardF(ctx, p)
 	}
 	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *mockSSHConnection) IsAlive() bool {
-	return m.isAlive
 }
 
 func (m *mockSSHConnection) KeepAlive(ctx context.Context, interval time.Duration) {
@@ -215,11 +212,7 @@ type mockListener struct {
 	connCh chan net.Conn
 }
 
-func newMockListener() *mockListener {
-	return &mockListener{
-		connCh: make(chan net.Conn),
-	}
-}
+func newMockListener() *mockListener { return &mockListener{connCh: make(chan net.Conn)} }
 
 func (l *mockListener) Accept() (net.Conn, error) {
 	conn, ok := <-l.connCh
@@ -239,9 +232,7 @@ func (l *mockListener) Close() error {
 	return nil
 }
 
-func (l *mockListener) Addr() net.Addr {
-	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0}
-}
+func (l *mockListener) Addr() net.Addr { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0} }
 
 // drainEvent はイベントチャネルから1件受信する。タイムアウトでテスト失敗。
 func drainEvent(t *testing.T, ch <-chan core.ForwardEvent) core.ForwardEvent {
