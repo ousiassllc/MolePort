@@ -17,6 +17,8 @@ import (
 
 const (
 	// metricsInterval はメトリクス更新の間隔。
+	// TODO: セッション数が多い場合にボトルネックになる可能性があるため、
+	// イベント購読と組み合わせたプッシュ型への移行を検討する。
 	metricsInterval = 2 * time.Second
 	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
 	ipcReadTimeout = 5 * time.Second
@@ -159,7 +161,7 @@ func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
-		state := parseConnectionState(evt.Type)
+		state := protocol.ParseConnectionState(evt.Type)
 		m.dashboard.UpdateHostState(evt.Host, state)
 		if evt.Error != "" {
 			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error), tui.LogInfo)

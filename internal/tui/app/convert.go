@@ -14,7 +14,7 @@ func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 		HostName:           info.HostName,
 		Port:               info.Port,
 		User:               info.User,
-		State:              parseConnectionState(info.State),
+		State:              protocol.ParseConnectionState(info.State),
 		ActiveForwardCount: info.ActiveForwardCount,
 	}
 }
@@ -43,23 +43,6 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 		BytesReceived:  info.BytesReceived,
 		ReconnectCount: info.ReconnectCount,
 		LastError:      info.LastError,
-	}
-}
-
-func parseConnectionState(s string) core.ConnectionState {
-	switch s {
-	case protocol.StateConnected:
-		return core.Connected
-	case protocol.StateConnecting:
-		return core.Connecting
-	case protocol.StateReconnecting:
-		return core.Reconnecting
-	case protocol.StatePendingAuth:
-		return core.PendingAuth
-	case protocol.StateError:
-		return core.ConnectionError
-	default:
-		return core.Disconnected
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 type CredentialHandler func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error)
 
+// IPCClient は Unix ドメインソケット上で JSON-RPC 2.0 通信を行うクライアント。
 type IPCClient struct {
 	socketPath  string
 	conn        net.Conn

@@ -13,17 +13,10 @@ import (
 	"github.com/ousiassllc/moleport/internal/infra"
 )
 
-// SSHConfigParser は SSH config ファイルを解析しホスト定義を抽出する。
-type SSHConfigParser interface {
-	// Parse は指定パスの SSH config を解析し、ホスト一覧を返す。
-	// ワイルドカードホスト (*) は除外する。
-	Parse(configPath string) ([]core.SSHHost, error)
-}
-
 type sshConfigParser struct{}
 
-// NewSSHConfigParser は SSHConfigParser の実装を返す。
-func NewSSHConfigParser() SSHConfigParser {
+// NewSSHConfigParser は core.SSHConfigParser の実装を返す。
+func NewSSHConfigParser() core.SSHConfigParser {
 	return &sshConfigParser{}
 }
 

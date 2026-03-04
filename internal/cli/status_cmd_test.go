@@ -1,6 +1,10 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ousiassllc/moleport/internal/format"
+)
 
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
@@ -19,9 +23,9 @@ func TestFormatBytes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := formatBytes(tt.input)
+		got := format.Bytes(tt.input)
 		if got != tt.want {
-			t.Errorf("formatBytes(%d) = %q, want %q", tt.input, got, tt.want)
+			t.Errorf("format.Bytes(%d) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

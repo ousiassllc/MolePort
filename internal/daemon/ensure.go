@@ -7,6 +7,8 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
+const ensureRetryDelay = 200 * time.Millisecond
+
 // EnsureDaemon はデーモンが起動中であることを確認し、接続済みの IPCClient を返す。
 // デーモンが起動していない場合はエラーを返す。
 func EnsureDaemon(configDir string) (*client.IPCClient, error) {
@@ -35,6 +37,6 @@ func EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*client.IPC
 		if time.Now().After(deadline) {
 			return nil, fmt.Errorf("daemon not ready after %s: %w", maxWait, err)
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(ensureRetryDelay)
 	}
 }

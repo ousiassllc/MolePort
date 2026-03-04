@@ -18,6 +18,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+const (
+	defaultDialTimeout      = 10 * time.Second
+	defaultHandshakeTimeout = 120 * time.Second
+)
+
 type sshConnection struct {
 	mu          sync.Mutex
 	client      *ssh.Client
@@ -57,13 +62,13 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	}
 
 	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
-	dialTimeout := 10 * time.Second
+	dialTimeout := defaultDialTimeout
 
 	// クレデンシャルコールバックがある場合、ハンドシェイク中にユーザー入力を待つため
 	// デッドラインを長くする。
 	handshakeTimeout := dialTimeout
 	if cb != nil {
-		handshakeTimeout = 120 * time.Second
+		handshakeTimeout = defaultHandshakeTimeout
 	}
 
 	// ProxyJump が設定されていても現在は未対応のため警告を出力

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/format"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -59,8 +60,8 @@ func runSessionGet(configDir string, name string, jsonOutput bool) {
 	if session.ConnectedAt != "" {
 		fmt.Println(i18n.T("cli.status.session_connected_at", map[string]any{"Time": session.ConnectedAt}))
 	}
-	fmt.Println(i18n.T("cli.status.session_bytes_sent", map[string]any{"Bytes": formatBytes(session.BytesSent)}))
-	fmt.Println(i18n.T("cli.status.session_bytes_received", map[string]any{"Bytes": formatBytes(session.BytesReceived)}))
+	fmt.Println(i18n.T("cli.status.session_bytes_sent", map[string]any{"Bytes": format.Bytes(session.BytesSent)}))
+	fmt.Println(i18n.T("cli.status.session_bytes_received", map[string]any{"Bytes": format.Bytes(session.BytesReceived)}))
 	if session.ReconnectCount > 0 {
 		fmt.Printf("  Reconnects:     %d\n", session.ReconnectCount)
 	}
@@ -149,25 +150,5 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 		fmt.Println(i18n.T("cli.status.hosts_summary", map[string]any{"Total": len(hosts.Hosts), "Connected": connectedHosts}))
 	}
 	fmt.Println(i18n.T("cli.status.forwards_summary", map[string]any{"Total": len(sessions.Sessions), "Active": activeSessions, "Stopped": stoppedSessions}))
-	fmt.Println(i18n.T("cli.status.traffic_summary", map[string]any{"Sent": formatBytes(totalSent), "Received": formatBytes(totalRecv)}))
-}
-
-// formatBytes はバイト数を人間が読みやすい形式に変換する。
-func formatBytes(b int64) string {
-	const (
-		KB = 1024
-		MB = 1024 * KB
-		GB = 1024 * MB
-	)
-
-	switch {
-	case b >= GB:
-		return fmt.Sprintf("%.1fGB", float64(b)/float64(GB))
-	case b >= MB:
-		return fmt.Sprintf("%.1fMB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.1fKB", float64(b)/float64(KB))
-	default:
-		return fmt.Sprintf("%dB", b)
-	}
+	fmt.Println(i18n.T("cli.status.traffic_summary", map[string]any{"Sent": format.Bytes(totalSent), "Received": format.Bytes(totalRecv)}))
 }
