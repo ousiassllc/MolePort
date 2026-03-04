@@ -50,7 +50,7 @@ func (m *MainModel) checkDaemonVersion() tea.Cmd {
 // handleVersionCheckDone はバージョンチェック結果を処理する。
 func (m MainModel) handleVersionCheckDone(msg tui.VersionCheckDoneMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
-		m.dashboard.AppendLog(i18n.T("tui.version.check_error", map[string]any{"Error": msg.Err}))
+		m.dashboard.AppendLog(i18n.T("tui.version.check_error", map[string]any{"Error": msg.Err}), tui.LogError)
 		return m, nil
 	}
 	if msg.Match {
@@ -68,11 +68,11 @@ func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cm
 	if confirmed {
 		m.restarting = true
 		m.pendingUpdateCheck = nil // 再起動するのでアップデート通知は不要
-		m.dashboard.AppendLog(i18n.T("tui.version.restarting"))
+		m.dashboard.AppendLog(i18n.T("tui.version.restarting"), tui.LogInfo)
 		return m, m.restartDaemon()
 	}
 	m.dashboard.SetVersionWarning(true)
-	m.dashboard.AppendLog(i18n.T("tui.version.mismatch_continue"))
+	m.dashboard.AppendLog(i18n.T("tui.version.mismatch_continue"), tui.LogInfo)
 	// バッファリングされたアップデート通知があれば表示する
 	if m.pendingUpdateCheck != nil {
 		pending := *m.pendingUpdateCheck
@@ -126,12 +126,12 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 func (m MainModel) handleDaemonRestartDone(msg daemonRestartDoneMsg) (MainModel, tea.Cmd) {
 	m.restarting = false
 	if msg.err != nil {
-		m.dashboard.AppendLog(i18n.T("tui.version.restart_error", map[string]any{"Error": msg.err}))
+		m.dashboard.AppendLog(i18n.T("tui.version.restart_error", map[string]any{"Error": msg.err}), tui.LogError)
 		return m, nil
 	}
 	m.client = msg.newClient
 	m.subscriptionID = ""
-	m.dashboard.AppendLog(i18n.T("tui.version.restarted"))
+	m.dashboard.AppendLog(i18n.T("tui.version.restarted"), tui.LogSuccess)
 	return m, tea.Batch(
 		m.loadHosts(),
 		m.loadSessions(),

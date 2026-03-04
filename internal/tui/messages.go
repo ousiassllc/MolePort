@@ -64,9 +64,19 @@ type ForwardAddRequestMsg struct {
 	AutoConnect bool
 }
 
+// LogLevel はログ行の種類を表す。
+type LogLevel int
+
+const (
+	LogInfo LogLevel = iota
+	LogSuccess
+	LogError
+)
+
 // LogOutputMsg はログ出力テキスト。
 type LogOutputMsg struct {
-	Text string
+	Text  string
+	Level LogLevel
 }
 
 // QuitRequestMsg はアプリケーション終了を要求する。

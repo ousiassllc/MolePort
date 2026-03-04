@@ -114,7 +114,7 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 	case tui.SSHEventMsg:
 		d.handleSSHEvent(msg.Event)
 	case tui.LogOutputMsg:
-		d.log.AppendOutput(msg.Text)
+		d.log.AppendOutput(msg.Text, msg.Level)
 	}
 
 	// SetupPanel にメッセージを転送（テキスト入力の blink 等）
@@ -200,8 +200,8 @@ func (d *DashboardPage) UpdateHostState(hostName string, state core.ConnectionSt
 }
 
 // AppendLog はログ出力を追加する。
-func (d *DashboardPage) AppendLog(text string) {
-	d.log.AppendOutput(text)
+func (d *DashboardPage) AppendLog(text string, level tui.LogLevel) {
+	d.log.AppendOutput(text, level)
 }
 
 // LogLineCount はログ出力の行数を返す。
