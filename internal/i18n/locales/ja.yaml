@@ -81,6 +81,10 @@ cli:
     host_added: "  + {{.Name}} が追加されました"
     host_removed: "  - {{.Name}} が削除されました"
     failed: "SSH config の再読み込みに失敗しました: {{.Error}}"
+  version:
+    update_available: "アップデートがあります: {{.Latest}} (現在: {{.Current}})"
+    release_url: "リリース: {{.URL}}"
+    check_failed: "バージョンチェックに失敗しました: {{.Error}}"
   tui:
     daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
     daemon_started: "デーモンを起動しました (PID: {{.PID}})"

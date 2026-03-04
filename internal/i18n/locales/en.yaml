@@ -81,6 +81,10 @@ cli:
     host_added: "  + {{.Name}} added"
     host_removed: "  - {{.Name}} removed"
     failed: "Failed to reload SSH config: {{.Error}}"
+  version:
+    update_available: "Update available: {{.Latest}} (current: {{.Current}})"
+    release_url: "Release: {{.URL}}"
+    check_failed: "Version check failed: {{.Error}}"
   tui:
     daemon_start_failed: "Failed to start daemon: {{.Error}}"
     daemon_started: "Daemon started (PID: {{.PID}})"
