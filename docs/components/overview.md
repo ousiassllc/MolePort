@@ -1282,6 +1282,31 @@ func (g ThemeGrid) View() string
 func (g ThemeGrid) SelectedPresetID() string
 ```
 
+### InfoDialog (`molecules/infodialog.go`)
+
+OK ボタンのみの情報ダイアログ Molecule。アップデート通知など、ユーザーへの情報表示に使用する。
+
+#### 責務
+
+- メッセージテキストの表示
+- OK ボタン（Enter / Esc / O キー）で閉じる操作
+- 閉じたときに `InfoDismissedMsg` を発行
+
+#### インターフェース
+
+```go
+type InfoDialog struct {
+    message string
+}
+
+type InfoDismissedMsg struct{}
+
+func NewInfoDialog(message string) InfoDialog
+func (m InfoDialog) Init() tea.Cmd
+func (m InfoDialog) Update(msg tea.Msg) (InfoDialog, tea.Cmd)
+func (m InfoDialog) View() string
+```
+
 ### Organisms
 
 SetupPanel / ForwardPanel / LogPanel / StatusBar の構造は維持。
@@ -1344,7 +1369,7 @@ ForwardPanel / SetupPanel / LogPanel（Organisms）
 StatusBar（Organism）
   責務: 背景色付きスタイルを自身で適用
 
-ConfirmDialog / PasswordInput（Molecules）
+ConfirmDialog / PasswordInput / InfoDialog（Molecules）
   責務: 自身のボーダー描画（常にフォーカス状態）
 ```
 
@@ -1359,6 +1384,7 @@ ConfirmDialog / PasswordInput（Molecules）
 | **StatusBar** | `organisms/statusbar.go` | View 内で `StatusBarStyle`（背景色付き）を自身で適用 |
 | **ConfirmDialog** | `molecules/confirmdialog.go` | View 内で `FocusedBorder` を自身で適用 |
 | **PasswordInput** | `molecules/passwordinput.go` | View 内で `FocusedBorder` を自身で適用 |
+| **InfoDialog** | `molecules/infodialog.go` | View 内で `FocusedBorder` を自身で適用 |
 
 #### ボーダーのインラインタイトル
 
@@ -1411,6 +1437,7 @@ return border.
 | **StatusBar** | `organisms/statusbar.go` | 統計テキストを `i18n.T("tui.statusbar.*")` に置き換え |
 | **ConfirmDialog** | `molecules/confirmdialog.go` | 「はい」「いいえ」を `i18n.T("tui.confirm.*")` に置き換え |
 | **PasswordInput** | `molecules/passwordinput.go` | プロンプトテキストを `i18n.T()` に置き換え |
+| **InfoDialog** | `molecules/infodialog.go` | OK ボタンテキストを `i18n.T("tui.update.ok")` に置き換え |
 | **app_version** | `app/app_version.go` | バージョン不一致メッセージを `i18n.T()` に置き換え |
 | **Config** | `core/types_models.go` | `Config` 構造体に `Language string` フィールドを追加 |
 

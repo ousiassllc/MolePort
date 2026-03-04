@@ -144,6 +144,10 @@ tui:
   theme:
     base: "dark"           # "dark" | "light"
     accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+
+update_check:
+  enabled: true            # false to disable update checks
+  interval: "24h"          # check interval
 ```
 
 ## Host Key Verification

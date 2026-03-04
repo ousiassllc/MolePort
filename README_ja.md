@@ -142,6 +142,10 @@ tui:
   theme:
     base: "dark"           # "dark" | "light"
     accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+
+update_check:
+  enabled: true            # false でアップデートチェックを無効化
+  interval: "24h"          # チェック間隔
 ```
 
 ## ホスト鍵検証
