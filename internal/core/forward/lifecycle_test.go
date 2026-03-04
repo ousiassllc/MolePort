@@ -35,7 +35,7 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 // パスワード認証が必要なホストへの接続が失敗していた。
 func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := newMockLocalDefaultConn()
+	mockConn := newMockConn(true, false)
 	// Connect（コールバックなし）は認証エラーを返す
 	sm.connectErr = fmt.Errorf("authentication required: no authentication methods available")
 	// ConnectWithCallback はコールバック付きなら成功する
@@ -69,7 +69,7 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 
 func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockLocalDefaultConn())
+	sm.setConnected("server1", newMockConn(true, false))
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
@@ -115,7 +115,7 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	sm.connectWithCbFn = func(hostName string, _ core.CredentialCallback) error {
 		sm.mu.Lock()
 		sm.connected[hostName] = true
-		sm.sshConns[hostName] = newMockLocalDefaultConn()
+		sm.sshConns[hostName] = newMockConn(true, false)
 		sm.mu.Unlock()
 		return nil
 	}
@@ -168,7 +168,7 @@ func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
 		{
 			name:     "Dynamic",
 			rule:     core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080},
-			mockConn: newMockDynamicDefaultConn(),
+			mockConn: newMockConn(false, true),
 		},
 	}
 	for _, tt := range tests {

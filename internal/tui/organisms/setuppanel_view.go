@@ -13,12 +13,10 @@ import (
 
 // View はパネルを描画する。
 func (p SetupPanel) View() string {
-	// innerWidth = p.width - 4 (2 border + 2 padding)
 	innerWidth := p.width - 4
 	if innerWidth < 10 {
 		innerWidth = 10
 	}
-	// innerHeight = p.height - 2 (top + bottom border)
 	innerHeight := p.height - 2
 	if innerHeight < 1 {
 		innerHeight = 1

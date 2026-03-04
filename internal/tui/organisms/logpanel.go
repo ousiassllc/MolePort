@@ -9,7 +9,6 @@ import (
 
 const logMaxOutputLines = 100
 
-// logEntry はログ行のテキストとレベルを保持する。
 type logEntry struct {
 	text  string
 	level tui.LogLevel
@@ -51,18 +50,15 @@ func (p *LogPanel) SetSize(width, height int) {
 
 // View はパネルを描画する。
 func (p LogPanel) View() string {
-	// innerWidth = p.width - 4 (2 border + 2 padding)
 	innerWidth := p.width - 4
 	if innerWidth < 10 {
 		innerWidth = 10
 	}
-	// innerHeight = p.height - 2 (top + bottom border)
 	innerHeight := p.height - 2
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
 
-	// 出力バッファから表示分を取得
 	var entries []logEntry
 	if len(p.output) > innerHeight {
 		entries = p.output[len(p.output)-innerHeight:]
@@ -70,7 +66,6 @@ func (p LogPanel) View() string {
 		entries = p.output
 	}
 
-	// 不足分の空行で埋める
 	for len(entries) < innerHeight {
 		entries = append(entries, logEntry{})
 	}
@@ -84,7 +79,6 @@ func (p LogPanel) View() string {
 	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, i18n.T("tui.log.title"), content)
 }
 
-// styleLogEntry はログエントリにスタイルを適用する。
 func styleLogEntry(entry logEntry) string {
 	if entry.text == "" {
 		return ""

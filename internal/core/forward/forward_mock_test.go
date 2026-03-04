@@ -179,20 +179,15 @@ func (m *mockSSHConnection) KeepAlive(ctx context.Context, interval time.Duratio
 
 var _ core.SSHConnection = (*mockSSHConnection)(nil)
 
-func newMockDynamicDefaultConn() *mockSSHConnection {
-	return &mockSSHConnection{isAlive: true, dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return newMockListener(), nil }}
-}
-
-func newMockLocalDefaultConn() *mockSSHConnection {
-	return &mockSSHConnection{isAlive: true, localForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil }}
-}
-
-func newMockLocalAndDynamicDefaultConn() *mockSSHConnection {
-	return &mockSSHConnection{
-		isAlive:         true,
-		localForwardF:   func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil },
-		dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return newMockListener(), nil },
+func newMockConn(local, dynamic bool) *mockSSHConnection {
+	c := &mockSSHConnection{isAlive: true}
+	if local {
+		c.localForwardF = func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil }
 	}
+	if dynamic {
+		c.dynamicForwardF = func(_ context.Context, _ int) (net.Listener, error) { return newMockListener(), nil }
+	}
+	return c
 }
 
 type mockSOCKS5Dialer struct {
@@ -234,7 +229,6 @@ func (l *mockListener) Close() error {
 
 func (l *mockListener) Addr() net.Addr { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0} }
 
-// drainEvent はイベントチャネルから1件受信する。タイムアウトでテスト失敗。
 func drainEvent(t *testing.T, ch <-chan core.ForwardEvent) core.ForwardEvent {
 	t.Helper()
 	select {
@@ -246,7 +240,6 @@ func drainEvent(t *testing.T, ch <-chan core.ForwardEvent) core.ForwardEvent {
 	}
 }
 
-// assertSessionStatus はセッションのステータスを検証する。
 func assertSessionStatus(t *testing.T, fm core.ForwardManager, name string, want core.SessionStatus) {
 	t.Helper()
 	session, err := fm.GetSession(name)

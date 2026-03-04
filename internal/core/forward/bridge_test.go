@@ -12,7 +12,6 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// halfCloseConn は net.Conn をラップし、CloseWrite の呼び出しを記録する。
 type halfCloseConn struct {
 	net.Conn
 	closeWriteCalled atomic.Bool
@@ -23,8 +22,6 @@ func (c *halfCloseConn) CloseWrite() error {
 	return nil
 }
 
-// plainConn は CloseWrite を持たない net.Conn ラッパー。
-// Close の呼び出しを記録する。
 type plainConn struct {
 	net.Conn
 	mu          sync.Mutex
@@ -38,7 +35,6 @@ func (c *plainConn) Close() error {
 	return c.Conn.Close()
 }
 
-// doSOCKS5Connect はSOCKS5グリーティング・リクエストを送信し、接続先アドレスを返す。
 func doSOCKS5Connect(t *testing.T, request []byte) string {
 	t.Helper()
 	clientConn, serverConn := net.Pipe()

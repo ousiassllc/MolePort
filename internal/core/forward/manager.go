@@ -49,18 +49,15 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 名前が空の場合は自動生成
 	if rule.Name == "" {
 		m.nextID++
 		rule.Name = fmt.Sprintf("forward-%d", m.nextID)
 	}
 
-	// 名前の一意性チェック
 	if _, exists := m.rules[rule.Name]; exists {
 		return "", &core.AlreadyExistsError{Resource: "rule", Name: rule.Name}
 	}
 
-	// バリデーション
 	if rule.Host == "" {
 		return "", fmt.Errorf("host is required")
 	}
@@ -95,7 +92,6 @@ func (m *forwardManager) DeleteRule(name string) error {
 	session := m.stopForwardLocked(name)
 
 	delete(m.rules, name)
-	// ruleOrder から削除
 	for i, n := range m.ruleOrder {
 		if n == name {
 			m.ruleOrder = append(m.ruleOrder[:i], m.ruleOrder[i+1:]...)

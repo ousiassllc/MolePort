@@ -30,7 +30,7 @@ func TestForwardManager_GetSession_Inactive(t *testing.T) {
 
 func TestForwardManager_GetAllSessions(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
@@ -50,7 +50,7 @@ func TestForwardManager_GetAllSessions(t *testing.T) {
 
 func TestForwardManager_Subscribe_MultipleSubscribers(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	ch1 := fm.Subscribe()
 	ch2 := fm.Subscribe()
