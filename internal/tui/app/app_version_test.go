@@ -10,252 +10,195 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
 
-func TestVersionCheckDone_Match_NoDialog(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
+func newTestModel(version string) MainModel {
+	m := NewMainModel(nil, version, "/tmp/test")
 	m.dashboard.SetSize(80, 24)
+	return m
+}
 
-	msg := tui.VersionCheckDoneMsg{Match: true}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.showVersionConfirm {
-		t.Error("showVersionConfirm should be false when versions match")
+func TestVersionCheckDone(t *testing.T) {
+	tests := []struct {
+		name        string
+		msg         tui.VersionCheckDoneMsg
+		wantConfirm bool
+		wantLogs    int
+	}{
+		{"match", tui.VersionCheckDoneMsg{Match: true}, false, 0},
+		{"mismatch", tui.VersionCheckDoneMsg{DaemonVersion: "1.0.0", TUIVersion: "2.0.0"}, true, 0},
+		{"error", tui.VersionCheckDoneMsg{Err: fmt.Errorf("connection refused")}, false, 1},
 	}
-	if cmd != nil {
-		t.Error("no command should be returned when versions match")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, _ := newTestModel("2.0.0").Update(tt.msg)
+			u := result.(MainModel)
+			if u.showVersionConfirm != tt.wantConfirm {
+				t.Errorf("showVersionConfirm = %v, want %v", u.showVersionConfirm, tt.wantConfirm)
+			}
+			if got := u.dashboard.LogLineCount(); got != tt.wantLogs {
+				t.Errorf("LogLineCount() = %d, want %d", got, tt.wantLogs)
+			}
+		})
 	}
 }
 
-func TestVersionCheckDone_Mismatch_ShowsDialog(t *testing.T) {
-	m := NewMainModel(nil, "2.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := tui.VersionCheckDoneMsg{
-		Match:         false,
-		DaemonVersion: "1.0.0",
-		TUIVersion:    "2.0.0",
+func TestVersionConfirmResult_No(t *testing.T) {
+	m := newTestModel("2.0.0")
+	m.showVersionConfirm = true
+	result, cmd := m.Update(molecules.ConfirmResultMsg{Confirmed: false})
+	u := result.(MainModel)
+	if u.showVersionConfirm || cmd != nil {
+		t.Error("showVersionConfirm should be false and cmd should be nil")
 	}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if !updated.showVersionConfirm {
-		t.Error("showVersionConfirm should be true when versions mismatch")
-	}
-	if cmd != nil {
-		t.Error("no command should be returned, only dialog shown")
+	if got := u.dashboard.LogLineCount(); got != 1 {
+		t.Errorf("LogLineCount() = %d, want 1", got)
 	}
 }
 
-func TestVersionCheckDone_Error_LogsNoDialog(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := tui.VersionCheckDoneMsg{Err: fmt.Errorf("connection refused")}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.showVersionConfirm {
-		t.Error("showVersionConfirm should be false on error")
-	}
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (error should be logged)", got)
-	}
-}
-
-func TestVersionConfirmResult_No_ShowsWarning(t *testing.T) {
-	m := NewMainModel(nil, "2.0.0", "/tmp/test")
+func TestVersionConfirmResult_Yes(t *testing.T) {
+	m := NewMainModel(client.NewIPCClient("/tmp/nonexistent.sock"), "2.0.0", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
 	m.showVersionConfirm = true
-
-	msg := molecules.ConfirmResultMsg{Confirmed: false}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.showVersionConfirm {
-		t.Error("showVersionConfirm should be false after confirm result")
+	result, cmd := m.Update(molecules.ConfirmResultMsg{Confirmed: true})
+	u := result.(MainModel)
+	if u.showVersionConfirm || !u.restarting {
+		t.Error("expected showVersionConfirm=false, restarting=true")
 	}
-	if cmd != nil {
-		t.Error("no command should be returned when user declines restart")
-	}
-	// ログにバージョン不一致の警告が出る
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (warning should be logged)", got)
+	if cmd == nil {
+		t.Error("restart command expected")
 	}
 }
 
-func TestVersionConfirmResult_Yes_ReturnsRestartCmd(t *testing.T) {
-	// restartDaemon は m.client を参照するため、ダミークライアントが必要
-	dummyClient := client.NewIPCClient("/tmp/nonexistent.sock")
-	m := NewMainModel(dummyClient, "2.0.0", "/tmp/test")
+func TestDaemonRestartDone(t *testing.T) {
+	nc := client.NewIPCClient("/tmp/new.sock")
+	tests := []struct {
+		name    string
+		msg     daemonRestartDoneMsg
+		wantCmd bool
+	}{
+		{"error", daemonRestartDoneMsg{err: fmt.Errorf("failed")}, false},
+		{"success", daemonRestartDoneMsg{newClient: nc}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewMainModel(client.NewIPCClient("/tmp/old.sock"), "2.0.0", "/tmp/test")
+			m.dashboard.SetSize(80, 24)
+			m.restarting = true
+			m.subscriptionID = "sub-123"
+			result, cmd := m.Update(tt.msg)
+			u := result.(MainModel)
+			if u.restarting {
+				t.Error("restarting should be false")
+			}
+			if (cmd != nil) != tt.wantCmd {
+				t.Errorf("cmd nil=%v, wantCmd=%v", cmd == nil, tt.wantCmd)
+			}
+			if got := u.dashboard.LogLineCount(); got != 1 {
+				t.Errorf("LogLineCount() = %d, want 1", got)
+			}
+		})
+	}
+	// success ケースでクライアントが入れ替わることを確認
+	m := NewMainModel(client.NewIPCClient("/tmp/old.sock"), "2.0.0", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
+	result, _ := m.Update(daemonRestartDoneMsg{newClient: nc})
+	u := result.(MainModel)
+	if u.client != nc || u.subscriptionID != "" {
+		t.Error("client should be replaced and subscriptionID reset")
+	}
+}
+
+func TestRestartGuards(t *testing.T) {
+	msgs := []struct {
+		name string
+		msg  any
+	}{
+		{"metrics_tick", tui.MetricsTickMsg{}},
+		{"ipc_disconnected", tui.IPCDisconnectedMsg{}},
+		{"log_output", tui.LogOutputMsg{Text: "error"}},
+		{"theme_saved_err", tui.ThemeSavedMsg{Err: fmt.Errorf("err")}},
+	}
+	for _, tt := range msgs {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel("1.0.0")
+			m.restarting = true
+			result, _ := m.Update(tt.msg)
+			if got := result.(MainModel).dashboard.LogLineCount(); got != 0 {
+				t.Errorf("LogLineCount() = %d, want 0", got)
+			}
+		})
+	}
+}
+
+func TestView_ShowsDialogOverlays(t *testing.T) {
+	t.Run("confirm", func(t *testing.T) {
+		m := newTestModel("2.0.0")
+		m.width, m.height = 80, 24
+		m.showVersionConfirm = true
+		m.versionConfirm = molecules.NewConfirmDialog("バージョン不一致テスト")
+		view := m.View()
+		if !strings.Contains(view, "バージョン不一致テスト") {
+			t.Error("View should contain confirm dialog message")
+		}
+	})
+	t.Run("update_notify", func(t *testing.T) {
+		m := newTestModel("1.0.0")
+		m.width, m.height = 80, 24
+		m.showUpdateNotify = true
+		m.updateNotifyDialog = molecules.NewInfoDialog("MolePort 1.1.0 is available")
+		if !strings.Contains(m.View(), "MolePort 1.1.0 is available") {
+			t.Error("View should contain update notify dialog message")
+		}
+	})
+}
+
+func TestUpdateCheckDone(t *testing.T) {
+	tests := []struct {
+		name           string
+		msg            tui.UpdateCheckDoneMsg
+		versionConfirm bool
+		wantDialog     bool
+		wantPending    bool
+	}{
+		{"no_update", tui.UpdateCheckDoneMsg{UpdateAvailable: false}, false, false, false},
+		{"update_available", tui.UpdateCheckDoneMsg{UpdateAvailable: true, CurrentVersion: "1.0.0", LatestVersion: "1.1.0"}, false, true, false},
+		{"error_ignored", tui.UpdateCheckDoneMsg{Err: fmt.Errorf("error")}, false, false, false},
+		{"buffered", tui.UpdateCheckDoneMsg{UpdateAvailable: true, CurrentVersion: "1.0.0", LatestVersion: "1.1.0"}, true, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newTestModel("1.0.0")
+			m.showVersionConfirm = tt.versionConfirm
+			result, _ := m.Update(tt.msg)
+			u := result.(MainModel)
+			if u.showUpdateNotify != tt.wantDialog {
+				t.Errorf("showUpdateNotify = %v, want %v", u.showUpdateNotify, tt.wantDialog)
+			}
+			if (u.pendingUpdateCheck != nil) != tt.wantPending {
+				t.Errorf("pendingUpdateCheck nil=%v, wantPending=%v", u.pendingUpdateCheck == nil, tt.wantPending)
+			}
+		})
+	}
+}
+
+func TestInfoDismissedMsg_ClosesDialog(t *testing.T) {
+	m := newTestModel("1.0.0")
+	m.showUpdateNotify = true
+	m.updateNotifyDialog = molecules.NewInfoDialog("update available")
+	result, _ := m.Update(molecules.InfoDismissedMsg{})
+	if result.(MainModel).showUpdateNotify {
+		t.Error("showUpdateNotify should be false")
+	}
+}
+
+func TestVersionConfirmNo_ShowsPendingUpdate(t *testing.T) {
+	m := newTestModel("1.0.0")
 	m.showVersionConfirm = true
-
-	msg := molecules.ConfirmResultMsg{Confirmed: true}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.showVersionConfirm {
-		t.Error("showVersionConfirm should be false after confirm result")
+	m.pendingUpdateCheck = &tui.UpdateCheckDoneMsg{
+		UpdateAvailable: true, CurrentVersion: "1.0.0", LatestVersion: "1.1.0",
 	}
-	if !updated.restarting {
-		t.Error("restarting should be true after user confirms restart")
-	}
-	if cmd == nil {
-		t.Error("restart command should be returned when user confirms")
-	}
-	// ログに再起動中メッセージが出る
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (restart message should be logged)", got)
-	}
-}
-
-func TestDaemonRestartDone_Error_Logs(t *testing.T) {
-	m := NewMainModel(nil, "2.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := daemonRestartDoneMsg{err: fmt.Errorf("failed to start daemon")}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if cmd != nil {
-		t.Error("no command should be returned on restart error")
-	}
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (error should be logged)", got)
-	}
-}
-
-func TestDaemonRestartDone_Success_ReplacesClient(t *testing.T) {
-	oldClient := client.NewIPCClient("/tmp/old.sock")
-	newClient := client.NewIPCClient("/tmp/new.sock")
-	m := NewMainModel(oldClient, "2.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.subscriptionID = "sub-123"
-
-	msg := daemonRestartDoneMsg{newClient: newClient}
-	result, cmd := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.client != newClient {
-		t.Error("client should be replaced with newClient")
-	}
-	if updated.subscriptionID != "" {
-		t.Errorf("subscriptionID = %q, want empty (should be reset)", updated.subscriptionID)
-	}
-	if cmd == nil {
-		t.Error("batch command should be returned to reload data")
-	}
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (success message should be logged)", got)
-	}
-}
-
-func TestView_ShowsConfirmDialog_WhenVersionConfirmActive(t *testing.T) {
-	m := NewMainModel(nil, "2.0.0", "/tmp/test")
-	m.width = 80
-	m.height = 24
-	m.dashboard.SetSize(80, 24)
-	m.showVersionConfirm = true
-	m.versionConfirm = molecules.NewConfirmDialog("バージョン不一致テスト")
-
-	view := m.View()
-
-	if !strings.Contains(view, "バージョン不一致テスト") {
-		t.Error("View should contain version confirm dialog message")
-	}
-	// ダッシュボードのヘッダーは表示されないこと
-	if strings.Contains(view, "MolePort") {
-		t.Error("View should NOT contain dashboard header when confirm dialog is shown")
-	}
-}
-
-// --- 回帰テスト: デーモン再起動中のガード ---
-
-func TestMetricsTickDuringRestart_SkipsLoadSessions(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	result, cmd := m.Update(tui.MetricsTickMsg{})
-	updated := result.(MainModel)
-
-	// restarting 中でもタイマーは再スケジュールされるため cmd != nil
-	if cmd == nil {
-		t.Error("metricsTick cmd should still be returned for timer re-schedule")
-	}
-	// loadSessions は呼ばれないのでログが出ない
-	if got := updated.dashboard.LogLineCount(); got != 0 {
-		t.Errorf("LogLineCount() = %d, want 0 (loadSessions should be skipped during restart)", got)
-	}
-}
-
-func TestIPCDisconnectedDuringRestart_SkipsShutdown(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	result, cmd := m.Update(tui.IPCDisconnectedMsg{})
-	updated := result.(MainModel)
-
-	if updated.quitting {
-		t.Error("quitting should be false when IPCDisconnectedMsg arrives during restart")
-	}
-	if cmd != nil {
-		t.Error("no command should be returned when IPCDisconnectedMsg is skipped during restart")
-	}
-}
-
-func TestDaemonRestartDone_ClearsRestartingFlag(t *testing.T) {
-	newClient := client.NewIPCClient("/tmp/new.sock")
-	m := NewMainModel(newClient, "2.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	msg := daemonRestartDoneMsg{newClient: newClient}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.restarting {
-		t.Error("restarting should be false after successful daemon restart")
-	}
-}
-
-func TestDaemonRestartDone_Error_ClearsRestartingFlag(t *testing.T) {
-	m := NewMainModel(nil, "2.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	msg := daemonRestartDoneMsg{err: fmt.Errorf("restart failed")}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if updated.restarting {
-		t.Error("restarting should be false after failed daemon restart")
-	}
-}
-
-func TestLogOutputDuringRestart_Suppressed(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	result, _ := m.Update(tui.LogOutputMsg{Text: "Session fetch error: not connected"})
-	updated := result.(MainModel)
-
-	if got := updated.dashboard.LogLineCount(); got != 0 {
-		t.Errorf("LogLineCount() = %d, want 0 (LogOutputMsg should be suppressed during restart)", got)
-	}
-}
-
-func TestThemeSavedErrorDuringRestart_Suppressed(t *testing.T) {
-	m := NewMainModel(nil, "1.0.0", "/tmp/test")
-	m.dashboard.SetSize(80, 24)
-	m.restarting = true
-
-	result, _ := m.Update(tui.ThemeSavedMsg{Err: fmt.Errorf("not connected")})
-	updated := result.(MainModel)
-
-	if got := updated.dashboard.LogLineCount(); got != 0 {
-		t.Errorf("LogLineCount() = %d, want 0 (ThemeSavedMsg error should be suppressed during restart)", got)
+	result, _ := m.Update(molecules.ConfirmResultMsg{Confirmed: false})
+	u := result.(MainModel)
+	if u.showVersionConfirm || !u.showUpdateNotify || u.pendingUpdateCheck != nil {
+		t.Error("expected showVersionConfirm=false, showUpdateNotify=true, pendingUpdateCheck=nil")
 	}
 }

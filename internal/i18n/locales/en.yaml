@@ -169,6 +169,9 @@ tui:
     restarted: "Daemon restarted"
     mismatch_continue: "Continuing with version mismatch"
     mismatch_warning: "Version mismatch"
+  update:
+    available: "MolePort {{.Latest}} is available (current: {{.Current}})"
+    ok: "OK"
   theme:
     header: "Theme Select"
     help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"

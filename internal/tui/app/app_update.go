@@ -42,6 +42,13 @@ func (m MainModel) handleKeyMsg(msg tea.KeyMsg) (MainModel, tea.Cmd, bool) {
 		m.showHelpModal = false
 		return m, nil, true
 	}
+	// アップデート通知ダイアログ表示中は ForceQuit 以外はダイアログに転送
+	// showUpdateNotify と showVersionConfirm は相互排他（handleUpdateCheckDone でバッファリング）
+	if m.showUpdateNotify {
+		var cmd tea.Cmd
+		m.updateNotifyDialog, cmd = m.updateNotifyDialog.Update(msg)
+		return m, cmd, true
+	}
 	// バージョン確認ダイアログ表示中は ForceQuit 以外はダイアログに転送
 	if m.showVersionConfirm {
 		var cmd tea.Cmd
@@ -177,6 +184,17 @@ func (m MainModel) handleUIMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 	case tui.VersionCheckDoneMsg:
 		model, cmd := m.handleVersionCheckDone(msg)
 		return model, cmd, true
+
+	case tui.UpdateCheckDoneMsg:
+		model, cmd := m.handleUpdateCheckDone(msg)
+		return model, cmd, true
+
+	case molecules.InfoDismissedMsg:
+		if m.showUpdateNotify {
+			model, cmd := m.handleUpdateNotifyDismissed()
+			return model, cmd, true
+		}
+		return m, nil, true
 
 	case molecules.ConfirmResultMsg:
 		if m.showVersionConfirm {

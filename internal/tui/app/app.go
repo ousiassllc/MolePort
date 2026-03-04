@@ -42,6 +42,11 @@ type MainModel struct {
 	showVersionConfirm bool
 	restarting         bool // デーモン再起動中フラグ
 
+	// アップデート通知ダイアログ
+	updateNotifyDialog molecules.InfoDialog
+	showUpdateNotify   bool
+	pendingUpdateCheck *tui.UpdateCheckDoneMsg
+
 	// ヘルプモーダル
 	showHelpModal bool
 
@@ -85,6 +90,7 @@ func (m MainModel) Init() tea.Cmd {
 		m.dashboard.Init(),
 		m.loadConfig(),
 		m.checkDaemonVersion(),
+		m.checkLatestVersion(),
 	)
 }
 
@@ -127,6 +133,9 @@ func (m MainModel) View() string {
 	}
 	if m.showVersionConfirm {
 		return m.renderVersionConfirmOverlay()
+	}
+	if m.showUpdateNotify {
+		return m.renderUpdateNotifyOverlay()
 	}
 	if m.currentPage == pageTheme {
 		return m.themePage.View()
