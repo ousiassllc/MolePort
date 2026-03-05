@@ -9,11 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
-	"github.com/ousiassllc/moleport/internal/infra"
-	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -172,29 +169,18 @@ func RunDaemonMode(configDir string) {
 // 設定ファイルの log.file と log.level を参照する。
 // ログファイルの作成に失敗した場合はエラーを返す。
 func setupDaemonLogging(configDir string) (*os.File, error) {
-	store := yamlstore.NewYAMLStore()
-	cfgMgr := core.NewConfigManager(store, configDir)
-	cfg, err := cfgMgr.LoadConfig()
-	if err != nil {
-		c := core.DefaultConfig()
-		cfg = &c
-	}
+	logCfg := daemon.ResolveLogConfig(configDir)
 
-	logPath := cfg.Log.File
-	if expanded, err := infra.ExpandTilde(logPath); err == nil {
-		logPath = expanded
-	}
-
-	if err := os.MkdirAll(filepath.Dir(logPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(logCfg.Path), 0700); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := os.OpenFile(logCfg.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("open log file: %w", err)
 	}
 
-	level := parseSlogLevel(cfg.Log.Level)
+	level := parseSlogLevel(logCfg.Level)
 	handler := slog.NewTextHandler(f, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(handler))
 	return f, nil
