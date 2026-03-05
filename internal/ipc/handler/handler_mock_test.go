@@ -258,6 +258,7 @@ func newTestHandler() (*Handler, *mockSSHManager, *mockForwardManager, *mockConf
 	daemon := &mockDaemonInfo{status: protocol.DaemonStatusResult{
 		Version: "test", PID: 1234, StartedAt: "2025-01-01T00:00:00Z",
 		Uptime: "1h0m0s", ConnectedClients: 2,
+		Warnings: []string{"test warning"},
 	}}
 	return NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemon, nil), sshMgr, fwdMgr, cfgMgr
 }

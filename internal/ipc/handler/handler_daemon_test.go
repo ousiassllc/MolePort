@@ -28,6 +28,9 @@ func TestHandler_DaemonStatus(t *testing.T) {
 	if statusResult.ConnectedClients != 2 {
 		t.Errorf("ConnectedClients = %d, want %d", statusResult.ConnectedClients, 2)
 	}
+	if len(statusResult.Warnings) != 1 || statusResult.Warnings[0] != "test warning" {
+		t.Errorf("Warnings = %v, want [\"test warning\"]", statusResult.Warnings)
+	}
 }
 
 func TestHandler_DaemonStatus_NilDaemon(t *testing.T) {

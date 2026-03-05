@@ -78,6 +78,8 @@ type Daemon struct {
 	wg      sync.WaitGroup
 	stopped bool
 	purge   bool
+
+	warnings []string
 }
 
 // New は新しい Daemon を生成する。
@@ -111,9 +113,11 @@ func New(configDir string, version string) (*Daemon, error) {
 	fwdMgr := forward.NewForwardManager(sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
+	var warnings []string
 	for _, rule := range cfg.Forwards {
 		if _, err := fwdMgr.AddRule(rule); err != nil {
 			slog.Warn("failed to load forward rule", "rule", rule.Name, "error", err)
+			warnings = append(warnings, fmt.Sprintf("failed to load forward rule %q: %v", rule.Name, err))
 		}
 	}
 
@@ -129,6 +133,7 @@ func New(configDir string, version string) (*Daemon, error) {
 		fwdMgr:         fwdMgr,
 		versionChecker: versionChecker,
 		pidFile:        pidFile,
+		warnings:       warnings,
 	}
 
 	// EventBroker: server.SendNotification をクロージャで渡す
@@ -176,6 +181,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	// SSH ホストを読み込む（エラーは警告のみ）
 	if _, err := d.sshMgr.LoadHosts(); err != nil {
 		slog.Warn("failed to load SSH hosts", "error", err)
+		d.warnings = append(d.warnings, fmt.Sprintf("failed to load SSH hosts: %v", err))
 	}
 
 	d.versionChecker.Start(d.ctx, 10*time.Second)
