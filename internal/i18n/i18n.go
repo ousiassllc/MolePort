@@ -3,6 +3,7 @@ package i18n
 import (
 	"embed"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"text/template"
@@ -59,7 +60,7 @@ var global = &localizer{
 
 func init() {
 	if err := SetLang(DefaultLang()); err != nil {
-		panic("i18n: failed to load default locale: " + err.Error())
+		log.Fatal("i18n: failed to load default locale: " + err.Error())
 	}
 }
 

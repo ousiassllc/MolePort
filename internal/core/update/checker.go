@@ -114,6 +114,8 @@ func (vc *VersionChecker) LatestVersion(ctx context.Context) (*core.VersionCheck
 }
 
 // UpdateAvailable はアップデートが利用可能かどうかを返す。
+// プロダクションコードでは GetResult() で取得した結果の UpdateAvailable フィールドを使用する。
+// このメソッドは主にテストで使用される。
 func (vc *VersionChecker) UpdateAvailable() bool {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
