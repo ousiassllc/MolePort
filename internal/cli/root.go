@@ -51,9 +51,12 @@ func defaultConnectDaemon(configDir string) *client.IPCClient {
 	return c
 }
 
-// CallCtx は RPC 呼び出し用のコンテキストを生成する（10秒タイムアウト）。
+// defaultCallTimeout は RPC 呼び出しのデフォルトタイムアウト。
+const defaultCallTimeout = 10 * time.Second
+
+// CallCtx は RPC 呼び出し用のコンテキストを生成する。
 func CallCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 10*time.Second)
+	return context.WithTimeout(context.Background(), defaultCallTimeout)
 }
 
 // ExitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。

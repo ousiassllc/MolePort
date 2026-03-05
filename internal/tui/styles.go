@@ -9,56 +9,83 @@ import (
 
 // カラーパレット（テーマから動的取得）
 
-func AccentColor() lipgloss.Color  { return theme.Current().Accent }
-func TextColor() lipgloss.Color    { return theme.Current().Text }
-func MutedColor() lipgloss.Color   { return theme.Current().Muted }
-func ErrorColor() lipgloss.Color   { return theme.Current().Error }
+// AccentColor はアクセントカラーを返す。
+func AccentColor() lipgloss.Color { return theme.Current().Accent }
+
+// TextColor はテキストカラーを返す。
+func TextColor() lipgloss.Color { return theme.Current().Text }
+
+// MutedColor はミュートカラーを返す。
+func MutedColor() lipgloss.Color { return theme.Current().Muted }
+
+// ErrorColor はエラーカラーを返す。
+func ErrorColor() lipgloss.Color { return theme.Current().Error }
+
+// WarningColor は警告カラーを返す。
 func WarningColor() lipgloss.Color { return theme.Current().Warning }
 
 // テキストスタイル
 
+// TitleStyle はタイトル用の太字アクセントスタイルを返す。
 func TitleStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
 }
 
+// MutedStyle はミュート（低強調）テキスト用スタイルを返す。
 func MutedStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Muted)
 }
 
+// SelectedStyle は選択中アイテムのハイライトスタイルを返す。
 func SelectedStyle() lipgloss.Style {
 	p := theme.Current()
 	return lipgloss.NewStyle().Background(p.BgHighlight).Foreground(p.Accent).Bold(true)
 }
 
+// TextStyle は標準テキスト用スタイルを返す。
 func TextStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Text)
 }
 
 // ステータスカラースタイル
 
-func ActiveStyle() lipgloss.Style  { return lipgloss.NewStyle().Foreground(theme.Current().Accent) }
+// ActiveStyle はアクティブ状態のスタイルを返す。
+func ActiveStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Accent) }
+
+// StoppedStyle は停止状態のスタイルを返す。
 func StoppedStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Muted) }
-func ErrorStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(theme.Current().Error) }
+
+// ErrorStyle はエラー状態のスタイルを返す。
+func ErrorStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Error) }
+
+// ReconnectingStyle は再接続中のスタイルを返す。
 func ReconnectingStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Warning)
 }
+
+// WarningStyle は警告メッセージのスタイルを返す。
 func WarningStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Warning).Bold(true)
 }
 
 // キーヒントスタイル
 
+// KeyStyle はキーバインド表示用のスタイルを返す。
 func KeyStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(theme.Current().Accent).Bold(true)
 }
+
+// DescStyle はキーバインド説明文のスタイルを返す。
 func DescStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Muted) }
 
 // 区切り線スタイル
 
+// DividerStyle は区切り線のスタイルを返す。
 func DividerStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Dim) }
 
 // ヘッダースタイル
 
+// HeaderStyle はヘッダー用の太字アクセントスタイルを返す。
 func HeaderStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
 }
