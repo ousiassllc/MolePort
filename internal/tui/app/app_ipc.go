@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,6 +17,8 @@ import (
 
 const (
 	// metricsInterval はメトリクス更新の間隔。
+	// TODO: セッション数が多い場合にボトルネックになる可能性があるため、
+	// イベント購読と組み合わせたプッシュ型への移行を検討する。
 	metricsInterval = 2 * time.Second
 	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
 	ipcReadTimeout = 5 * time.Second
@@ -63,7 +66,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 		defer cancel()
 		var result protocol.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.session_error", map[string]any{"Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.session_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 		sessions := make([]core.ForwardSession, len(result.Sessions))
 		for i, s := range result.Sessions {
@@ -80,7 +83,7 @@ func (m *MainModel) subscribeEvents() tea.Cmd {
 		defer cancel()
 		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
 		if err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.subscribe_error", map[string]any{"Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.subscribe_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 		return subscriptionStartedMsg{SubscriptionID: subID}
 	}
@@ -155,19 +158,21 @@ func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	case "event.ssh":
 		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
-		state := parseConnectionState(evt.Type)
+		state := protocol.ParseConnectionState(evt.Type)
 		m.dashboard.UpdateHostState(evt.Host, state)
 		if evt.Error != "" {
-			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error))
+			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error), tui.LogInfo)
 		}
 	case "event.forward":
 		var evt protocol.ForwardEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
-		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type))
+		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type), tui.LogInfo)
 		// セッション一覧は次の metricsTick で再読み込みされる
 	}
 }

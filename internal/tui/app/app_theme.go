@@ -19,7 +19,7 @@ const (
 func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
 		if !m.restarting {
-			m.dashboard.AppendLog(i18n.T("tui.log.config_load_error", map[string]any{"Error": msg.Err}))
+			m.dashboard.AppendLog(i18n.T("tui.log.config_load_error", map[string]any{"Error": msg.Err}), tui.LogError)
 		}
 		return m, nil
 	}
@@ -79,7 +79,7 @@ func (m MainModel) handleThemeCancelled() (MainModel, tea.Cmd) {
 // handleThemeSaved はテーマ保存完了メッセージを処理する。
 func (m MainModel) handleThemeSaved(msg tui.ThemeSavedMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil && !m.restarting {
-		m.dashboard.AppendLog(i18n.T("tui.log.theme_save_error", map[string]any{"Error": msg.Err}))
+		m.dashboard.AppendLog(i18n.T("tui.log.theme_save_error", map[string]any{"Error": msg.Err}), tui.LogError)
 	}
 	return m, nil
 }

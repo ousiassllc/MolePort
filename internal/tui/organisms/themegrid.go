@@ -10,6 +10,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
 
+var (
+	themeLeftKey  = key.NewBinding(key.WithKeys("left", "h"))
+	themeRightKey = key.NewBinding(key.WithKeys("right", "l"))
+)
+
 // ThemeGrid はテーマプリセットを2カラム（Dark/Light）で表示・選択するコンポーネント。
 type ThemeGrid struct {
 	darkPresets  []theme.Preset
@@ -51,9 +56,6 @@ func NewThemeGrid(currentPresetID string) ThemeGrid {
 
 // Update はキー入力に応じてカーソルを移動し、リアルタイムプレビューを適用する。
 func (g ThemeGrid) Update(msg tea.Msg) (ThemeGrid, tea.Cmd) {
-	leftKey := key.NewBinding(key.WithKeys("left", "h"))
-	rightKey := key.NewBinding(key.WithKeys("right", "l"))
-
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return g, nil
@@ -70,13 +72,13 @@ func (g ThemeGrid) Update(msg tea.Msg) (ThemeGrid, tea.Cmd) {
 			g.accentIndex++
 			g.applySelected()
 		}
-	case key.Matches(keyMsg, leftKey):
+	case key.Matches(keyMsg, themeLeftKey):
 		if g.baseIndex > 0 {
 			g.baseIndex--
 			g.accentIndex = g.clampedAccentIndex()
 			g.applySelected()
 		}
-	case key.Matches(keyMsg, rightKey):
+	case key.Matches(keyMsg, themeRightKey):
 		if g.baseIndex < 1 {
 			g.baseIndex++
 			g.accentIndex = g.clampedAccentIndex()
@@ -150,7 +152,6 @@ func (g ThemeGrid) renderPresetRow(preset theme.Preset, selected bool) string {
 	return "  " + swatch + " " + preset.Label
 }
 
-// activePresets は現在選択されているカラムのプリセットリストを返す。
 func (g ThemeGrid) activePresets() []theme.Preset {
 	if g.baseIndex == 1 {
 		return g.lightPresets
@@ -158,12 +159,10 @@ func (g ThemeGrid) activePresets() []theme.Preset {
 	return g.darkPresets
 }
 
-// activeColumnLen は現在カラムのプリセット数を返す。
 func (g ThemeGrid) activeColumnLen() int {
 	return len(g.activePresets())
 }
 
-// clampedAccentIndex はカラム切替時に accentIndex を有効範囲に補正した値を返す。
 func (g ThemeGrid) clampedAccentIndex() int {
 	maxIdx := g.activeColumnLen() - 1
 	if maxIdx < 0 {
@@ -175,7 +174,6 @@ func (g ThemeGrid) clampedAccentIndex() int {
 	return g.accentIndex
 }
 
-// applySelected は現在選択されているプリセットをテーマに適用する。
 func (g ThemeGrid) applySelected() {
 	theme.Apply(g.SelectedPresetID())
 }

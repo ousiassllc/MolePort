@@ -13,12 +13,10 @@ import (
 
 // View はパネルを描画する。
 func (p SetupPanel) View() string {
-	// innerWidth = p.width - 4 (2 border + 2 padding)
 	innerWidth := p.width - 4
 	if innerWidth < 10 {
 		innerWidth = 10
 	}
-	// innerHeight = p.height - 2 (top + bottom border)
 	innerHeight := p.height - 2
 	if innerHeight < 1 {
 		innerHeight = 1
@@ -36,16 +34,16 @@ func (p SetupPanel) View() string {
 		rows = p.viewSelectType()
 	case StepLocalPort:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Local port", &p.portInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_local_port"), &p.portInput)
 	case StepRemoteHost:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Remote host", &p.hostInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_remote_host"), &p.hostInput)
 	case StepRemotePort:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Remote port", &p.portInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_remote_port"), &p.portInput)
 	case StepRuleName:
 		title = p.wizardTitleText()
-		rows = p.viewTextInput("Rule name", &p.nameInput)
+		rows = p.viewTextInput(i18n.T("tui.setup_panel.label_rule_name"), &p.nameInput)
 	case StepConfirm:
 		title = p.wizardTitleText()
 		rows = p.viewConfirm()

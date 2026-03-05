@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -148,6 +150,8 @@ func (s *IPCServer) acceptLoop() {
 			case <-s.ctx.Done():
 				return
 			default:
+				slog.Warn("accept error", "error", err)
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 		}

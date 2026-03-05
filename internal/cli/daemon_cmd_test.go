@@ -13,9 +13,11 @@ func TestSetupDaemonLogging_DefaultLogPath(t *testing.T) {
 	// 一時ディレクトリを config ディレクトリとして使用
 	tmpDir := t.TempDir()
 
-	if err := setupDaemonLogging(tmpDir); err != nil {
+	f, err := setupDaemonLogging(tmpDir)
+	if err != nil {
 		t.Fatalf("setupDaemonLogging() error = %v", err)
 	}
+	defer func() { _ = f.Close() }()
 
 	// デフォルト設定では log.file = "~/.config/moleport/moleport.log"
 	// ただし configDir 内にコンフィグがないのでデフォルトが使われる
@@ -49,9 +51,11 @@ func TestSetupDaemonLogging_CustomLogPath(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	if err := setupDaemonLogging(tmpDir); err != nil {
+	f, err := setupDaemonLogging(tmpDir)
+	if err != nil {
 		t.Fatalf("setupDaemonLogging() error = %v", err)
 	}
+	defer func() { _ = f.Close() }()
 
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		t.Errorf("expected log file at %s, but it does not exist", logPath)

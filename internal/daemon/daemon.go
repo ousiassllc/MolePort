@@ -234,10 +234,11 @@ func (d *Daemon) Wait() error {
 func (d *Daemon) Shutdown(purge bool) error {
 	d.mu.Lock()
 	d.purge = purge
+	cancel := d.cancel
 	d.mu.Unlock()
 
-	if d.cancel != nil {
-		d.cancel()
+	if cancel != nil {
+		cancel()
 	}
 	return nil
 }

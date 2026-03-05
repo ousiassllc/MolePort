@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -56,11 +57,11 @@ func (p *PIDFile) Release() error {
 		return nil
 	}
 
-	os.Remove(p.path)
+	removeErr := os.Remove(p.path)
 	syscall.Flock(int(p.file.Fd()), syscall.LOCK_UN)
-	err := p.file.Close()
+	closeErr := p.file.Close()
 	p.file = nil
-	return err
+	return errors.Join(removeErr, closeErr)
 }
 
 // KillProcess は PID ファイルから PID を読み取り、SIGKILL で強制終了し、PID ファイルを削除する。

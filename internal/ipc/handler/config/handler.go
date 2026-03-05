@@ -9,16 +9,21 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
-func validateDuration(value *string, fieldName string) *protocol.RPCError {
+// parsedDurations はバリデーション時にパースした Duration を保持する。
+type parsedDurations map[string]time.Duration
+
+func validateAndParseDuration(value *string, fieldName string, parsed parsedDurations) *protocol.RPCError {
 	if value == nil {
 		return nil
 	}
-	if _, err := time.ParseDuration(*value); err != nil {
+	d, err := time.ParseDuration(*value)
+	if err != nil {
 		return &protocol.RPCError{
 			Code:    protocol.InvalidParams,
 			Message: fmt.Sprintf("invalid %s: %s", fieldName, err),
 		}
 	}
+	parsed[fieldName] = d
 	return nil
 }
 
@@ -101,105 +106,17 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "invalid params: " + err.Error()}
 	}
 
-	// Duration フィールドのバリデーション
-	if p.Reconnect != nil {
-		if err := validateDuration(p.Reconnect.InitialDelay, "reconnect.initial_delay"); err != nil {
-			return nil, err
-		}
-		if err := validateDuration(p.Reconnect.MaxDelay, "reconnect.max_delay"); err != nil {
-			return nil, err
-		}
-		if err := validateDuration(p.Reconnect.KeepAliveInterval, "reconnect.keepalive_interval"); err != nil {
-			return nil, err
-		}
-	}
-	if p.UpdateCheck != nil {
-		if err := validateDuration(p.UpdateCheck.Interval, "update_check.interval"); err != nil {
-			return nil, err
-		}
-		if p.UpdateCheck.Interval != nil {
-			d, _ := time.ParseDuration(*p.UpdateCheck.Interval)
-			if d < time.Hour {
-				return nil, &protocol.RPCError{
-					Code:    protocol.InvalidParams,
-					Message: "update_check.interval must be at least 1h",
-				}
-			}
-		}
-	}
-	for name, update := range p.Hosts {
-		if update == nil || update.Reconnect == nil {
-			continue
-		}
-		if err := validateDuration(update.Reconnect.InitialDelay, "hosts."+name+".reconnect.initial_delay"); err != nil {
-			return nil, err
-		}
-		if err := validateDuration(update.Reconnect.MaxDelay, "hosts."+name+".reconnect.max_delay"); err != nil {
-			return nil, err
-		}
+	durations, rpcErr := validateParams(&p)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
 
 	if err := h.cfgMgr.UpdateConfig(func(cfg *core.Config) {
 		if p.SSHConfigPath != nil {
 			cfg.SSHConfigPath = *p.SSHConfigPath
 		}
-		if p.Reconnect != nil {
-			if p.Reconnect.Enabled != nil {
-				cfg.Reconnect.Enabled = *p.Reconnect.Enabled
-			}
-			if p.Reconnect.MaxRetries != nil {
-				cfg.Reconnect.MaxRetries = *p.Reconnect.MaxRetries
-			}
-			if p.Reconnect.InitialDelay != nil {
-				if d, err := time.ParseDuration(*p.Reconnect.InitialDelay); err == nil {
-					cfg.Reconnect.InitialDelay = core.Duration{Duration: d}
-				}
-			}
-			if p.Reconnect.MaxDelay != nil {
-				if d, err := time.ParseDuration(*p.Reconnect.MaxDelay); err == nil {
-					cfg.Reconnect.MaxDelay = core.Duration{Duration: d}
-				}
-			}
-			if p.Reconnect.KeepAliveInterval != nil {
-				if d, err := time.ParseDuration(*p.Reconnect.KeepAliveInterval); err == nil {
-					cfg.Reconnect.KeepAliveInterval = core.Duration{Duration: d}
-				}
-			}
-		}
-		if p.Hosts != nil {
-			if cfg.Hosts == nil {
-				cfg.Hosts = make(map[string]core.HostConfig)
-			}
-			for name, update := range p.Hosts {
-				if update == nil {
-					delete(cfg.Hosts, name)
-					continue
-				}
-				hc := cfg.Hosts[name]
-				if update.Reconnect != nil {
-					if hc.Reconnect == nil {
-						hc.Reconnect = &core.ReconnectOverride{}
-					}
-					if update.Reconnect.Enabled != nil {
-						hc.Reconnect.Enabled = update.Reconnect.Enabled
-					}
-					if update.Reconnect.MaxRetries != nil {
-						hc.Reconnect.MaxRetries = update.Reconnect.MaxRetries
-					}
-					if update.Reconnect.InitialDelay != nil {
-						if d, err := time.ParseDuration(*update.Reconnect.InitialDelay); err == nil {
-							hc.Reconnect.InitialDelay = &core.Duration{Duration: d}
-						}
-					}
-					if update.Reconnect.MaxDelay != nil {
-						if d, err := time.ParseDuration(*update.Reconnect.MaxDelay); err == nil {
-							hc.Reconnect.MaxDelay = &core.Duration{Duration: d}
-						}
-					}
-				}
-				cfg.Hosts[name] = hc
-			}
-		}
+		applyReconnect(cfg, p.Reconnect, durations)
+		applyHosts(cfg, p.Hosts, durations)
 		if p.Session != nil && p.Session.AutoRestore != nil {
 			cfg.Session.AutoRestore = *p.Session.AutoRestore
 		}
@@ -218,10 +135,8 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 			if p.UpdateCheck.Enabled != nil {
 				cfg.UpdateCheck.Enabled = *p.UpdateCheck.Enabled
 			}
-			if p.UpdateCheck.Interval != nil {
-				if d, err := time.ParseDuration(*p.UpdateCheck.Interval); err == nil {
-					cfg.UpdateCheck.Interval = core.Duration{Duration: d}
-				}
+			if d, ok := durations["update_check.interval"]; ok {
+				cfg.UpdateCheck.Interval = core.Duration{Duration: d}
 			}
 		}
 		if p.TUI != nil && p.TUI.Theme != nil {
@@ -237,4 +152,97 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 	}
 
 	return protocol.ConfigUpdateResult{OK: true}, nil
+}
+
+func validateParams(p *protocol.ConfigUpdateParams) (parsedDurations, *protocol.RPCError) {
+	parsed := make(parsedDurations)
+	if p.Reconnect != nil {
+		if err := validateAndParseDuration(p.Reconnect.InitialDelay, "reconnect.initial_delay", parsed); err != nil {
+			return nil, err
+		}
+		if err := validateAndParseDuration(p.Reconnect.MaxDelay, "reconnect.max_delay", parsed); err != nil {
+			return nil, err
+		}
+		if err := validateAndParseDuration(p.Reconnect.KeepAliveInterval, "reconnect.keepalive_interval", parsed); err != nil {
+			return nil, err
+		}
+	}
+	if p.UpdateCheck != nil {
+		if err := validateAndParseDuration(p.UpdateCheck.Interval, "update_check.interval", parsed); err != nil {
+			return nil, err
+		}
+		if d, ok := parsed["update_check.interval"]; ok && d < time.Hour {
+			return nil, &protocol.RPCError{
+				Code:    protocol.InvalidParams,
+				Message: "update_check.interval must be at least 1h",
+			}
+		}
+	}
+	for name, update := range p.Hosts {
+		if update == nil || update.Reconnect == nil {
+			continue
+		}
+		if err := validateAndParseDuration(update.Reconnect.InitialDelay, "hosts."+name+".reconnect.initial_delay", parsed); err != nil {
+			return nil, err
+		}
+		if err := validateAndParseDuration(update.Reconnect.MaxDelay, "hosts."+name+".reconnect.max_delay", parsed); err != nil {
+			return nil, err
+		}
+	}
+	return parsed, nil
+}
+
+func applyReconnect(cfg *core.Config, r *protocol.ReconnectUpdateInfo, durations parsedDurations) {
+	if r == nil {
+		return
+	}
+	if r.Enabled != nil {
+		cfg.Reconnect.Enabled = *r.Enabled
+	}
+	if r.MaxRetries != nil {
+		cfg.Reconnect.MaxRetries = *r.MaxRetries
+	}
+	if d, ok := durations["reconnect.initial_delay"]; ok {
+		cfg.Reconnect.InitialDelay = core.Duration{Duration: d}
+	}
+	if d, ok := durations["reconnect.max_delay"]; ok {
+		cfg.Reconnect.MaxDelay = core.Duration{Duration: d}
+	}
+	if d, ok := durations["reconnect.keepalive_interval"]; ok {
+		cfg.Reconnect.KeepAliveInterval = core.Duration{Duration: d}
+	}
+}
+
+func applyHosts(cfg *core.Config, hosts map[string]*protocol.HostConfigUpdateInfo, durations parsedDurations) {
+	if hosts == nil {
+		return
+	}
+	if cfg.Hosts == nil {
+		cfg.Hosts = make(map[string]core.HostConfig)
+	}
+	for name, update := range hosts {
+		if update == nil {
+			delete(cfg.Hosts, name)
+			continue
+		}
+		hc := cfg.Hosts[name]
+		if update.Reconnect != nil {
+			if hc.Reconnect == nil {
+				hc.Reconnect = &core.ReconnectOverride{}
+			}
+			if update.Reconnect.Enabled != nil {
+				hc.Reconnect.Enabled = update.Reconnect.Enabled
+			}
+			if update.Reconnect.MaxRetries != nil {
+				hc.Reconnect.MaxRetries = update.Reconnect.MaxRetries
+			}
+			if d, ok := durations["hosts."+name+".reconnect.initial_delay"]; ok {
+				hc.Reconnect.InitialDelay = &core.Duration{Duration: d}
+			}
+			if d, ok := durations["hosts."+name+".reconnect.max_delay"]; ok {
+				hc.Reconnect.MaxDelay = &core.Duration{Duration: d}
+			}
+		}
+		cfg.Hosts[name] = hc
+	}
 }

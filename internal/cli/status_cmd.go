@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/format"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -48,19 +49,19 @@ func runSessionGet(configDir string, name string, jsonOutput bool) {
 		return
 	}
 
-	fmt.Printf("Session: %s\n", session.Name)
-	fmt.Printf("  Host:           %s\n", session.Host)
-	fmt.Printf("  Type:           %s\n", session.Type)
-	fmt.Printf("  Local Port:     %d\n", session.LocalPort)
+	fmt.Println(i18n.T("cli.status.session_header", map[string]any{"Name": session.Name}))
+	fmt.Println(i18n.T("cli.status.session_host", map[string]any{"Host": session.Host}))
+	fmt.Println(i18n.T("cli.status.session_type", map[string]any{"Type": session.Type}))
+	fmt.Println(i18n.T("cli.status.session_local_port", map[string]any{"Port": session.LocalPort}))
 	if session.RemoteHost != "" {
-		fmt.Printf("  Remote:         %s:%d\n", session.RemoteHost, session.RemotePort)
+		fmt.Println(i18n.T("cli.status.session_remote", map[string]any{"Remote": fmt.Sprintf("%s:%d", session.RemoteHost, session.RemotePort)}))
 	}
-	fmt.Printf("  Status:         %s\n", session.Status)
+	fmt.Println(i18n.T("cli.status.session_status", map[string]any{"Status": session.Status}))
 	if session.ConnectedAt != "" {
-		fmt.Printf("  Connected At:   %s\n", session.ConnectedAt)
+		fmt.Println(i18n.T("cli.status.session_connected_at", map[string]any{"Time": session.ConnectedAt}))
 	}
-	fmt.Printf("  Bytes Sent:     %s\n", formatBytes(session.BytesSent))
-	fmt.Printf("  Bytes Received: %s\n", formatBytes(session.BytesReceived))
+	fmt.Println(i18n.T("cli.status.session_bytes_sent", map[string]any{"Bytes": format.Bytes(session.BytesSent)}))
+	fmt.Println(i18n.T("cli.status.session_bytes_received", map[string]any{"Bytes": format.Bytes(session.BytesReceived)}))
 	if session.ReconnectCount > 0 {
 		fmt.Printf("  Reconnects:     %d\n", session.ReconnectCount)
 	}
@@ -141,33 +142,13 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 		totalRecv += s.BytesReceived
 	}
 
-	fmt.Println("MolePort Status:")
-	fmt.Printf("  Daemon:    Running (PID: %d, uptime: %s)\n", daemonStatus.PID, daemonStatus.Uptime)
+	fmt.Println(i18n.T("cli.status.header"))
+	fmt.Println(i18n.T("cli.status.daemon_running", map[string]any{"PID": daemonStatus.PID, "Uptime": daemonStatus.Uptime}))
 	if pendingAuthHosts > 0 {
-		fmt.Printf("  Hosts:     %d total, %d connected, %d pending auth\n", len(hosts.Hosts), connectedHosts, pendingAuthHosts)
+		fmt.Println(i18n.T("cli.status.hosts_summary_auth", map[string]any{"Total": len(hosts.Hosts), "Connected": connectedHosts, "PendingAuth": pendingAuthHosts}))
 	} else {
-		fmt.Printf("  Hosts:     %d total, %d connected\n", len(hosts.Hosts), connectedHosts)
+		fmt.Println(i18n.T("cli.status.hosts_summary", map[string]any{"Total": len(hosts.Hosts), "Connected": connectedHosts}))
 	}
-	fmt.Printf("  Forwards:  %d total, %d active, %d stopped\n", len(sessions.Sessions), activeSessions, stoppedSessions)
-	fmt.Printf("  Traffic:   sent %s, recv %s\n", formatBytes(totalSent), formatBytes(totalRecv))
-}
-
-// formatBytes はバイト数を人間が読みやすい形式に変換する。
-func formatBytes(b int64) string {
-	const (
-		KB = 1024
-		MB = 1024 * KB
-		GB = 1024 * MB
-	)
-
-	switch {
-	case b >= GB:
-		return fmt.Sprintf("%.1fGB", float64(b)/float64(GB))
-	case b >= MB:
-		return fmt.Sprintf("%.1fMB", float64(b)/float64(MB))
-	case b >= KB:
-		return fmt.Sprintf("%.1fKB", float64(b)/float64(KB))
-	default:
-		return fmt.Sprintf("%dB", b)
-	}
+	fmt.Println(i18n.T("cli.status.forwards_summary", map[string]any{"Total": len(sessions.Sessions), "Active": activeSessions, "Stopped": stoppedSessions}))
+	fmt.Println(i18n.T("cli.status.traffic_summary", map[string]any{"Sent": format.Bytes(totalSent), "Received": format.Bytes(totalRecv)}))
 }

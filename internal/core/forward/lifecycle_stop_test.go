@@ -20,7 +20,7 @@ func TestForwardManager_StopForward_NotActive(t *testing.T) {
 
 func TestForwardManager_StopAllForwards(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
@@ -38,7 +38,7 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 
 func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
@@ -52,7 +52,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 
 func TestForwardManager_Close(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	events := fm.Subscribe()
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})

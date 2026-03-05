@@ -28,7 +28,7 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 		}
 		var result protocol.ForwardAddResult
 		if err := m.client.Call(ctx, "forward.add", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_add_error", map[string]any{"Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_add_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 
 		// AutoConnect が設定されている場合はフォワードも開始
@@ -44,14 +44,14 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 				delParams := protocol.ForwardDeleteParams(result)
 				var delResult protocol.ForwardDeleteResult
 				if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
-					return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_rollback_error", map[string]any{"Name": result.Name, "Error": err, "DeleteError": delErr})}
+					return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_rollback_error", map[string]any{"Name": result.Name, "Error": err, "DeleteError": delErr}), Level: tui.LogError}
 				}
-				return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": result.Name, "Error": err})}
+				return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": result.Name, "Error": err}), Level: tui.LogError}
 			}
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added_started", map[string]any{"Name": result.Name})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added_started", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 		}
 
-		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added", map[string]any{"Name": result.Name})}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 	}
 }
 
@@ -62,9 +62,9 @@ func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
 		params := protocol.ForwardDeleteParams{Name: ruleName}
 		var result protocol.ForwardDeleteResult
 		if err := m.client.Call(ctx, "forward.delete", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_delete_error", map[string]any{"Name": ruleName, "Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_delete_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_deleted", map[string]any{"Name": ruleName})}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_deleted", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -88,9 +88,9 @@ func (m *MainModel) startForward(ruleName string) tea.Cmd {
 		params := protocol.ForwardStartParams{Name: ruleName}
 		var result protocol.ForwardStartResult
 		if err := m.client.Call(ctx, "forward.start", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": ruleName, "Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_started", map[string]any{"Name": ruleName})}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_started", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -101,9 +101,9 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 		params := protocol.ForwardStopParams{Name: ruleName}
 		var result protocol.ForwardStopResult
 		if err := m.client.Call(ctx, "forward.stop", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stop_error", map[string]any{"Name": ruleName, "Error": err})}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stop_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stopped", map[string]any{"Name": ruleName})}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stopped", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -142,7 +142,7 @@ func (m MainModel) handleCredentialRequest(msg tui.CredentialRequestMsg) (tea.Mo
 	}
 
 	cmd := m.dashboard.ShowPasswordInput(prompt)
-	m.dashboard.AppendLog(i18n.T("tui.log.credential_required", map[string]any{"Host": msg.Request.Host, "Type": msg.Request.Type}))
+	m.dashboard.AppendLog(i18n.T("tui.log.credential_required", map[string]any{"Host": msg.Request.Host, "Type": msg.Request.Type}), tui.LogInfo)
 	return m, cmd
 }
 
@@ -153,7 +153,7 @@ func (m MainModel) handleCredentialSubmit(msg tui.CredentialSubmitMsg) (tea.Mode
 
 	if msg.Cancelled {
 		m.credResponseCh <- nil
-		m.dashboard.AppendLog(i18n.T("tui.log.credential_cancelled"))
+		m.dashboard.AppendLog(i18n.T("tui.log.credential_cancelled"), tui.LogInfo)
 	} else {
 		resp := &protocol.CredentialResponseParams{
 			Value: msg.Value,

@@ -3,14 +3,20 @@ package organisms
 import (
 	"strings"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
 const logMaxOutputLines = 100
 
+type logEntry struct {
+	text  string
+	level tui.LogLevel
+}
+
 // LogPanel はログ/出力メッセージを表示する読み取り専用パネル。
 type LogPanel struct {
-	output []string
+	output []logEntry
 	width  int
 	height int
 }
@@ -21,9 +27,11 @@ func NewLogPanel() LogPanel {
 }
 
 // AppendOutput は出力バッファにテキストを追加する。
-func (p *LogPanel) AppendOutput(text string) {
+func (p *LogPanel) AppendOutput(text string, level tui.LogLevel) {
 	lines := strings.Split(text, "\n")
-	p.output = append(p.output, lines...)
+	for _, line := range lines {
+		p.output = append(p.output, logEntry{text: line, level: level})
+	}
 	if len(p.output) > logMaxOutputLines {
 		p.output = p.output[len(p.output)-logMaxOutputLines:]
 	}
@@ -42,81 +50,45 @@ func (p *LogPanel) SetSize(width, height int) {
 
 // View はパネルを描画する。
 func (p LogPanel) View() string {
-	// innerWidth = p.width - 4 (2 border + 2 padding)
 	innerWidth := p.width - 4
 	if innerWidth < 10 {
 		innerWidth = 10
 	}
-	// innerHeight = p.height - 2 (top + bottom border)
 	innerHeight := p.height - 2
 	if innerHeight < 1 {
 		innerHeight = 1
 	}
 
-	// 出力バッファから表示分を取得
-	var lines []string
+	var entries []logEntry
 	if len(p.output) > innerHeight {
-		lines = p.output[len(p.output)-innerHeight:]
+		entries = p.output[len(p.output)-innerHeight:]
 	} else {
-		lines = p.output
+		entries = p.output
 	}
 
-	// 不足分の空行で埋める
-	for len(lines) < innerHeight {
-		lines = append(lines, "")
+	for len(entries) < innerHeight {
+		entries = append(entries, logEntry{})
 	}
 
 	var rows []string
-	for _, line := range lines {
-		rows = append(rows, styleLogLine(line))
+	for _, entry := range entries {
+		rows = append(rows, styleLogEntry(entry))
 	}
 
 	content := strings.Join(rows, "\n")
-	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, "Log", content)
+	return tui.RenderWithBorderTitle(tui.UnfocusedBorder(), innerWidth, innerHeight, i18n.T("tui.log.title"), content)
 }
 
-// styleLogLine はログ行にスタイルを適用する。
-func styleLogLine(line string) string {
-	if line == "" {
+func styleLogEntry(entry logEntry) string {
+	if entry.text == "" {
 		return ""
 	}
-	if isErrorLine(line) {
-		return tui.ErrorStyle().Render("✗") + " " + tui.MutedStyle().Render(line)
+	switch entry.level {
+	case tui.LogError:
+		return tui.ErrorStyle().Render("✗") + " " + tui.MutedStyle().Render(entry.text)
+	case tui.LogSuccess:
+		return tui.ActiveStyle().Render("✓") + " " + tui.MutedStyle().Render(entry.text)
+	default:
+		return tui.MutedStyle().Render(entry.text)
 	}
-	if isSuccessLine(line) {
-		return tui.ActiveStyle().Render("✓") + " " + tui.MutedStyle().Render(line)
-	}
-	return tui.MutedStyle().Render(line)
-}
-
-// エラー判定キーワード（日本語 + 英語 + slog レベルプレフィックス）。
-var errorKeywords = []string{
-	"エラー", "失敗",
-	"error", "Error", "ERROR",
-	"failed", "Failed",
-}
-
-// 成功判定キーワード（日本語 + 英語）。
-var successKeywords = []string{
-	"しました", "完了", "復元",
-	"started", "stopped", "added", "deleted",
-	"loaded", "reloaded", "restarted", "saved",
-}
-
-func isErrorLine(line string) bool {
-	for _, kw := range errorKeywords {
-		if strings.Contains(line, kw) {
-			return true
-		}
-	}
-	return false
-}
-
-func isSuccessLine(line string) bool {
-	for _, kw := range successKeywords {
-		if strings.Contains(line, kw) {
-			return true
-		}
-	}
-	return false
 }

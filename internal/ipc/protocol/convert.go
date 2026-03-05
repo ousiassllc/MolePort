@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -8,34 +9,55 @@ import (
 )
 
 // ToRPCError はコアエラーを RPCError に変換する。
-// エラーメッセージに基づいてアプリケーション固有のエラーコードを割り当てる。
+// 構造化エラー型に基づいてアプリケーション固有のエラーコードを割り当てる。
+// 外部起因エラーについては文字列マッチによるフォールバックを使用する。
 func ToRPCError(err error, defaultCode int) *RPCError {
 	msg := err.Error()
 
+	// センチネルエラー
 	switch {
-	case strings.Contains(msg, "not found"):
-		if strings.Contains(msg, "host") {
+	case errors.Is(err, core.ErrCredentialTimeout):
+		return &RPCError{Code: CredentialTimeout, Message: msg}
+	case errors.Is(err, core.ErrCredentialCancelled):
+		return &RPCError{Code: CredentialCancelled, Message: msg}
+	}
+
+	// 構造化エラー型
+	var notFound *core.NotFoundError
+	if errors.As(err, &notFound) {
+		switch notFound.Resource {
+		case "host":
 			return &RPCError{Code: HostNotFound, Message: msg}
-		}
-		if strings.Contains(msg, "rule") {
+		case "rule":
 			return &RPCError{Code: RuleNotFound, Message: msg}
 		}
-	case strings.Contains(msg, "already exists"):
+	}
+
+	var alreadyExists *core.AlreadyExistsError
+	if errors.As(err, &alreadyExists) {
 		return &RPCError{Code: RuleAlreadyExists, Message: msg}
-	case strings.Contains(msg, "already active"):
+	}
+
+	var alreadyActive *core.AlreadyActiveError
+	if errors.As(err, &alreadyActive) {
 		return &RPCError{Code: AlreadyConnected, Message: msg}
-	case strings.Contains(msg, "not connected"):
+	}
+
+	var notConnected *core.NotConnectedError
+	if errors.As(err, &notConnected) {
 		return &RPCError{Code: NotConnected, Message: msg}
-	case strings.Contains(msg, "already connected"):
-		return &RPCError{Code: AlreadyConnected, Message: msg}
-	case strings.Contains(msg, "credential timeout"):
-		return &RPCError{Code: CredentialTimeout, Message: msg}
-	case strings.Contains(msg, "credential cancelled"):
-		return &RPCError{Code: CredentialCancelled, Message: msg}
+	}
+
+	var authRequired *core.AuthRequiredError
+	if errors.As(err, &authRequired) {
+		return &RPCError{Code: AuthenticationFailed, Message: msg}
+	}
+
+	// 外部起因エラー: 文字列マッチによるフォールバック
+	switch {
 	case strings.Contains(msg, "address already in use"):
 		return &RPCError{Code: PortConflict, Message: msg}
-	case strings.Contains(msg, "authentication required"),
-		strings.Contains(msg, "unable to authenticate"),
+	case strings.Contains(msg, "unable to authenticate"),
 		strings.Contains(msg, "no authentication methods available"),
 		strings.Contains(msg, "no supported methods remain"):
 		return &RPCError{Code: AuthenticationFailed, Message: msg}
@@ -122,6 +144,24 @@ func sessionStatusToWire(s core.SessionStatus) string {
 		return SessionError
 	default:
 		return SessionStopped
+	}
+}
+
+// ParseConnectionState は IPC ワイヤー文字列を core.ConnectionState に変換する。
+func ParseConnectionState(s string) core.ConnectionState {
+	switch s {
+	case StateConnected:
+		return core.Connected
+	case StateConnecting:
+		return core.Connecting
+	case StateReconnecting:
+		return core.Reconnecting
+	case StatePendingAuth:
+		return core.PendingAuth
+	case StateError:
+		return core.ConnectionError
+	default:
+		return core.Disconnected
 	}
 }
 

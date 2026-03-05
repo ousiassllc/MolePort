@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -88,7 +87,7 @@ func TestHandler_ForwardParamValidation(t *testing.T) {
 
 func TestHandler_ForwardAdd_RuleAlreadyExists(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
-	fwdMgr.addErr = fmt.Errorf("rule %q already exists", "web")
+	fwdMgr.addErr = &core.AlreadyExistsError{Resource: "rule", Name: "web"}
 
 	params := mustMarshal(t, protocol.ForwardAddParams{
 		Name:       "web",
@@ -128,7 +127,7 @@ func TestHandler_ForwardDelete_Success(t *testing.T) {
 
 func TestHandler_ForwardDelete_NotFound(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
-	fwdMgr.deleteErr = fmt.Errorf("rule %q not found", "nonexistent")
+	fwdMgr.deleteErr = &core.NotFoundError{Resource: "rule", Name: "nonexistent"}
 
 	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: "nonexistent"})
 	_, rpcErr := h.Handle("client-1", "forward.delete", params)

@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+const (
+	forkStartupTimeout = 3 * time.Second
+	forkDialTimeout    = 100 * time.Millisecond
+	forkPollInterval   = 50 * time.Millisecond
+)
+
 // IsDaemonMode は os.Args に --daemon-mode フラグが含まれているかを返す。
 func IsDaemonMode() bool {
 	for _, arg := range os.Args[1:] {
@@ -51,14 +57,14 @@ func StartDaemonProcess(configDir string) (int, error) {
 
 	// デーモンの起動完了を待機（ソケット接続を試行）
 	socketPath := SocketPath(configDir)
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(forkStartupTimeout)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+		conn, err := net.DialTimeout("unix", socketPath, forkDialTimeout)
 		if err == nil {
 			_ = conn.Close()
 			return pid, nil
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(forkPollInterval)
 	}
 
 	return pid, nil // ソケット未準備でも PID を返す

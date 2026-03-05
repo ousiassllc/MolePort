@@ -17,19 +17,17 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	rule, exists := m.rules[ruleName]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("rule %q not found", ruleName)
+		return &core.NotFoundError{Resource: "rule", Name: ruleName}
 	}
 
 	if _, active := m.active[ruleName]; active {
 		m.mu.Unlock()
-		return fmt.Errorf("forward %q is already active", ruleName)
+		return &core.AlreadyActiveError{Name: ruleName}
 	}
 
-	// 起動中プレースホルダーを挿入（並行 StartForward を防ぐ）
 	m.active[ruleName] = &activeForward{starting: true}
 	m.mu.Unlock()
 
-	// エラー時にプレースホルダーをクリーンアップするヘルパー
 	cleanup := func() {
 		m.mu.Lock()
 		if af, ok := m.active[ruleName]; ok && af.starting {
@@ -38,7 +36,6 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		m.mu.Unlock()
 	}
 
-	// SSH 接続を確認（必要に応じてコールバック付きで接続）
 	if !m.sshManager.IsConnected(rule.Host) {
 		if err := m.sshManager.ConnectWithCallback(rule.Host, cb); err != nil {
 			cleanup()
@@ -98,7 +95,6 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	m.active[ruleName] = af
 	m.mu.Unlock()
 
-	// accept ループを開始
 	go m.acceptLoop(af, rule, sshClient)
 
 	m.emit(core.ForwardEvent{

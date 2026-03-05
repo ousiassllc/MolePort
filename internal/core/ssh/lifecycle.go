@@ -51,7 +51,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	idx, ok := m.hostsMap[hostName]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("host %q not found", hostName)
+		return &core.NotFoundError{Resource: "host", Name: hostName}
 	}
 
 	// 既に接続中または接続処理中の場合は何もしない
@@ -84,7 +84,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 			}
 			m.mu.Unlock()
 			m.emit(core.SSHEvent{Type: core.SSHEventPendingAuth, HostName: hostName})
-			return fmt.Errorf("authentication required for %s: %w", hostName, err)
+			return &core.AuthRequiredError{HostName: hostName, Err: err}
 		}
 
 		if i, ok := m.hostsMap[hostName]; ok {
@@ -180,7 +180,7 @@ func (m *sshManager) GetConnection(hostName string) (*cryptossh.Client, error) {
 
 	hc, exists := m.conns[hostName]
 	if !exists || hc.state != core.Connected {
-		return nil, fmt.Errorf("host %q is not connected", hostName)
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	return hc.client, nil
 }
@@ -192,7 +192,7 @@ func (m *sshManager) GetSSHConnection(hostName string) (core.SSHConnection, erro
 
 	hc, exists := m.conns[hostName]
 	if !exists || hc.state != core.Connected {
-		return nil, fmt.Errorf("host %q is not connected", hostName)
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	return hc.conn, nil
 }

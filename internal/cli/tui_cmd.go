@@ -40,6 +40,7 @@ func RunTUI(configDir string, args []string) {
 	if err != nil {
 		exitError("%s", i18n.T("cli.tui.daemon_connect_failed", map[string]any{"Error": err}))
 	}
+	defer func() { _ = client.Close() }()
 
 	// Bubble Tea プログラム起動
 	model := app.NewMainModel(client, Version, configDir)
@@ -50,9 +51,6 @@ func RunTUI(configDir string, args []string) {
 	client.SetCredentialHandler(app.NewTUICredentialHandler(p))
 
 	if _, err := p.Run(); err != nil {
-		client.Close()
 		exitError("%s", i18n.T("cli.tui.tui_error", map[string]any{"Error": err}))
 	}
-
-	client.Close()
 }

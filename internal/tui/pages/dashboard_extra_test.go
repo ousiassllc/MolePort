@@ -87,9 +87,9 @@ func TestAppendLogAndLogLineCount(t *testing.T) {
 	if d.LogLineCount() != 0 {
 		t.Fatalf("initial LogLineCount = %d", d.LogLineCount())
 	}
-	d.AppendLog("line 1")
-	d.AppendLog("line 2")
-	d.AppendLog("line 3")
+	d.AppendLog("line 1", tui.LogInfo)
+	d.AppendLog("line 2", tui.LogSuccess)
+	d.AppendLog("line 3", tui.LogError)
 	if d.LogLineCount() != 3 {
 		t.Errorf("LogLineCount = %d, want 3", d.LogLineCount())
 	}

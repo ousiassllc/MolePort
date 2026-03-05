@@ -54,7 +54,7 @@ func TestForwardManager_GetRulesByHost_Empty(t *testing.T) {
 
 func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockDynamicDefaultConn())
+	sm.setConnected("server1", newMockConn(false, true))
 	fm := NewForwardManager(sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)

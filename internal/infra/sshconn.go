@@ -18,6 +18,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+const (
+	defaultDialTimeout      = 10 * time.Second
+	defaultHandshakeTimeout = 120 * time.Second
+)
+
 type sshConnection struct {
 	mu          sync.Mutex
 	client      *ssh.Client
@@ -57,13 +62,19 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	}
 
 	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
-	dialTimeout := 10 * time.Second
+	dialTimeout := defaultDialTimeout
 
 	// クレデンシャルコールバックがある場合、ハンドシェイク中にユーザー入力を待つため
 	// デッドラインを長くする。
 	handshakeTimeout := dialTimeout
 	if cb != nil {
-		handshakeTimeout = 120 * time.Second
+		handshakeTimeout = defaultHandshakeTimeout
+	}
+
+	// ProxyJump が設定されていても現在は未対応のため警告を出力
+	if len(host.ProxyJump) > 0 {
+		slog.Warn("ProxyJump is not supported, ignoring",
+			"host", host.Name, "proxy_jump", host.ProxyJump)
 	}
 
 	// 接続（ProxyCommand の有無で分岐）
@@ -135,6 +146,8 @@ func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, er
 			if mkErr := os.WriteFile(knownHostsPath, nil, 0600); mkErr != nil {
 				return nil, fmt.Errorf("failed to create known_hosts: %w", mkErr)
 			}
+			slog.Warn("known_hosts is empty; to trust host keys, run: ssh <host> manually",
+				"path", knownHostsPath)
 			// 空ファイルで再読込（全ホストキーを未知として扱う）
 			callback, err = knownhosts.New(knownHostsPath)
 			if err != nil {

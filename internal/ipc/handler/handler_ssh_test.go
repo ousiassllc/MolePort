@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +57,7 @@ func TestHandler_SSHConnect_Success(t *testing.T) {
 func TestHandler_SSHConnect_Error(t *testing.T) {
 	h, sshMgr, _, _ := newTestHandler()
 	sshMgr.connectFn = func(hostName string) error {
-		return fmt.Errorf("host %q not found", hostName)
+		return &core.NotFoundError{Resource: "host", Name: hostName}
 	}
 
 	params := mustMarshal(t, protocol.SSHConnectParams{Host: "nonexistent"})
@@ -92,7 +91,7 @@ func TestHandler_SSHDisconnect_Success(t *testing.T) {
 func TestHandler_SSHDisconnect_NotConnected(t *testing.T) {
 	h, sshMgr, _, _ := newTestHandler()
 	sshMgr.disconnFn = func(hostName string) error {
-		return fmt.Errorf("host %q not connected", hostName)
+		return &core.NotConnectedError{HostName: hostName}
 	}
 
 	params := mustMarshal(t, protocol.SSHDisconnectParams{Host: "prod"})

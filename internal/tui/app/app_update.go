@@ -82,7 +82,7 @@ func (m MainModel) handleKeyMsg(msg tea.KeyMsg) (MainModel, tea.Cmd, bool) {
 			m.openLangPage()
 			return m, nil, true
 		case key.Matches(msg, m.keys.Version):
-			m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version))
+			m.dashboard.AppendLog(fmt.Sprintf("MolePort %s", m.version), tui.LogInfo)
 			return m, nil, true
 		}
 	}
@@ -96,23 +96,23 @@ func (m MainModel) handleIPCMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
 			if !m.restarting {
-				m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}))
+				m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}), tui.LogError)
 			}
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
 			m.refreshForwardPanel()
-			m.dashboard.AppendLog(i18n.T("tui.log.hosts_loaded", map[string]any{"Count": len(msg.Hosts)}))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_loaded", map[string]any{"Count": len(msg.Hosts)}), tui.LogSuccess)
 		}
 		return m, nil, true
 
 	case tui.HostsReloadedMsg:
 		if msg.Err != nil {
-			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reload_error", map[string]any{"Error": msg.Err}))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reload_error", map[string]any{"Error": msg.Err}), tui.LogError)
 		} else {
 			m.hosts = msg.Hosts
 			m.dashboard.SetHosts(msg.Hosts)
-			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reloaded", map[string]any{"Count": len(msg.Hosts)}))
+			m.dashboard.AppendLog(i18n.T("tui.log.hosts_reloaded", map[string]any{"Count": len(msg.Hosts)}), tui.LogSuccess)
 		}
 		return m, nil, true
 
@@ -137,7 +137,7 @@ func (m MainModel) handleIPCMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 		if m.restarting {
 			return m, nil, true
 		}
-		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"))
+		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"), tui.LogError)
 		return m, m.shutdown(), true
 
 	case tui.MetricsTickMsg:
@@ -170,7 +170,7 @@ func (m MainModel) handleForwardMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 
 	case tui.LogOutputMsg:
 		if !m.restarting {
-			m.dashboard.AppendLog(msg.Text)
+			m.dashboard.AppendLog(msg.Text, msg.Level)
 		}
 		return m, nil, true
 	}

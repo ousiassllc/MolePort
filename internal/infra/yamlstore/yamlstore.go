@@ -56,9 +56,14 @@ func (s *yamlStore) Write(path string, data interface{}) error {
 	// これにより書き込み中のクラッシュでファイルが壊れることを防ぐ。
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, buf, 0600); err != nil {
+		_ = os.Remove(tmpPath)
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
 
 func (s *yamlStore) Exists(path string) bool {

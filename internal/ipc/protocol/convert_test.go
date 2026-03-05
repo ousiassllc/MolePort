@@ -8,6 +8,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// wrapError はエラーを別のメッセージでラップする（errors.As/Is テスト用）。
+func wrapError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, err)
+}
+
 func TestToRPCError(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -16,75 +21,86 @@ func TestToRPCError(t *testing.T) {
 		wantCode    int
 		wantMsg     string
 	}{
+		// 構造化エラー型
 		{
 			name:        "host not found",
-			err:         fmt.Errorf("host not found"),
+			err:         &core.NotFoundError{Resource: "host", Name: "prod"},
 			defaultCode: InternalError,
 			wantCode:    HostNotFound,
-			wantMsg:     "host not found",
+			wantMsg:     `host "prod" not found`,
 		},
 		{
 			name:        "rule not found",
-			err:         fmt.Errorf("rule not found"),
+			err:         &core.NotFoundError{Resource: "rule", Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    RuleNotFound,
-			wantMsg:     "rule not found",
+			wantMsg:     `rule "web" not found`,
 		},
 		{
 			name:        "already exists",
-			err:         fmt.Errorf("rule already exists"),
+			err:         &core.AlreadyExistsError{Resource: "rule", Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    RuleAlreadyExists,
-			wantMsg:     "rule already exists",
+			wantMsg:     `rule "web" already exists`,
 		},
 		{
 			name:        "already active",
-			err:         fmt.Errorf("connection already active"),
+			err:         &core.AlreadyActiveError{Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    AlreadyConnected,
-			wantMsg:     "connection already active",
+			wantMsg:     `"web" is already active`,
 		},
 		{
 			name:        "not connected",
-			err:         fmt.Errorf("host is not connected"),
+			err:         &core.NotConnectedError{HostName: "prod"},
 			defaultCode: InternalError,
 			wantCode:    NotConnected,
-			wantMsg:     "host is not connected",
+			wantMsg:     `host "prod" is not connected`,
 		},
 		{
-			name:        "already connected",
-			err:         fmt.Errorf("host already connected"),
+			name:        "auth required",
+			err:         &core.AuthRequiredError{HostName: "prod", Err: fmt.Errorf("ssh: unable to authenticate")},
 			defaultCode: InternalError,
-			wantCode:    AlreadyConnected,
-			wantMsg:     "host already connected",
+			wantCode:    AuthenticationFailed,
+			wantMsg:     "authentication required for prod: ssh: unable to authenticate",
 		},
+		// センチネルエラー
 		{
 			name:        "credential timeout",
-			err:         fmt.Errorf("credential timeout"),
+			err:         core.ErrCredentialTimeout,
 			defaultCode: InternalError,
 			wantCode:    CredentialTimeout,
 			wantMsg:     "credential timeout",
 		},
 		{
 			name:        "credential cancelled",
-			err:         fmt.Errorf("credential cancelled"),
+			err:         core.ErrCredentialCancelled,
 			defaultCode: InternalError,
 			wantCode:    CredentialCancelled,
 			wantMsg:     "credential cancelled",
 		},
+		// ラップされた構造化エラー（errors.As で検出可能）
+		{
+			name:        "wrapped host not found",
+			err:         wrapError("operation failed", &core.NotFoundError{Resource: "host", Name: "staging"}),
+			defaultCode: InternalError,
+			wantCode:    HostNotFound,
+			wantMsg:     `operation failed: host "staging" not found`,
+		},
+		{
+			name:        "wrapped credential timeout",
+			err:         wrapError("connect failed", core.ErrCredentialTimeout),
+			defaultCode: InternalError,
+			wantCode:    CredentialTimeout,
+			wantMsg:     "connect failed: credential timeout",
+		},
+		// 外部起因エラー（文字列マッチフォールバック）
 		{
 			name:        "address already in use",
 			err:         fmt.Errorf("listen tcp :8080: bind: address already in use"),
 			defaultCode: InternalError,
 			wantCode:    PortConflict,
 			wantMsg:     "listen tcp :8080: bind: address already in use",
-		},
-		{
-			name:        "authentication required",
-			err:         fmt.Errorf("authentication required"),
-			defaultCode: InternalError,
-			wantCode:    AuthenticationFailed,
-			wantMsg:     "authentication required",
 		},
 		{
 			name:        "unable to authenticate",
@@ -107,6 +123,7 @@ func TestToRPCError(t *testing.T) {
 			wantCode:    AuthenticationFailed,
 			wantMsg:     "ssh: no supported methods remain",
 		},
+		// デフォルトコード
 		{
 			name:        "generic error uses defaultCode",
 			err:         fmt.Errorf("something unexpected happened"),

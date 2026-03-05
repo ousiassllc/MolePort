@@ -79,8 +79,8 @@ func TestParseConnectionState(t *testing.T) {
 		{"disconnected", core.Disconnected}, {"unknown", core.Disconnected}, {"", core.Disconnected},
 	}
 	for _, tt := range tests {
-		if got := parseConnectionState(tt.input); got != tt.want {
-			t.Errorf("parseConnectionState(%q) = %v, want %v", tt.input, got, tt.want)
+		if got := protocol.ParseConnectionState(tt.input); got != tt.want {
+			t.Errorf("protocol.ParseConnectionState(%q) = %v, want %v", tt.input, got, tt.want)
 		}
 	}
 }

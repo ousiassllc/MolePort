@@ -41,6 +41,13 @@ cli:
     killed: "Daemon force killed (PID: {{.PID}})"
     kill_failed: "Failed to force kill daemon: {{.Error}}"
     status_failed: "Failed to get status: {{.Error}}"
+    status_header: "MolePort Daemon:"
+    status_version: "  Version:    {{.Version}}"
+    status_pid: "  PID:        {{.PID}}"
+    status_uptime: "  Uptime:     {{.Uptime}}"
+    status_clients: "  Clients:    {{.Count}} connected"
+    status_ssh: "  SSH:        {{.Count}} connections"
+    status_forwards: "  Forwards:   {{.Count}} active"
   connect:
     success: "Connected to {{.Host}}"
     host_required: "Host name required: moleport connect <host>"
@@ -73,6 +80,21 @@ cli:
     get_failed: "Failed to get status: {{.Error}}"
     get_hosts_failed: "Failed to get host list: {{.Error}}"
     get_sessions_failed: "Failed to get session list: {{.Error}}"
+    header: "MolePort Status:"
+    daemon_running: "  Daemon:    Running (PID: {{.PID}}, uptime: {{.Uptime}})"
+    hosts_summary: "  Hosts:     {{.Total}} total, {{.Connected}} connected"
+    hosts_summary_auth: "  Hosts:     {{.Total}} total, {{.Connected}} connected, {{.PendingAuth}} pending auth"
+    forwards_summary: "  Forwards:  {{.Total}} total, {{.Active}} active, {{.Stopped}} stopped"
+    traffic_summary: "  Traffic:   sent {{.Sent}}, recv {{.Received}}"
+    session_header: "Session: {{.Name}}"
+    session_host: "  Host:           {{.Host}}"
+    session_type: "  Type:           {{.Type}}"
+    session_local_port: "  Local Port:     {{.Port}}"
+    session_remote: "  Remote:         {{.Remote}}"
+    session_status: "  Status:         {{.Status}}"
+    session_connected_at: "  Connected At:   {{.Time}}"
+    session_bytes_sent: "  Bytes Sent:     {{.Bytes}}"
+    session_bytes_received: "  Bytes Received: {{.Bytes}}"
   config:
     get_failed: "Failed to get configuration: {{.Error}}"
   reload:
@@ -118,6 +140,10 @@ tui:
     port_required: "Port number is required"
     port_not_number: "Must be a number"
     port_out_of_range: "Port must be in range 1-65535"
+    label_local_port: "Local port"
+    label_remote_host: "Remote host"
+    label_remote_port: "Remote port"
+    label_rule_name: "Rule name"
   keys:
     switch_pane: "Switch"
     help: "Help"
@@ -161,6 +187,7 @@ tui:
     switch_hint: "Switch"
   password:
     prompt: "Enter password for {{.Host}}:"
+    hint: "[Enter] Submit  [Esc] Cancel"
   version:
     check_error: "Version check error: {{.Error}}"
     mismatch: "Daemon version ({{.DaemonVersion}}) does not match TUI version ({{.TUIVersion}}). Restart daemon?"
@@ -178,6 +205,7 @@ tui:
   lang:
     help: "[↑↓] Select  [Enter] Apply  [Esc] Cancel/Skip"
   log:
+    title: "Log"
     hosts_loaded: "{{.Count}} hosts loaded"
     hosts_reloaded: "{{.Count}} hosts reloaded"
     hosts_load_error: "Host load error: {{.Error}}"
@@ -210,3 +238,5 @@ tui:
     credential_password_prompt: "Enter password for {{.Host}}:"
     daemon_start_failed: "Failed to start new daemon"
     daemon_connect_failed: "Failed to connect to new daemon"
+  prompt:
+    placeholder: "Enter command..."

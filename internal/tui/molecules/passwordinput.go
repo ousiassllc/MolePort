@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
@@ -86,7 +87,7 @@ func (m PasswordInput) View() string {
 
 	prompt := tui.TextStyle().Render(m.prompt)
 	input := m.textInput.View()
-	hints := tui.MutedStyle().Render("[Enter] 送信  [Esc] キャンセル")
+	hints := tui.MutedStyle().Render(i18n.T("tui.password.hint"))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		prompt,

@@ -114,7 +114,7 @@ func TestRestartGuards(t *testing.T) {
 	}{
 		{"metrics_tick", tui.MetricsTickMsg{}},
 		{"ipc_disconnected", tui.IPCDisconnectedMsg{}},
-		{"log_output", tui.LogOutputMsg{Text: "error"}},
+		{"log_output", tui.LogOutputMsg{Text: "error", Level: tui.LogError}},
 		{"theme_saved_err", tui.ThemeSavedMsg{Err: fmt.Errorf("err")}},
 	}
 	for _, tt := range msgs {
