@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,60 +126,11 @@ func TestParseGlobalFlags_Empty(t *testing.T) {
 	}
 }
 
-// exitCalled はテスト用 exitFunc が呼ばれたことを示す panic 型。
-type exitCalled struct{ code int }
-
-// stubExit は exitFunc を差し替えて os.Exit を回避するヘルパー。
-// exitFunc が呼ばれると exitCalled を panic するので、
-// captureExit で recover して終了コードを取得する。
-func stubExit(t *testing.T) {
-	t.Helper()
-	orig := exitFunc
-	t.Cleanup(func() { exitFunc = orig })
-	exitFunc = func(c int) { panic(exitCalled{code: c}) }
-}
-
-// captureExit は fn を呼び、exitFunc 経由の終了コードと stderr 出力を返す。
-// exitFunc が呼ばれなかった場合は code=-1 を返す。
-func captureExit(t *testing.T, fn func()) (code int, stderr string) {
-	t.Helper()
-	origStderr := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = w.Close()
-		_ = r.Close()
-		os.Stderr = origStderr
-	})
-	os.Stderr = w
-
-	code = -1
-	func() {
-		defer func() {
-			if v := recover(); v != nil {
-				if ec, ok := v.(exitCalled); ok {
-					code = ec.code
-				} else {
-					panic(v)
-				}
-			}
-		}()
-		fn()
-	}()
-
-	_ = w.Close()
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(r)
-	return code, buf.String()
-}
-
 func TestExitError_CallsExitFunc(t *testing.T) {
 	stubExit(t)
 
 	code, output := captureExit(t, func() {
-		exitError("something went %s", "wrong")
+		ExitError("something went %s", "wrong")
 	})
 
 	if code != 1 {
@@ -188,5 +138,62 @@ func TestExitError_CallsExitFunc(t *testing.T) {
 	}
 	if !strings.Contains(output, "wrong") {
 		t.Errorf("stderr = %q, want to contain %q", output, "wrong")
+	}
+}
+
+func TestCallCtx_ReturnsContext(t *testing.T) {
+	ctx, cancel := CallCtx()
+	defer cancel()
+
+	if ctx == nil {
+		t.Error("CallCtx should return non-nil context")
+	}
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Error("CallCtx should set a deadline")
+	}
+	if deadline.IsZero() {
+		t.Error("deadline should be non-zero")
+	}
+}
+
+func TestPrintJSON_WritesToStdout(t *testing.T) {
+	data := map[string]string{"key": "value"}
+
+	output := captureStdout(t, func() {
+		PrintJSON(data)
+	})
+
+	if !strings.Contains(output, "key") || !strings.Contains(output, "value") {
+		t.Errorf("PrintJSON output = %q, want to contain key and value", output)
+	}
+}
+
+func TestPrintJSON_PrettyPrinted(t *testing.T) {
+	data := map[string]int{"a": 1}
+
+	output := captureStdout(t, func() {
+		PrintJSON(data)
+	})
+
+	if !strings.Contains(output, "  ") {
+		t.Errorf("PrintJSON should produce indented output, got %q", output)
+	}
+}
+
+func TestConnectDaemon_FailsWithoutDaemon(t *testing.T) {
+	stubExit(t)
+	configDir := t.TempDir()
+
+	code, stderr := captureExit(t, func() {
+		ConnectDaemon(configDir)
+	})
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if stderr == "" {
+		t.Error("stderr should contain an error message")
 	}
 }

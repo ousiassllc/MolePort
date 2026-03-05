@@ -1,9 +1,10 @@
-package cli
+package statuscmd
 
 import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/format"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -16,7 +17,7 @@ func RunStatus(configDir string, args []string) {
 	jsonFlag := fs.Bool("json", false, "JSON 形式で出力")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		cli.ExitError("%v", err)
 	}
 
 	remaining := fs.Args()
@@ -32,20 +33,20 @@ func RunStatus(configDir string, args []string) {
 }
 
 func runSessionGet(configDir string, name string, jsonOutput bool) {
-	client := connectDaemon(configDir)
+	client := cli.ConnectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := cli.CallCtx()
 	defer cancel()
 
 	params := protocol.SessionGetParams{Name: name}
 	var session protocol.SessionGetResult
 	if err := client.Call(ctx, "session.get", params, &session); err != nil {
-		exitError("%v", err)
+		cli.ExitError("%v", err)
 	}
 
 	if jsonOutput {
-		printJSON(session)
+		cli.PrintJSON(session)
 		return
 	}
 
@@ -80,33 +81,33 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := cli.CallCtx()
 	defer cancel()
 
 	// デーモンステータス
 	var daemonStatus protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &daemonStatus); err != nil {
-		exitError("%s", i18n.T("cli.status.get_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.status.get_failed", map[string]any{"Error": err}))
 	}
 
 	// ホスト一覧
 	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
-		exitError("%s", i18n.T("cli.status.get_hosts_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.status.get_hosts_failed", map[string]any{"Error": err}))
 	}
 
 	// セッション一覧
 	var sessions protocol.SessionListResult
 	if err := client.Call(ctx, "session.list", nil, &sessions); err != nil {
-		exitError("%s", i18n.T("cli.status.get_sessions_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.status.get_sessions_failed", map[string]any{"Error": err}))
 	}
 
 	if jsonOutput {
-		printJSON(struct {
+		cli.PrintJSON(struct {
 			Daemon   protocol.DaemonStatusResult `json:"daemon"`
 			Hosts    []protocol.HostInfo         `json:"hosts"`
 			Sessions []protocol.SessionInfo      `json:"sessions"`

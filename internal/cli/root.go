@@ -37,38 +37,42 @@ func ResolveConfigDir(flagValue string) string {
 	return filepath.Join(home, ".config", "moleport")
 }
 
-// connectDaemon はデーモンに接続し、IPCClient を返す。
+// ConnectDaemon はデーモンに接続し、IPCClient を返す。
 // 接続に失敗した場合はエラーメッセージを表示して終了する。
-func connectDaemon(configDir string) *client.IPCClient {
-	client, err := daemon.EnsureDaemon(configDir)
+// テスト時に差し替え可能にするため変数として定義する（ExitFunc と同パターン）。
+// NOTE: stubConnectDaemon を使用するテストは t.Parallel() と併用不可。
+var ConnectDaemon = defaultConnectDaemon
+
+func defaultConnectDaemon(configDir string) *client.IPCClient {
+	c, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("%s", i18n.T("cli.error.daemon_not_running"))
+		ExitError("%s", i18n.T("cli.error.daemon_not_running"))
 	}
-	return client
+	return c
 }
 
-// callCtx は RPC 呼び出し用のコンテキストを生成する（10秒タイムアウト）。
-func callCtx() (context.Context, context.CancelFunc) {
+// CallCtx は RPC 呼び出し用のコンテキストを生成する（10秒タイムアウト）。
+func CallCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 10*time.Second)
 }
 
-// exitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。
+// ExitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。
 // NOTE: stubExit/captureExit を使用するテストは t.Parallel() と併用不可。
-var exitFunc = os.Exit
+var ExitFunc = os.Exit
 
-// exitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
-func exitError(format string, args ...any) {
+// ExitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
+func ExitError(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "%s: %s\n", i18n.T("cli.error.prefix"), msg)
-	exitFunc(1)
+	ExitFunc(1)
 }
 
-// printJSON は値を整形された JSON として stdout に出力する。
-func printJSON(v any) {
+// PrintJSON は値を整形された JSON として stdout に出力する。
+func PrintJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
-		exitError("%s", i18n.T("cli.error.json_output_failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.error.json_output_failed", map[string]any{"Error": err}))
 	}
 }
 

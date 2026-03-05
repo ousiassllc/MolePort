@@ -1,4 +1,4 @@
-package cli
+package daemoncmd
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -17,7 +18,7 @@ import (
 // RunDaemon は daemon サブコマンドをルーティングする。
 func RunDaemon(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("%s", i18n.T("cli.daemon.subcommand_required"))
+		cli.ExitError("%s", i18n.T("cli.daemon.subcommand_required"))
 	}
 
 	switch args[0] {
@@ -30,7 +31,7 @@ func RunDaemon(configDir string, args []string) {
 	case "kill":
 		runDaemonKill(configDir)
 	default:
-		exitError("%s", i18n.T("cli.daemon.unknown_subcommand", map[string]any{"Sub": args[0]}))
+		cli.ExitError("%s", i18n.T("cli.daemon.unknown_subcommand", map[string]any{"Sub": args[0]}))
 	}
 }
 
@@ -44,7 +45,7 @@ func runDaemonStart(configDir string) {
 
 	pid, err := daemon.StartDaemonProcess(configDir)
 	if err != nil {
-		exitError("%s", i18n.T("cli.daemon.start_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.start_failed", map[string]any{"Error": err}))
 	}
 
 	fmt.Println(i18n.T("cli.daemon.started", map[string]any{"PID": pid}))
@@ -54,7 +55,7 @@ func runDaemonStop(configDir string, args []string) {
 	fs := flag.NewFlagSet("daemon stop", flag.ContinueOnError)
 	purge := fs.Bool("purge", false, "状態ファイルを削除して停止")
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		cli.ExitError("%v", err)
 	}
 
 	pidPath := daemon.PIDFilePath(configDir)
@@ -66,17 +67,17 @@ func runDaemonStop(configDir string, args []string) {
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := cli.CallCtx()
 	defer cancel()
 
 	params := protocol.DaemonShutdownParams{Purge: *purge}
 	var result protocol.DaemonShutdownResult
 	if err := client.Call(ctx, "daemon.shutdown", params, &result); err != nil {
-		exitError("%s", i18n.T("cli.daemon.stop_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.stop_failed", map[string]any{"Error": err}))
 	}
 
 	if *purge {
@@ -95,7 +96,7 @@ func runDaemonKill(configDir string) {
 	}
 
 	if err := daemon.KillProcess(pidPath); err != nil {
-		exitError("%s", i18n.T("cli.daemon.kill_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.kill_failed", map[string]any{"Error": err}))
 	}
 
 	// 強制終了では graceful shutdown が走らないため、state.yaml を手動で削除する。
@@ -116,16 +117,16 @@ func runDaemonStatus(configDir string) {
 
 	client, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := cli.CallCtx()
 	defer cancel()
 
 	var status protocol.DaemonStatusResult
 	if err := client.Call(ctx, "daemon.status", nil, &status); err != nil {
-		exitError("%s", i18n.T("cli.daemon.status_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.daemon.status_failed", map[string]any{"Error": err}))
 	}
 
 	fmt.Println(i18n.T("cli.daemon.status_header"))
@@ -143,31 +144,29 @@ func RunDaemonMode(configDir string) {
 	logFile, err := setupDaemonLogging(configDir)
 	if err != nil {
 		slog.Error("failed to setup logging", "error", err)
-		exitFunc(1)
+		cli.ExitFunc(1)
 	}
 	defer func() { _ = logFile.Close() }()
 
-	d, err := daemon.New(configDir, Version)
+	d, err := daemon.New(configDir, cli.Version)
 	if err != nil {
 		slog.Error("failed to create daemon", "error", err)
-		exitFunc(1)
+		cli.ExitFunc(1)
 	}
 
 	ctx := context.Background()
 	if err := d.Start(ctx); err != nil {
 		slog.Error("failed to start daemon", "error", err)
-		exitFunc(1)
+		cli.ExitFunc(1)
 	}
 
 	if err := d.Wait(); err != nil {
 		slog.Error("daemon error", "error", err)
-		exitFunc(1)
+		cli.ExitFunc(1)
 	}
 }
 
 // setupDaemonLogging はデーモンプロセス用のログ設定を行う。
-// 設定ファイルの log.file と log.level を参照する。
-// ログファイルの作成に失敗した場合はエラーを返す。
 func setupDaemonLogging(configDir string) (*os.File, error) {
 	logCfg := daemon.ResolveLogConfig(configDir)
 

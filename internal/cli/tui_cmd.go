@@ -30,7 +30,7 @@ func RunTUI(configDir string, args []string) {
 	if !running {
 		pid, err := daemon.StartDaemonProcess(configDir)
 		if err != nil {
-			exitError("%s", i18n.T("cli.tui.daemon_start_failed", map[string]any{"Error": err}))
+			ExitError("%s", i18n.T("cli.tui.daemon_start_failed", map[string]any{"Error": err}))
 		}
 		fmt.Println(i18n.T("cli.tui.daemon_started", map[string]any{"PID": pid}))
 	}
@@ -38,7 +38,7 @@ func RunTUI(configDir string, args []string) {
 	// リトライ付きで接続
 	client, err := daemon.EnsureDaemonWithRetry(configDir, 5*time.Second)
 	if err != nil {
-		exitError("%s", i18n.T("cli.tui.daemon_connect_failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.tui.daemon_connect_failed", map[string]any{"Error": err}))
 	}
 	defer func() { _ = client.Close() }()
 
@@ -51,6 +51,6 @@ func RunTUI(configDir string, args []string) {
 	client.SetCredentialHandler(app.NewTUICredentialHandler(p))
 
 	if _, err := p.Run(); err != nil {
-		exitError("%s", i18n.T("cli.tui.tui_error", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.tui.tui_error", map[string]any{"Error": err}))
 	}
 }

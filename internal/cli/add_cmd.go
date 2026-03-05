@@ -21,39 +21,39 @@ func RunAdd(configDir string, args []string) {
 	autoConnect := fs.Bool("auto-connect", false, "起動時に自動接続")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
 	if *host == "" {
-		exitError("%s", i18n.T("cli.add.host_required"))
+		ExitError("%s", i18n.T("cli.add.host_required"))
 	}
 	if *localPort == 0 {
-		exitError("%s", i18n.T("cli.add.local_port_required"))
+		ExitError("%s", i18n.T("cli.add.local_port_required"))
 	}
 	if *localPort < 1 || *localPort > 65535 {
-		exitError("%s", i18n.T("cli.add.port_range"))
+		ExitError("%s", i18n.T("cli.add.port_range"))
 	}
 
 	switch *fwdType {
 	case "local", "remote", "dynamic":
 		// OK
 	default:
-		exitError("%s", i18n.T("cli.add.type_invalid"))
+		ExitError("%s", i18n.T("cli.add.type_invalid"))
 	}
 
 	if *fwdType != "dynamic" {
 		if *remotePort == 0 {
-			exitError("%s", i18n.T("cli.add.remote_port_required"))
+			ExitError("%s", i18n.T("cli.add.remote_port_required"))
 		}
 		if *remotePort < 1 || *remotePort > 65535 {
-			exitError("%s", i18n.T("cli.add.port_range"))
+			ExitError("%s", i18n.T("cli.add.port_range"))
 		}
 	}
 
-	client := connectDaemon(configDir)
+	client := ConnectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := CallCtx()
 	defer cancel()
 
 	params := protocol.ForwardAddParams{
@@ -68,7 +68,7 @@ func RunAdd(configDir string, args []string) {
 
 	var result protocol.ForwardAddResult
 	if err := client.Call(ctx, "forward.add", params, &result); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
 	fmt.Println(i18n.T("cli.add.success", map[string]any{"Name": result.Name}))

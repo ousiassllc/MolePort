@@ -30,7 +30,7 @@ func RunVersion(configDir string, args []string) {
 	}
 	defer func() { _ = client.Close() }()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := CallCtx()
 	defer cancel()
 
 	var result protocol.VersionCheckResult
