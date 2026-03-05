@@ -50,14 +50,7 @@ func (p *LogPanel) SetSize(width, height int) {
 
 // View はパネルを描画する。
 func (p LogPanel) View() string {
-	innerWidth := p.width - 4
-	if innerWidth < 10 {
-		innerWidth = 10
-	}
-	innerHeight := p.height - 2
-	if innerHeight < 1 {
-		innerHeight = 1
-	}
+	innerWidth, innerHeight := panelInnerSize(p.width, p.height)
 
 	var entries []logEntry
 	if len(p.output) > innerHeight {
