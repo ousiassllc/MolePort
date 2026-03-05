@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	cryptossh "golang.org/x/crypto/ssh"
 
@@ -13,13 +12,7 @@ import (
 
 // isAuthFailure はエラーが認証失敗を示すかどうかを判定する。
 func isAuthFailure(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "unable to authenticate") ||
-		strings.Contains(msg, "no authentication methods available") ||
-		strings.Contains(msg, "no supported methods remain")
+	return core.IsAuthFailure(err)
 }
 
 // Connect はホストへ SSH 接続を確立する。

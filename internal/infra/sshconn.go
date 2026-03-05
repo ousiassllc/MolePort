@@ -193,7 +193,7 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
@@ -241,7 +241,7 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)

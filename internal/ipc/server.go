@@ -196,7 +196,7 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 	scanner := bufio.NewScanner(c.conn)
 	// デフォルトの 64KB バッファで十分だが、大きなメッセージに備える
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, protocol.ScannerInitBuf), protocol.ScannerMaxBuf)
 
 	for scanner.Scan() {
 		select {
