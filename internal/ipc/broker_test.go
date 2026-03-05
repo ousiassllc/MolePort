@@ -198,6 +198,22 @@ func TestEventBroker_HandleSSHEvent_WithError(t *testing.T) {
 	}
 }
 
+func TestEventBroker_Distribute_MarshalError(t *testing.T) {
+	sender, log := collectingSender()
+	broker := NewEventBroker(sender)
+
+	broker.Subscribe("client-1", []string{"test"})
+
+	// json.Marshal が失敗する値（chan 型）を渡し、パニックせず通知が送信されないことを確認
+	broker.distribute("test", "event.test", make(chan int))
+
+	// 少し待って通知が送信されていないことを確認
+	entries := log.get()
+	if len(entries) != 0 {
+		t.Errorf("expected 0 notifications for unmarshalable payload, got %d", len(entries))
+	}
+}
+
 // waitForEntries は通知ログに指定数のエントリが蓄積されるまで待つ。
 func waitForEntries(t *testing.T, log *notifLog, count int) {
 	t.Helper()

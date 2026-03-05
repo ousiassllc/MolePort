@@ -108,6 +108,25 @@ func TestProxyCommandConn_CloseMultipleTimes(t *testing.T) {
 	}
 }
 
+func TestCommandName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"ssh -o ProxyCommand=none host", "ssh"},
+		{"nc %h %p", "nc"},
+		{"/usr/bin/ssh", "/usr/bin/ssh"},
+		{"", ""},
+		{" leading-space", "leading-space"},
+	}
+	for _, tt := range tests {
+		got := commandName(tt.input)
+		if got != tt.want {
+			t.Errorf("commandName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestProxyCommandConn_CloseTerminatesProcess(t *testing.T) {
 	conn, err := dialViaProxyCommand("sleep 3600")
 	if err != nil {

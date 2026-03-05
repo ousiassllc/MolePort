@@ -108,8 +108,18 @@ type proxyCommandStderrWriter struct {
 }
 
 func (w *proxyCommandStderrWriter) Write(p []byte) (int, error) {
-	slog.Warn("ProxyCommand stderr", "command", w.command, "output", string(p))
+	slog.Warn("ProxyCommand stderr", "command", commandName(w.command), "output", string(p))
 	return len(p), nil
+}
+
+// commandName はコマンド文字列から最初のトークン（実行ファイル名）のみを返す。
+// ログ出力時に引数（ホスト名やポート等）をマスクする目的で使用する。
+func commandName(command string) string {
+	command = strings.TrimSpace(command)
+	if name, _, ok := strings.Cut(command, " "); ok {
+		return name
+	}
+	return command
 }
 
 // ExpandProxyCommand は ProxyCommand 文字列内の SSH トークンを展開する。
