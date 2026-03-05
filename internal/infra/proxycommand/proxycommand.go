@@ -1,4 +1,4 @@
-package infra
+package proxycommand
 
 import (
 	"fmt"
@@ -12,16 +12,16 @@ import (
 	"time"
 )
 
-// proxyCommandAddr は ProxyCommand 経由接続用の net.Addr 実装。
-type proxyCommandAddr struct {
+// addr は ProxyCommand 経由接続用の net.Addr 実装。
+type addr struct {
 	desc string
 }
 
-func (a proxyCommandAddr) Network() string { return "proxycommand" }
-func (a proxyCommandAddr) String() string  { return a.desc }
+func (a addr) Network() string { return "proxycommand" }
+func (a addr) String() string  { return a.desc }
 
-// proxyCommandConn は ProxyCommand の stdin/stdout を net.Conn として扱うラッパー。
-type proxyCommandConn struct {
+// conn は ProxyCommand の stdin/stdout を net.Conn として扱うラッパー。
+type conn struct {
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
 	stdout    io.ReadCloser
@@ -29,15 +29,15 @@ type proxyCommandConn struct {
 	closeOnce sync.Once
 }
 
-func (c *proxyCommandConn) Read(b []byte) (int, error) {
+func (c *conn) Read(b []byte) (int, error) {
 	return c.stdout.Read(b)
 }
 
-func (c *proxyCommandConn) Write(b []byte) (int, error) {
+func (c *conn) Write(b []byte) (int, error) {
 	return c.stdin.Write(b)
 }
 
-func (c *proxyCommandConn) Close() error {
+func (c *conn) Close() error {
 	c.closeOnce.Do(func() {
 		_ = c.stdin.Close()
 		_ = c.stdout.Close()
@@ -51,23 +51,23 @@ func (c *proxyCommandConn) Close() error {
 	return nil
 }
 
-func (c *proxyCommandConn) LocalAddr() net.Addr {
-	return proxyCommandAddr{desc: "proxycommand-local"}
+func (c *conn) LocalAddr() net.Addr {
+	return addr{desc: "proxycommand-local"}
 }
 
-func (c *proxyCommandConn) RemoteAddr() net.Addr {
-	return proxyCommandAddr{desc: c.cmd.String()}
+func (c *conn) RemoteAddr() net.Addr {
+	return addr{desc: c.cmd.String()}
 }
 
 // ProxyCommand 経由の場合、OS パイプには SetDeadline の概念がないため no-op とする。
 // SSH ハンドシェイクのタイムアウト保護は機能しないが、ProxyCommand 自体の
 // タイムアウト制御はコマンド側の責務とする（OpenSSH と同様の挙動）。
-func (c *proxyCommandConn) SetDeadline(_ time.Time) error      { return nil }
-func (c *proxyCommandConn) SetReadDeadline(_ time.Time) error  { return nil }
-func (c *proxyCommandConn) SetWriteDeadline(_ time.Time) error { return nil }
+func (c *conn) SetDeadline(_ time.Time) error      { return nil }
+func (c *conn) SetReadDeadline(_ time.Time) error  { return nil }
+func (c *conn) SetWriteDeadline(_ time.Time) error { return nil }
 
-// dialViaProxyCommand は ProxyCommand を起動し、その stdin/stdout を net.Conn として返す。
-func dialViaProxyCommand(command string) (*proxyCommandConn, error) {
+// Dial は ProxyCommand を起動し、その stdin/stdout を net.Conn として返す。
+func Dial(command string) (net.Conn, error) {
 	cmd := exec.Command("sh", "-c", command) //nolint:gosec // ProxyCommand は SSH config 由来のユーザー設定値
 
 	stdin, err := cmd.StdinPipe()
@@ -82,7 +82,7 @@ func dialViaProxyCommand(command string) (*proxyCommandConn, error) {
 
 	// ProxyCommand の stderr はログに記録する。
 	// os.Stderr に直接流すと TUI 表示を乱す可能性がある。
-	cmd.Stderr = &proxyCommandStderrWriter{command: command}
+	cmd.Stderr = &stderrWriter{command: command}
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start ProxyCommand %q: %w", command, err)
@@ -94,7 +94,7 @@ func dialViaProxyCommand(command string) (*proxyCommandConn, error) {
 		close(done)
 	}()
 
-	return &proxyCommandConn{
+	return &conn{
 		cmd:    cmd,
 		stdin:  stdin,
 		stdout: stdout,
@@ -102,17 +102,27 @@ func dialViaProxyCommand(command string) (*proxyCommandConn, error) {
 	}, nil
 }
 
-// proxyCommandStderrWriter は ProxyCommand の stderr 出力を slog 経由でログに記録する。
-type proxyCommandStderrWriter struct {
+// stderrWriter は ProxyCommand の stderr 出力を slog 経由でログに記録する。
+type stderrWriter struct {
 	command string
 }
 
-func (w *proxyCommandStderrWriter) Write(p []byte) (int, error) {
-	slog.Warn("ProxyCommand stderr", "command", w.command, "output", string(p))
+func (w *stderrWriter) Write(p []byte) (int, error) {
+	slog.Warn("ProxyCommand stderr", "command", commandName(w.command), "output", string(p))
 	return len(p), nil
 }
 
-// ExpandProxyCommand は ProxyCommand 文字列内の SSH トークンを展開する。
+// commandName はコマンド文字列から最初のトークン（実行ファイル名）のみを返す。
+// ログ出力時に引数（ホスト名やポート等）をマスクする目的で使用する。
+func commandName(command string) string {
+	command = strings.TrimSpace(command)
+	if name, _, ok := strings.Cut(command, " "); ok {
+		return name
+	}
+	return command
+}
+
+// ExpandCommand は ProxyCommand 文字列内の SSH トークンを展開する。
 // サポートするトークン:
 //
 //	%h → リモートホスト名
@@ -122,7 +132,7 @@ func (w *proxyCommandStderrWriter) Write(p []byte) (int, error) {
 //
 // 上記以外のトークン（%n, %d 等）は未展開のまま保持される。
 // ProxyCommand が設定されている場合は ProxyJump より優先される（OpenSSH の挙動に準拠）。
-func ExpandProxyCommand(command, host string, port int, user string) string {
+func ExpandCommand(command, host string, port int, user string) string {
 	if command == "" {
 		return ""
 	}

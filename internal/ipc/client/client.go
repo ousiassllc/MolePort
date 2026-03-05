@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
+// CredentialHandler はクレデンシャルリクエスト通知を受け取り、レスポンスを返すハンドラ関数型。
 type CredentialHandler func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error)
 
 // IPCClient は Unix ドメインソケット上で JSON-RPC 2.0 通信を行うクライアント。
@@ -34,6 +35,7 @@ type IPCClient struct {
 	credHandler CredentialHandler
 }
 
+// NewIPCClient は指定された Unix ソケットパスで新しい IPC クライアントを生成する。
 func NewIPCClient(socketPath string) *IPCClient {
 	return &IPCClient{
 		socketPath: socketPath,
@@ -53,7 +55,7 @@ func (c *IPCClient) Connect() error {
 	c.conn = conn
 	c.enc = json.NewEncoder(conn)
 	c.scanner = bufio.NewScanner(conn)
-	c.scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	c.scanner.Buffer(make([]byte, 0, protocol.ScannerInitBuf), protocol.ScannerMaxBuf)
 	c.connected.Store(true)
 
 	go c.readLoop()

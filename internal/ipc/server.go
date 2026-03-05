@@ -127,6 +127,7 @@ func (s *IPCServer) SendNotification(clientID string, notification protocol.Noti
 }
 
 // BroadcastNotification は全クライアントに通知を送信する。
+// 主にテストで使用される。プロダクションコードでは EventBroker 経由で通知を配信する。
 func (s *IPCServer) BroadcastNotification(notification protocol.Notification) {
 	s.mu.RLock()
 	clients := make([]*clientConn, 0, len(s.clients))
@@ -196,7 +197,7 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 	scanner := bufio.NewScanner(c.conn)
 	// デフォルトの 64KB バッファで十分だが、大きなメッセージに備える
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, protocol.ScannerInitBuf), protocol.ScannerMaxBuf)
 
 	for scanner.Scan() {
 		select {

@@ -23,6 +23,29 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
+// LogConfig はデーモンのログ設定を保持する。
+type LogConfig struct {
+	Path  string
+	Level string
+}
+
+// ResolveLogConfig は設定ファイルからログファイルのパスとレベルを解決する。
+// 設定の読み込みに失敗した場合はデフォルトの設定を使用する。
+func ResolveLogConfig(configDir string) LogConfig {
+	store := yamlstore.NewYAMLStore()
+	cfgMgr := core.NewConfigManager(store, configDir)
+	cfg, err := cfgMgr.LoadConfig()
+	if err != nil {
+		c := core.DefaultConfig()
+		cfg = &c
+	}
+	logPath := cfg.Log.File
+	if expanded, err := infra.ExpandTilde(logPath); err == nil {
+		logPath = expanded
+	}
+	return LogConfig{Path: logPath, Level: cfg.Log.Level}
+}
+
 // SocketPath はデーモンの Unix ソケットパスを返す。
 func SocketPath(configDir string) string {
 	return filepath.Join(configDir, "moleport.sock")
@@ -55,6 +78,8 @@ type Daemon struct {
 	wg      sync.WaitGroup
 	stopped bool
 	purge   bool
+
+	warnings []string
 }
 
 // New は新しい Daemon を生成する。
@@ -88,9 +113,11 @@ func New(configDir string, version string) (*Daemon, error) {
 	fwdMgr := forward.NewForwardManager(sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
+	var warnings []string
 	for _, rule := range cfg.Forwards {
 		if _, err := fwdMgr.AddRule(rule); err != nil {
 			slog.Warn("failed to load forward rule", "rule", rule.Name, "error", err)
+			warnings = append(warnings, fmt.Sprintf("failed to load forward rule %q: %v", rule.Name, err))
 		}
 	}
 
@@ -106,6 +133,7 @@ func New(configDir string, version string) (*Daemon, error) {
 		fwdMgr:         fwdMgr,
 		versionChecker: versionChecker,
 		pidFile:        pidFile,
+		warnings:       warnings,
 	}
 
 	// EventBroker: server.SendNotification をクロージャで渡す
@@ -153,6 +181,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	// SSH ホストを読み込む（エラーは警告のみ）
 	if _, err := d.sshMgr.LoadHosts(); err != nil {
 		slog.Warn("failed to load SSH hosts", "error", err)
+		d.warnings = append(d.warnings, fmt.Sprintf("failed to load SSH hosts: %v", err))
 	}
 
 	d.versionChecker.Start(d.ctx, 10*time.Second)

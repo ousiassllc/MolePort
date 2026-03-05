@@ -56,7 +56,7 @@ func (m *forwardManager) dialRemote(rule core.ForwardRule, sshClient interface {
 		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
 		return sshClient.Dial("tcp", remoteAddr)
 	case core.Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
+		localAddr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", rule.LocalPort))
 		return net.Dial("tcp", localAddr)
 	default:
 		return nil, fmt.Errorf("unsupported forward type for bridge: %v", rule.Type)

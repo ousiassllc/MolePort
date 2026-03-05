@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // センチネルエラー
@@ -62,3 +63,27 @@ func (e *AuthRequiredError) Error() string {
 func (e *AuthRequiredError) Unwrap() error {
 	return e.Err
 }
+
+// authFailureMessages は認証失敗を示すエラー文字列のリスト。
+var authFailureMessages = []string{
+	"unable to authenticate",
+	"no authentication methods available",
+	"no supported methods remain",
+}
+
+// IsAuthFailure はエラーが認証失敗を示すかどうかを判定する。
+func IsAuthFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, s := range authFailureMessages {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// LocalhostAddr はローカルホストの IPv4 アドレス。
+const LocalhostAddr = "127.0.0.1"

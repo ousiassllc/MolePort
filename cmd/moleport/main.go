@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/ousiassllc/moleport/internal/cli"
+	"github.com/ousiassllc/moleport/internal/cli/daemoncmd"
+	"github.com/ousiassllc/moleport/internal/cli/statuscmd"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -16,7 +18,7 @@ func main() {
 	if daemon.IsDaemonMode() {
 		flagConfigDir, _ := cli.ParseGlobalFlags()
 		configDir := cli.ResolveConfigDir(flagConfigDir)
-		cli.RunDaemonMode(configDir)
+		daemoncmd.RunDaemonMode(configDir)
 		return
 	}
 
@@ -37,7 +39,7 @@ func main() {
 
 	switch cmd {
 	case "daemon":
-		cli.RunDaemon(configDir, subArgs)
+		daemoncmd.RunDaemon(configDir, subArgs)
 	case "connect":
 		cli.RunConnect(configDir, subArgs)
 	case "disconnect":
@@ -53,7 +55,7 @@ func main() {
 	case "list":
 		cli.RunList(configDir, subArgs)
 	case "status":
-		cli.RunStatus(configDir, subArgs)
+		statuscmd.RunStatus(configDir, subArgs)
 	case "config":
 		cli.RunConfig(configDir, subArgs)
 	case "reload":

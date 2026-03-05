@@ -58,10 +58,10 @@ func (p *PIDFile) Release() error {
 	}
 
 	removeErr := os.Remove(p.path)
-	syscall.Flock(int(p.file.Fd()), syscall.LOCK_UN)
+	flockErr := syscall.Flock(int(p.file.Fd()), syscall.LOCK_UN) //nolint:gosec // Fd() は有効な fd を返す
 	closeErr := p.file.Close()
 	p.file = nil
-	return errors.Join(removeErr, closeErr)
+	return errors.Join(removeErr, flockErr, closeErr)
 }
 
 // KillProcess は PID ファイルから PID を読み取り、SIGKILL で強制終了し、PID ファイルを削除する。

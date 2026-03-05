@@ -3,6 +3,7 @@ package ipc
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
@@ -135,6 +136,7 @@ func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent) {
 func (b *EventBroker) distribute(eventType string, method string, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
+		slog.Warn("failed to marshal notification", "error", err)
 		return
 	}
 

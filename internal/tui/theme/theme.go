@@ -1,6 +1,7 @@
 package theme
 
 import (
+	"log"
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
@@ -35,7 +36,7 @@ var (
 func init() {
 	p, ok := presets[DefaultPresetID()]
 	if !ok {
-		panic("default preset not found: " + DefaultPresetID())
+		log.Fatal("default preset not found: " + DefaultPresetID())
 	}
 	current = p.Palette
 }

@@ -57,9 +57,7 @@ func ToRPCError(err error, defaultCode int) *RPCError {
 	switch {
 	case strings.Contains(msg, "address already in use"):
 		return &RPCError{Code: PortConflict, Message: msg}
-	case strings.Contains(msg, "unable to authenticate"),
-		strings.Contains(msg, "no authentication methods available"),
-		strings.Contains(msg, "no supported methods remain"):
+	case core.IsAuthFailure(err):
 		return &RPCError{Code: AuthenticationFailed, Message: msg}
 	}
 

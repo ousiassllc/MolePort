@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -57,21 +56,7 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	var listener net.Listener
-	switch rule.Type {
-	case core.Local:
-		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
-		listener, err = sshConn.LocalForward(ctx, rule.LocalPort, remoteAddr)
-	case core.Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
-		listener, err = sshConn.RemoteForward(ctx, rule.RemotePort, localAddr)
-	case core.Dynamic:
-		listener, err = sshConn.DynamicForward(ctx, rule.LocalPort)
-	default:
-		cancel()
-		cleanup()
-		return fmt.Errorf("unsupported forward type: %v", rule.Type)
-	}
+	listener, err := openListener(ctx, sshConn, rule)
 
 	if err != nil {
 		cancel()

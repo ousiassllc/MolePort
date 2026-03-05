@@ -14,22 +14,22 @@ func RunConfig(configDir string, args []string) {
 	jsonFlag := fs.Bool("json", false, "JSON 形式で出力")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	client := connectDaemon(configDir)
+	client := ConnectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := CallCtx()
 	defer cancel()
 
 	var result protocol.ConfigGetResult
 	if err := client.Call(ctx, "config.get", nil, &result); err != nil {
-		exitError("%s", i18n.T("cli.config.get_failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.config.get_failed", map[string]any{"Error": err}))
 	}
 
 	if *jsonFlag {
-		printJSON(result)
+		PrintJSON(result)
 		return
 	}
 

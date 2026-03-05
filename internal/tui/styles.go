@@ -65,6 +65,7 @@ func HeaderStyle() lipgloss.Style {
 
 // パネルボーダースタイル
 
+// FocusedBorder はフォーカス中のパネルボーダースタイルを返す。
 func FocusedBorder() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -72,6 +73,7 @@ func FocusedBorder() lipgloss.Style {
 		Padding(0, 1)
 }
 
+// UnfocusedBorder は非フォーカスのパネルボーダースタイルを返す。
 func UnfocusedBorder() lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -79,6 +81,7 @@ func UnfocusedBorder() lipgloss.Style {
 		Padding(0, 1)
 }
 
+// StatusBarStyle はステータスバーのスタイルを返す。
 func StatusBarStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Padding(0, 1)
 }
@@ -107,10 +110,7 @@ func RenderWithBorderTitle(style lipgloss.Style, width, height int, title, conte
 
 	suffix := borderColor.Render(b.TopRight)
 	suffixWidth := lipgloss.Width(suffix)
-	fillCount := topWidth - prefixWidth - suffixWidth
-	if fillCount < 0 {
-		fillCount = 0
-	}
+	fillCount := max(topWidth-prefixWidth-suffixWidth, 0)
 
 	lines[0] = prefix + borderColor.Render(strings.Repeat(b.Top, fillCount)+b.TopRight)
 	return strings.Join(lines, "\n")

@@ -15,30 +15,30 @@ func RunList(configDir string, args []string) {
 	hostFlag := fs.String("host", "", "特定ホストのルールのみ表示")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	client := connectDaemon(configDir)
+	client := ConnectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := CallCtx()
 	defer cancel()
 
 	// ホスト一覧を取得
 	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
-		exitError("%s", i18n.T("cli.list.get_hosts_failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.list.get_hosts_failed", map[string]any{"Error": err}))
 	}
 
 	// フォワードルール一覧を取得
 	fwdParams := protocol.ForwardListParams{Host: *hostFlag}
 	var forwards protocol.ForwardListResult
 	if err := client.Call(ctx, "forward.list", fwdParams, &forwards); err != nil {
-		exitError("%s", i18n.T("cli.list.get_forwards_failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.list.get_forwards_failed", map[string]any{"Error": err}))
 	}
 
 	if *jsonFlag {
-		printJSON(struct {
+		PrintJSON(struct {
 			Hosts    []protocol.HostInfo    `json:"hosts"`
 			Forwards []protocol.ForwardInfo `json:"forwards"`
 		}{

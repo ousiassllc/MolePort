@@ -88,32 +88,6 @@ func TestConfigUpdateParams_AllFields(t *testing.T) {
 	}
 }
 
-func TestDaemonStatusResult_JSONRoundtrip(t *testing.T) {
-	original := DaemonStatusResult{
-		Version:              "v0.2.0",
-		PID:                  12345,
-		StartedAt:            "2026-02-11T10:00:00Z",
-		Uptime:               "2h 30m",
-		ConnectedClients:     2,
-		ActiveSSHConnections: 3,
-		ActiveForwards:       5,
-	}
-
-	data, err := json.Marshal(original)
-	if err != nil {
-		t.Fatalf("Marshal DaemonStatusResult: %v", err)
-	}
-
-	var got DaemonStatusResult
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("Unmarshal DaemonStatusResult: %v", err)
-	}
-
-	if got != original {
-		t.Errorf("DaemonStatusResult roundtrip: got %+v, want %+v", got, original)
-	}
-}
-
 func TestSSHEventNotification_JSONRoundtrip(t *testing.T) {
 	original := SSHEventNotification{
 		Type:  "error",

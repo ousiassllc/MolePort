@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/infra/proxycommand"
 )
 
 const (
@@ -81,8 +82,8 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	// ProxyCommand が設定されている場合は ProxyJump より優先する（OpenSSH の挙動に準拠）。
 	var conn net.Conn
 	if host.ProxyCommand != "" {
-		expandedCmd := ExpandProxyCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
-		conn, err = dialViaProxyCommand(expandedCmd)
+		expandedCmd := proxycommand.ExpandCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
+		conn, err = proxycommand.Dial(expandedCmd)
 		if err != nil {
 			closeAgent()
 			return nil, fmt.Errorf("failed to connect via ProxyCommand: %w", err)
@@ -193,7 +194,7 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
@@ -241,7 +242,7 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)

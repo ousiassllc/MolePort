@@ -105,14 +105,7 @@ func (p ForwardPanel) selectedSession() *core.ForwardSession {
 
 // View はパネルを描画する。
 func (p ForwardPanel) View() string {
-	innerWidth := p.width - 4
-	if innerWidth < 10 {
-		innerWidth = 10
-	}
-	innerHeight := p.height - 2
-	if innerHeight < 1 {
-		innerHeight = 1
-	}
+	innerWidth, innerHeight := panelInnerSize(p.width, p.height)
 
 	title := i18n.T("tui.forward.title", map[string]any{"Count": len(p.sessions)})
 

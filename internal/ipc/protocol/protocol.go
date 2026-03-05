@@ -17,6 +17,12 @@ const (
 	InternalError  = -32603
 )
 
+// Scanner バッファサイズ定数。
+const (
+	ScannerInitBuf = 64 * 1024   // 64KB
+	ScannerMaxBuf  = 1024 * 1024 // 1MB
+)
+
 // アプリケーション固有のエラーコード。
 const (
 	HostNotFound         = 1001

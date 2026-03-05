@@ -9,15 +9,15 @@ import (
 
 // RunReload は reload サブコマンドを実行する。
 func RunReload(configDir string, args []string) {
-	client := connectDaemon(configDir)
+	client := ConnectDaemon(configDir)
 	defer client.Close()
 
-	ctx, cancel := callCtx()
+	ctx, cancel := CallCtx()
 	defer cancel()
 
 	var result protocol.HostReloadResult
 	if err := client.Call(ctx, "host.reload", nil, &result); err != nil {
-		exitError("%s", i18n.T("cli.reload.failed", map[string]any{"Error": err}))
+		ExitError("%s", i18n.T("cli.reload.failed", map[string]any{"Error": err}))
 	}
 
 	fmt.Println(i18n.T("cli.reload.success"))
