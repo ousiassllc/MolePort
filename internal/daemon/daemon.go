@@ -184,7 +184,8 @@ func (d *Daemon) Start(ctx context.Context) error {
 		d.warnings = append(d.warnings, fmt.Sprintf("failed to load SSH hosts: %v", err))
 	}
 
-	d.versionChecker.Start(d.ctx, 10*time.Second)
+	const versionCheckInterval = 10 * time.Second
+	d.versionChecker.Start(d.ctx, versionCheckInterval)
 
 	d.startEventRouting()
 	d.restoreState()

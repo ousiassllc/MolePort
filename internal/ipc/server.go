@@ -152,7 +152,8 @@ func (s *IPCServer) acceptLoop() {
 				return
 			default:
 				slog.Warn("accept error", "error", err)
-				time.Sleep(100 * time.Millisecond)
+				const acceptBackoff = 100 * time.Millisecond
+				time.Sleep(acceptBackoff)
 				continue
 			}
 		}
