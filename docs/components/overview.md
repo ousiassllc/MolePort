@@ -185,6 +185,7 @@ type Daemon struct {
 func New(configDir string, version string) (*Daemon, error)
 func (d *Daemon) Start(ctx context.Context) error     // 初期化 + IPC Server 起動 + セッション復元
 func (d *Daemon) Stop() error      // グレースフルシャットダウン
+func (d *Daemon) Shutdown(purge bool) error  // シャットダウン（purge=true で設定も削除）
 func (d *Daemon) Wait() error      // 終了シグナルを待機
 ```
 
@@ -218,6 +219,7 @@ func NewPIDFile(path string) *PIDFile
 func (p *PIDFile) Acquire() error     // PID ファイル作成 + flock
 func (p *PIDFile) Release() error     // PID ファイル削除 + flock 解放
 func IsRunning(path string) (bool, int)  // 既存デーモンの稼働確認（PID + プロセス生存チェック）
+func KillProcess(pidPath string) error   // PID ファイルからプロセスを特定して停止
 ```
 
 ### Fork
