@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -43,7 +44,7 @@ func (c *conn) Close() error {
 		_ = c.stdout.Close()
 
 		if c.cmd.Process != nil {
-			_ = c.cmd.Process.Kill()
+			_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
 		}
 		// cmd.Wait() は goroutine 側で実行される。done チャネルで完了を待機する。
 		<-c.done
@@ -69,6 +70,7 @@ func (c *conn) SetWriteDeadline(_ time.Time) error { return nil }
 // Dial は ProxyCommand を起動し、その stdin/stdout を net.Conn として返す。
 func Dial(command string) (net.Conn, error) {
 	cmd := exec.Command("sh", "-c", command) //nolint:gosec // ProxyCommand は SSH config 由来のユーザー設定値
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
