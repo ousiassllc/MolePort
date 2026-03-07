@@ -775,7 +775,8 @@ type DaemonStatusResult struct {
     Uptime               string `json:"uptime"`     // human-readable ("2h 30m")
     ConnectedClients     int    `json:"connected_clients"`
     ActiveSSHConnections int    `json:"active_ssh_connections"`
-    ActiveForwards       int    `json:"active_forwards"`
+    ActiveForwards       int      `json:"active_forwards"`
+    Warnings             []string `json:"warnings,omitempty"`
 }
 
 // daemon.shutdown
