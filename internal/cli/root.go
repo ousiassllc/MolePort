@@ -59,6 +59,17 @@ func CallCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), defaultCallTimeout)
 }
 
+// DaemonCall はデーモンに接続し、RPC 呼び出し用のコンテキストとクリーンアップ関数を返す。
+func DaemonCall(configDir string) (cl *client.IPCClient, ctx context.Context, cleanup func()) {
+	cl = ConnectDaemon(configDir)
+	ctx, cancel := CallCtx()
+	cleanup = func() {
+		cancel()
+		_ = cl.Close()
+	}
+	return
+}
+
 // ExitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。
 // NOTE: stubExit/captureExit を使用するテストは t.Parallel() と併用不可。
 var ExitFunc = os.Exit
@@ -89,8 +100,8 @@ func ParseGlobalFlags() (configDir string, args []string) {
 			i++ // skip next arg (value)
 			continue
 		}
-		if strings.HasPrefix(rawArgs[i], "--config-dir=") {
-			configDir = strings.TrimPrefix(rawArgs[i], "--config-dir=")
+		if v, ok := strings.CutPrefix(rawArgs[i], "--config-dir="); ok {
+			configDir = v
 			continue
 		}
 		args = append(args, rawArgs[i])

@@ -18,11 +18,8 @@ func RunList(configDir string, args []string) {
 		ExitError("%v", err)
 	}
 
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	// ホスト一覧を取得
 	var hosts protocol.HostListResult

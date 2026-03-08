@@ -14,11 +14,8 @@ func RunStart(configDir string, args []string) {
 	}
 
 	name := args[0]
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.ForwardStartParams{Name: name}
 	var result protocol.ForwardStartResult
