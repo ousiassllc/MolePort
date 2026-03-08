@@ -1,4 +1,4 @@
-package cli
+package updatecmd
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -28,28 +29,28 @@ func RunUpdate(configDir string, args []string) {
 	}
 
 	// dev ビルドではアップデート不可
-	if Version == "dev" {
-		ExitError("%s", i18n.T("cli.update.dev_build"))
+	if cli.Version == "dev" {
+		cli.ExitError("%s", i18n.T("cli.update.dev_build"))
 	}
 
 	fmt.Println(i18n.T("cli.update.checking"))
 
 	ctx := context.Background()
-	vc := newVersionChecker(Version)
+	vc := newVersionChecker(cli.Version)
 
 	result, err := vc.LatestVersion(ctx)
 	if err != nil {
-		ExitError("%s", i18n.T("cli.update.check_failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.update.check_failed", map[string]any{"Error": err}))
 	}
 
 	if result == nil || !result.UpdateAvailable {
-		fmt.Println(i18n.T("cli.update.already_latest", map[string]any{"Version": Version}))
+		fmt.Println(i18n.T("cli.update.already_latest", map[string]any{"Version": cli.Version}))
 		return
 	}
 
 	fmt.Println(i18n.T("cli.update.available", map[string]any{
 		"Latest":  result.LatestVersion,
-		"Current": Version,
+		"Current": cli.Version,
 	}))
 
 	if checkOnly {
@@ -85,7 +86,7 @@ func RunUpdate(configDir string, args []string) {
 		if daemonRunning {
 			restartDaemonAfterUpdate(configDir)
 		}
-		ExitError("%s", i18n.T("cli.update.failed", map[string]any{"Error": err}))
+		cli.ExitError("%s", i18n.T("cli.update.failed", map[string]any{"Error": err}))
 	}
 
 	if daemonRunning {
@@ -103,7 +104,7 @@ func stopDaemonForUpdate(configDir string) {
 		return
 	}
 
-	ctx, cancel := CallCtx()
+	ctx, cancel := cli.CallCtx()
 	defer cancel()
 
 	var shutdownResult protocol.DaemonShutdownResult

@@ -1,14 +1,76 @@
-package cli
+package updatecmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/core/update"
 )
+
+type exitCalled struct{ code int }
+
+func stubExit(t *testing.T) {
+	t.Helper()
+	orig := cli.ExitFunc
+	t.Cleanup(func() { cli.ExitFunc = orig })
+	cli.ExitFunc = func(c int) { panic(exitCalled{code: c}) }
+}
+
+func captureExit(t *testing.T, fn func()) (code int, stderr string) {
+	t.Helper()
+	origStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = w.Close()
+		_ = r.Close()
+		os.Stderr = origStderr
+	})
+	os.Stderr = w
+	code = -1
+	func() {
+		defer func() {
+			if v := recover(); v != nil {
+				if ec, ok := v.(exitCalled); ok {
+					code = ec.code
+				} else {
+					panic(v)
+				}
+			}
+		}()
+		fn()
+	}()
+	_ = w.Close()
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+	return code, buf.String()
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+	fn()
+	_ = w.Close()
+	os.Stdout = orig
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	return buf.String()
+}
 
 // githubRelease はテスト用の GitHub リリース JSON 構造体。
 type githubRelease struct {
@@ -29,12 +91,12 @@ func stubVersionChecker(t *testing.T, serverURL string) {
 	}
 }
 
-// stubVersion は Version を差し替えて t.Cleanup で復元するヘルパー。
+// stubVersion は cli.Version を差し替えて t.Cleanup で復元するヘルパー。
 func stubVersion(t *testing.T, v string) {
 	t.Helper()
-	orig := Version
-	t.Cleanup(func() { Version = orig })
-	Version = v
+	orig := cli.Version
+	t.Cleanup(func() { cli.Version = orig })
+	cli.Version = v
 }
 
 func TestRunUpdate_DevBuild(t *testing.T) {
