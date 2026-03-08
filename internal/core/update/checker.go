@@ -204,7 +204,7 @@ func (vc *VersionChecker) fetchLatest(ctx context.Context) (*githubRelease, erro
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseResponseSize)).Decode(&release); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &release, nil

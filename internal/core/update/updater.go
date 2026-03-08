@@ -24,8 +24,13 @@ var (
 	ErrAlreadyLatest = errors.New("already running the latest version")
 )
 
-// maxDownloadSize はダウンロードファイルの最大サイズ (256MB)。
-const maxDownloadSize = 256 << 20
+const (
+	// maxDownloadSize はダウンロードファイルの最大サイズ (256 MiB)。
+	maxDownloadSize = 256 << 20
+
+	// maxReleaseResponseSize はリリース API レスポンスの最大サイズ (1 MiB)。
+	maxReleaseResponseSize = 1 << 20
+)
 
 // Updater はセルフアップデートを実行する。
 type Updater struct {
@@ -171,7 +176,7 @@ func (u *Updater) fetchRelease(ctx context.Context, tag string) (*githubRelease,
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseResponseSize)).Decode(&release); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &release, nil
