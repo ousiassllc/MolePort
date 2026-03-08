@@ -46,7 +46,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 
 	closeAgent := func() {
 		if agentCloser != nil {
-			agentCloser.Close()
+			if err := agentCloser.Close(); err != nil {
+				slog.Debug("failed to close SSH agent connection", "error", err)
+			}
 		}
 	}
 
@@ -166,7 +168,9 @@ func (c *sshConnection) Close() error {
 	defer c.mu.Unlock()
 
 	if c.agentCloser != nil {
-		c.agentCloser.Close()
+		if err := c.agentCloser.Close(); err != nil {
+			slog.Debug("failed to close SSH agent connection", "error", err)
+		}
 		c.agentCloser = nil
 	}
 
@@ -202,7 +206,9 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close local forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
@@ -226,7 +232,9 @@ func (c *sshConnection) RemoteForward(ctx context.Context, remotePort int, local
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close remote forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
@@ -250,7 +258,9 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close dynamic forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
