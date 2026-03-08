@@ -64,6 +64,8 @@ func main() {
 		cli.RunTUI(configDir, subArgs)
 	case "version":
 		cli.RunVersion(configDir, subArgs)
+	case "update":
+		cli.RunUpdate(configDir, subArgs)
 	case "help", "--help", "-h":
 		cli.RunHelp(configDir, subArgs)
 	default:

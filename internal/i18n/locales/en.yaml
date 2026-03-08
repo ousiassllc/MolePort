@@ -22,6 +22,7 @@ cli:
         config [--json]    Show configuration
         reload             Reload SSH config
         tui                Launch TUI dashboard
+        update [--check]   Auto-update to latest version
         help               Show this help
         version            Show version
 
@@ -107,6 +108,20 @@ cli:
     update_available: "Update available: {{.Latest}} (current: {{.Current}})"
     release_url: "Release: {{.URL}}"
     check_failed: "Version check failed: {{.Error}}"
+  update:
+    checking: "Checking for latest version..."
+    available: "{{.Latest}} is available (current: {{.Current}})"
+    already_latest: "Current version ({{.Version}}) is up to date"
+    check_failed: "Failed to check version: {{.Error}}"
+    downloading: "Downloading: {{.Asset}}"
+    verifying: "Checksum verification: OK"
+    stopping_daemon: "Stopping daemon..."
+    replacing: "Updating binary..."
+    restarting_daemon: "Restarting daemon..."
+    success: "✓ MolePort updated to {{.Version}}"
+    failed: "Update failed: {{.Error}}"
+    dev_build: "Cannot update dev build (install a release build)"
+    restart_failed: "Failed to restart daemon. Run 'moleport daemon start' manually."
   tui:
     daemon_start_failed: "Failed to start daemon: {{.Error}}"
     daemon_started: "Daemon started (PID: {{.PID}})"
