@@ -17,10 +17,17 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// githubReleaseAsset は GitHub リリースのアセット情報を表す。
+type githubReleaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+}
+
 // githubRelease は GitHub API のリリースレスポンスの必要フィールドを表す。
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
+	TagName string               `json:"tag_name"`
+	HTMLURL string               `json:"html_url"`
+	Assets  []githubReleaseAsset `json:"assets"`
 }
 
 // VersionChecker は GitHub リリースを定期的にチェックし、

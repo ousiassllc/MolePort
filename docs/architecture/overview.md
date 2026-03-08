@@ -1024,6 +1024,50 @@ graph LR
     TUI["TUI"] --> |接続| Sock
 ```
 
+## リリース・配布
+
+### GoReleaser 設定
+
+タグ push をトリガーに GoReleaser でクロスコンパイル・アセット生成・GitHub Release 作成を自動化する。
+
+**ターゲット**:
+
+| OS | Arch |
+|----|------|
+| linux | amd64 |
+| linux | arm64 |
+| darwin | amd64 |
+| darwin | arm64 |
+
+**アセット**:
+
+- `moleport_<os>_<arch>.tar.gz` — バイナリを含む tar.gz アーカイブ
+- `checksums.txt` — 全アセットの SHA-256 チェックサム
+
+**設定ファイル**: `.goreleaser.yaml`（リポジトリルート）
+
+**ビルドフラグ**: Makefile と同じ `-ldflags` を使用（`-s -w -X ...Version=$(VERSION)`）
+
+### GitHub Actions リリースワークフロー
+
+```mermaid
+flowchart LR
+    Tag["タグ push<br/>v*.*.*"] --> GHA["GitHub Actions<br/>release.yml"]
+    GHA --> GoReleaser["GoReleaser<br/>クロスコンパイル"]
+    GoReleaser --> Assets["アセット生成<br/>tar.gz + checksums.txt"]
+    Assets --> Release["GitHub Release<br/>作成・公開"]
+```
+
+**トリガー**: `v*.*.*` パターンのタグ push（例: `v0.2.0`）
+
+**ワークフローファイル**: `.github/workflows/release.yml`
+
+### Makefile ターゲット
+
+| ターゲット | 説明 |
+|-----------|------|
+| `update` | `go install github.com/ousiassllc/moleport/cmd/moleport@latest` で最新版をインストール（開発者向け） |
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -1040,3 +1084,4 @@ graph LR
 | 3.0 | 2026-03-01 | i18n パッケージ追加（internal/i18n/）: Localizer・Resolver・翻訳ファイル構造・言語解決フロー。技術選定に embed+text/template 追加。TUI Layer に多言語対応・LangPage 追加。Atomic Design 階層図・ディレクトリ構成更新。TUI 初回セットアップフロー追加 | #38 多言語対応 |
 | 3.1 | 2026-03-01 | ドキュメント乖離修正: ファイル名修正（theme.go/lang.go）、Atomic Design 階層図から ThemeCard/ColorSwatch 削除、並行処理モデル修正（Metrics Collector/Reconnect Monitor 削除、KeepAlive ベース再接続）、forward.stopAll メソッド追加、技術選定に golang.org/x/term 追加、i18n Resolver をパッケージレベル関数に修正、tui/app/ ファイル一覧更新、core/forward/ に reconnect.go 追加、ipc/protocol/ に convert.go 追加、handler/config サブパッケージ反映 | #40 ドキュメント乖離修正 |
 | 4.0 | 2026-03-04 | VersionChecker 追加: 技術選定に golang.org/x/mod/semver 追加、全体構成図に VersionChecker・GitHub API 追加、Core Layer に core/update/ サブパッケージ追加、JSON-RPC メソッドに version.check 追加、TUI 起動時最新バージョンチェックフロー追加、並行処理モデルに VersionChecker goroutine 追加、ディレクトリ構成に core/update/・handler_version.go・protocol_version.go 追加 | #44 最新バージョンチェック機能 |
+| 4.1 | 2026-03-08 | リリース・配布セクション追加: GoReleaser 設定（4プラットフォーム）、GitHub Actions リリースワークフロー、Makefile update ターゲット | #58 セルフアップデート機能 |

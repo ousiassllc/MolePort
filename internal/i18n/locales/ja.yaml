@@ -22,6 +22,7 @@ cli:
         config [--json]    設定を表示
         reload             SSH config を再読み込み
         tui                TUI ダッシュボードを起動
+        update [--check]   最新バージョンに自動アップデート
         help               このヘルプを表示
         version            バージョン情報を表示
 
@@ -107,6 +108,20 @@ cli:
     update_available: "アップデートがあります: {{.Latest}} (現在: {{.Current}})"
     release_url: "リリース: {{.URL}}"
     check_failed: "バージョンチェックに失敗しました: {{.Error}}"
+  update:
+    checking: "最新バージョンを確認中..."
+    available: "{{.Latest}} が利用可能です（現在: {{.Current}}）"
+    already_latest: "現在のバージョン ({{.Version}}) は最新です"
+    check_failed: "バージョン情報の取得に失敗しました: {{.Error}}"
+    downloading: "ダウンロード中: {{.Asset}}"
+    verifying: "チェックサム検証: OK"
+    stopping_daemon: "デーモンを停止中..."
+    replacing: "バイナリを更新中..."
+    restarting_daemon: "デーモンを再起動中..."
+    success: "✓ MolePort を {{.Version}} に更新しました"
+    failed: "アップデートに失敗しました: {{.Error}}"
+    dev_build: "dev ビルドではアップデートできません（リリースビルドをインストールしてください）"
+    restart_failed: "デーモンの再起動に失敗しました。moleport daemon start で手動起動してください。"
   tui:
     daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
     daemon_started: "デーモンを起動しました (PID: {{.PID}})"
