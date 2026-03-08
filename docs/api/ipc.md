@@ -685,7 +685,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
     "uptime": "3h 30m",
     "connected_clients": 1,
     "active_ssh_connections": 2,
-    "active_forwards": 3
+    "active_forwards": 3,
+    "warnings": ["バージョン不一致の可能性があります"]
   }
 }
 ```
@@ -701,6 +702,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 | `connected_clients` | int | 接続中のクライアント数 |
 | `active_ssh_connections` | int | アクティブな SSH 接続数 |
 | `active_forwards` | int | アクティブなポートフォワーディング数 |
+| `warnings` | string[] | 警告メッセージのリスト（省略可能） |
 
 > **Note**: TUI は起動時に `version` フィールドを自身のバージョンと比較し、不一致の場合はデーモン再起動を提案する（UC-17 参照）。`version` が `"dev"` の場合はチェックをスキップする。
 
@@ -1158,3 +1160,4 @@ SSH 接続状態の変化。
 | 1.5 | 2026-03-01 | daemon.status レスポンスに `version` フィールド追加、レスポンスフィールド表を追加 | #36 バージョン不一致検出 |
 | 1.6 | 2026-03-01 | config.get/update に `language` フィールド追加、event.metrics に未実装注記追加 | ドキュメント乖離修正 (#40) |
 | 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |
+| 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |
