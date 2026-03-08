@@ -12,6 +12,12 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
+// newVersionChecker は VersionChecker を生成するファクトリ関数。テストで差し替え可能。
+// NOTE: stubVersionChecker を使用するテストは t.Parallel() と併用不可。
+var newVersionChecker = func(version string) *update.VersionChecker {
+	return update.New(version, true, 0)
+}
+
 // RunUpdate は update サブコマンドを実行する。
 func RunUpdate(configDir string, args []string) {
 	checkOnly := false
@@ -29,7 +35,7 @@ func RunUpdate(configDir string, args []string) {
 	fmt.Println(i18n.T("cli.update.checking"))
 
 	ctx := context.Background()
-	vc := update.New(Version, true, 0)
+	vc := newVersionChecker(Version)
 
 	result, err := vc.LatestVersion(ctx)
 	if err != nil {

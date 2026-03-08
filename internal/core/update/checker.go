@@ -61,6 +61,11 @@ func New(currentVersion string, enabled bool, interval time.Duration) *VersionCh
 	}
 }
 
+// SetAPIBase はテスト用に API ベース URL を差し替える。
+func (vc *VersionChecker) SetAPIBase(base string) {
+	vc.apiBase = base
+}
+
 // Start はバックグラウンドゴルーチンで定期的なバージョンチェックを開始する。
 // enabled が false またはバージョンが "dev" の場合は何もしない。
 // initialDelay 後に最初のチェックを行い、以後 interval ごとにチェックする。
