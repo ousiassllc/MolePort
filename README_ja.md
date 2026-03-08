@@ -84,6 +84,7 @@ moleport tui
 | `moleport config [--json]` | 設定を表示 |
 | `moleport reload` | SSH config を再読み込み |
 | `moleport tui` | TUI ダッシュボードを起動 |
+| `moleport update [--check]` | 最新バージョンに自動アップデート（`--check`: 確認のみ） |
 | `moleport version` | バージョン情報を表示 |
 | `moleport help` | ヘルプを表示 |
 
@@ -96,6 +97,9 @@ moleport tui
 | `Tab` | ペイン切り替え |
 | `d` | 選択中の転送を切断 |
 | `x` | 選択中の転送を削除 |
+| `t` | テーマ変更 |
+| `l` | 言語切替 |
+| `v` | バージョン情報表示 |
 | `/` | コマンド入力にフォーカス |
 | `?` | ヘルプ表示 |
 | `Esc` | キャンセル |
