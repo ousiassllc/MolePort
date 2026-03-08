@@ -84,7 +84,7 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 		return h.sshConnect(clientID, params)
 	case "ssh.disconnect":
 		return h.sshDisconnect(params)
-	case "credential.response":
+	case protocol.MethodCredentialResponse:
 		return h.credentialResponse(params)
 	case "forward.list":
 		return h.forwardList(params)
@@ -112,9 +112,9 @@ func (h *Handler) Handle(clientID string, method string, params json.RawMessage)
 		return h.daemonStatus()
 	case "daemon.shutdown":
 		return h.daemonShutdown(params)
-	case "events.subscribe":
+	case protocol.MethodEventsSubscribe:
 		return h.eventsSubscribe(clientID, params)
-	case "events.unsubscribe":
+	case protocol.MethodEventsUnsubscribe:
 		return h.eventsUnsubscribe(params)
 	default:
 		return nil, &protocol.RPCError{Code: protocol.MethodNotFound, Message: "method not found: " + method}

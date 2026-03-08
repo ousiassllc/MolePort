@@ -14,11 +14,8 @@ func RunDelete(configDir string, args []string) {
 	}
 
 	name := args[0]
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.ForwardDeleteParams{Name: name}
 	var result protocol.ForwardDeleteResult

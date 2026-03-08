@@ -7,6 +7,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/cli/daemoncmd"
 	"github.com/ousiassllc/moleport/internal/cli/statuscmd"
+	"github.com/ousiassllc/moleport/internal/cli/updatecmd"
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -65,7 +66,7 @@ func main() {
 	case "version":
 		cli.RunVersion(configDir, subArgs)
 	case "update":
-		cli.RunUpdate(configDir, subArgs)
+		updatecmd.RunUpdate(configDir, subArgs)
 	case "help", "--help", "-h":
 		cli.RunHelp(configDir, subArgs)
 	default:

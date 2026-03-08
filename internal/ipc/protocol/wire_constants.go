@@ -28,3 +28,11 @@ const (
 	ForwardTypeRemote  = "remote"
 	ForwardTypeDynamic = "dynamic"
 )
+
+// RPC メソッド名定数。
+const (
+	MethodEventsSubscribe    = "events.subscribe"
+	MethodEventsUnsubscribe  = "events.unsubscribe"
+	MethodCredentialRequest  = "credential.request"  //nolint:gosec // RPC method name, not a credential
+	MethodCredentialResponse = "credential.response" //nolint:gosec // RPC method name, not a credential
+)

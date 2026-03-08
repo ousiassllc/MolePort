@@ -9,11 +9,8 @@ import (
 
 // RunReload は reload サブコマンドを実行する。
 func RunReload(configDir string, args []string) {
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	var result protocol.HostReloadResult
 	if err := client.Call(ctx, "host.reload", nil, &result); err != nil {

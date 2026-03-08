@@ -17,11 +17,8 @@ func RunConfig(configDir string, args []string) {
 		ExitError("%v", err)
 	}
 
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	var result protocol.ConfigGetResult
 	if err := client.Call(ctx, "config.get", nil, &result); err != nil {

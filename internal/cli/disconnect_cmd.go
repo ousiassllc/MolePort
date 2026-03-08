@@ -14,11 +14,8 @@ func RunDisconnect(configDir string, args []string) {
 	}
 
 	host := args[0]
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.SSHDisconnectParams{Host: host}
 	var result protocol.SSHDisconnectResult

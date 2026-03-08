@@ -61,6 +61,11 @@ func New(currentVersion string, enabled bool, interval time.Duration) *VersionCh
 	}
 }
 
+// SetAPIBase はテスト用に API ベース URL を差し替える。
+func (vc *VersionChecker) SetAPIBase(base string) {
+	vc.apiBase = base
+}
+
 // Start はバックグラウンドゴルーチンで定期的なバージョンチェックを開始する。
 // enabled が false またはバージョンが "dev" の場合は何もしない。
 // initialDelay 後に最初のチェックを行い、以後 interval ごとにチェックする。
@@ -204,7 +209,7 @@ func (vc *VersionChecker) fetchLatest(ctx context.Context) (*githubRelease, erro
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseResponseSize)).Decode(&release); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &release, nil

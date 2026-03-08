@@ -6,13 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
+)
+
+const (
+	// eventChannelBufferSize はイベント通知チャネルのバッファサイズ。
+	eventChannelBufferSize = 64
+
+	// readLoopShutdownTimeout は readLoop 終了待ちのタイムアウト。
+	readLoopShutdownTimeout = 3 * time.Second
+
+	// credentialResponseTimeout はクレデンシャル応答送信のタイムアウト。
+	credentialResponseTimeout = 5 * time.Second
 )
 
 // CredentialHandler はクレデンシャルリクエスト通知を受け取り、レスポンスを返すハンドラ関数型。
@@ -40,7 +50,7 @@ func NewIPCClient(socketPath string) *IPCClient {
 	return &IPCClient{
 		socketPath: socketPath,
 		pending:    make(map[int]chan *protocol.Response),
-		eventCh:    make(chan *protocol.Notification, 64),
+		eventCh:    make(chan *protocol.Notification, eventChannelBufferSize),
 		done:       make(chan struct{}),
 	}
 }
@@ -78,7 +88,7 @@ func (c *IPCClient) Close() error {
 	// readLoop の終了を待つ（タイムアウト付き）
 	select {
 	case <-c.done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(readLoopShutdownTimeout):
 	}
 
 	// 保留中のリクエストをすべてエラーで解決する
@@ -160,7 +170,7 @@ func (c *IPCClient) Call(ctx context.Context, method string, params any, result 
 func (c *IPCClient) Subscribe(ctx context.Context, types []string) (string, error) {
 	params := protocol.EventsSubscribeParams{Types: types}
 	var result protocol.EventsSubscribeResult
-	if err := c.Call(ctx, "events.subscribe", params, &result); err != nil {
+	if err := c.Call(ctx, protocol.MethodEventsSubscribe, params, &result); err != nil {
 		return "", err
 	}
 	return result.SubscriptionID, nil
@@ -170,7 +180,7 @@ func (c *IPCClient) Subscribe(ctx context.Context, types []string) (string, erro
 func (c *IPCClient) Unsubscribe(ctx context.Context, subscriptionID string) error {
 	params := protocol.EventsUnsubscribeParams{SubscriptionID: subscriptionID}
 	var result protocol.EventsUnsubscribeResult
-	return c.Call(ctx, "events.unsubscribe", params, &result)
+	return c.Call(ctx, protocol.MethodEventsUnsubscribe, params, &result)
 }
 
 // Events はイベント通知チャネルを返す。
@@ -181,22 +191,6 @@ func (c *IPCClient) Events() <-chan *protocol.Notification {
 // IsConnected は接続状態を返す。
 func (c *IPCClient) IsConnected() bool {
 	return c.connected.Load()
-}
-
-// SetCredentialHandler はクレデンシャル要求を処理するハンドラーを設定する。
-// いつでも安全に呼び出せる。
-func (c *IPCClient) SetCredentialHandler(handler CredentialHandler) {
-	c.credMu.Lock()
-	c.credHandler = handler
-	c.credMu.Unlock()
-}
-
-// CredentialHandler は現在設定されているクレデンシャルハンドラーを返す。
-func (c *IPCClient) CredentialHandler() CredentialHandler {
-	c.credMu.RLock()
-	h := c.credHandler
-	c.credMu.RUnlock()
-	return h
 }
 
 func (c *IPCClient) readLoop() {
@@ -240,7 +234,7 @@ func (c *IPCClient) readLoop() {
 				continue
 			}
 			// credential.request は専用ハンドラーで処理
-			if notif.Method == "credential.request" {
+			if notif.Method == protocol.MethodCredentialRequest {
 				go c.handleCredentialRequest(notif)
 				continue
 			}
@@ -250,48 +244,5 @@ func (c *IPCClient) readLoop() {
 				// チャネルが満杯の場合は通知を破棄する
 			}
 		}
-	}
-}
-
-// handleCredentialRequest は credential.request 通知を処理し、credential.response を送信する。
-func (c *IPCClient) handleCredentialRequest(notif protocol.Notification) {
-	var req protocol.CredentialRequestNotification
-	if err := json.Unmarshal(notif.Params, &req); err != nil {
-		return
-	}
-	handler := c.CredentialHandler()
-	if handler == nil {
-		c.sendCredentialCancel(req.RequestID)
-		return
-	}
-	resp, err := handler(req)
-	if err != nil || resp == nil {
-		c.sendCredentialCancel(req.RequestID)
-		return
-	}
-	c.sendCredentialResult(resp)
-}
-
-// sendCredentialCancel はキャンセル応答を送信する。
-func (c *IPCClient) sendCredentialCancel(requestID string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	params := protocol.CredentialResponseParams{
-		RequestID: requestID,
-		Cancelled: true,
-	}
-	var result protocol.CredentialResponseResult
-	if err := c.Call(ctx, "credential.response", params, &result); err != nil {
-		slog.Warn("failed to send credential cancel", "request_id", requestID, "error", err)
-	}
-}
-
-// sendCredentialResult はクレデンシャル応答を送信する。
-func (c *IPCClient) sendCredentialResult(resp *protocol.CredentialResponseParams) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var result protocol.CredentialResponseResult
-	if err := c.Call(ctx, "credential.response", resp, &result); err != nil {
-		slog.Warn("failed to send credential response", "request_id", resp.RequestID, "error", err)
 	}
 }

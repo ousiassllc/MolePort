@@ -50,11 +50,8 @@ func RunAdd(configDir string, args []string) {
 		}
 	}
 
-	client := ConnectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := CallCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.ForwardAddParams{
 		Name:        *name,

@@ -99,12 +99,16 @@ func (s *IPCServer) Stop() error {
 
 	s.mu.Lock()
 	for _, c := range s.clients {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			slog.Debug("failed to close client connection", "client", c.id, "error", err)
+		}
 	}
 	s.clients = make(map[string]*clientConn)
 	s.mu.Unlock()
 
-	os.Remove(s.socketPath)
+	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+		slog.Debug("failed to remove socket file", "path", s.socketPath, "error", err)
+	}
 	return firstErr
 }
 
@@ -182,7 +186,9 @@ func (s *IPCServer) acceptLoop() {
 
 func (s *IPCServer) readLoop(c *clientConn) {
 	defer func() {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			slog.Debug("failed to close client connection", "client", c.id, "error", err)
+		}
 
 		s.mu.Lock()
 		delete(s.clients, c.id)
