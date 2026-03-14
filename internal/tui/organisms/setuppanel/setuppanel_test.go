@@ -1,4 +1,4 @@
-package organisms
+package setuppanel
 
 import (
 	"testing"
@@ -16,15 +16,15 @@ func makeHosts(names ...string) []core.SSHHost {
 	return hosts
 }
 
-func typeRunes(p SetupPanel, s string) SetupPanel {
+func typeRunes(p Panel, s string) Panel {
 	for _, r := range s {
 		p, _ = p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	return p
 }
 
-func setupWizardAt(step WizardStep) SetupPanel {
-	p := NewSetupPanel()
+func setupWizardAt(step WizardStep) Panel {
+	p := New()
 	p.focused = true
 	p.hosts = []core.SSHHost{{Name: "test-host", User: "user", HostName: "example.com", Port: 22}}
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
@@ -36,13 +36,12 @@ func setupWizardAt(step WizardStep) SetupPanel {
 	return p
 }
 
-func TestSetupPanel_SetHosts(t *testing.T) {
-	p := NewSetupPanel()
+func TestPanel_BasicAccessors(t *testing.T) {
+	p := New()
 	p.SetHosts(makeHosts("alpha", "beta"))
 	if got := p.Hosts(); len(got) != 2 || got[0].Name != "alpha" {
 		t.Errorf("Hosts roundtrip failed: len=%d", len(p.Hosts()))
 	}
-	// Cursor adjusts on shrink
 	p.SetHosts(makeHosts("a", "b", "c"))
 	p.hostCursor = 2
 	p.SetHosts(makeHosts("a"))
@@ -54,10 +53,7 @@ func TestSetupPanel_SetHosts(t *testing.T) {
 	if p.hostCursor != 0 {
 		t.Errorf("cursor after empty=%d want 0", p.hostCursor)
 	}
-}
-
-func TestSetupPanel_SetFocused_And_SetSize(t *testing.T) {
-	p := NewSetupPanel()
+	// SetFocused / SetSize / IsInputActive
 	p.SetFocused(true)
 	if !p.focused {
 		t.Error("SetFocused(true) failed")
@@ -70,10 +66,6 @@ func TestSetupPanel_SetFocused_And_SetSize(t *testing.T) {
 	if p.width != 80 || p.height != 24 {
 		t.Errorf("SetSize: got %dx%d", p.width, p.height)
 	}
-}
-
-func TestSetupPanel_IsInputActive(t *testing.T) {
-	p := NewSetupPanel()
 	for _, step := range []WizardStep{StepIdle, StepSelectType, StepConfirm} {
 		p.step = step
 		if p.IsInputActive() {
@@ -86,42 +78,36 @@ func TestSetupPanel_IsInputActive(t *testing.T) {
 			t.Errorf("step %d should be true", step)
 		}
 	}
-}
-
-func TestSetupPanel_UpdateHostState(t *testing.T) {
-	p := NewSetupPanel()
+	// UpdateHostState
 	p.SetHosts(makeHosts("s1", "s2"))
 	p.UpdateHostState("s2", core.Connected)
 	if p.Hosts()[1].State != core.Connected || p.Hosts()[0].State != core.Disconnected {
 		t.Error("UpdateHostState did not update correctly")
 	}
 	p.UpdateHostState("nonexistent", core.Connected) // should not panic
-}
-func TestSetupPanel_Update_NotFocused(t *testing.T) {
-	p := NewSetupPanel()
-	p.SetHosts(makeHosts("a"))
-	p2, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil || p2.step != StepIdle {
+	// not focused -> noop
+	nf := New()
+	nf.SetHosts(makeHosts("a"))
+	nf2, cmd := nf.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil || nf2.step != StepIdle {
 		t.Error("Update when not focused should be noop")
 	}
-}
-
-func TestValidatePortStr(t *testing.T) {
-	for _, tt := range []struct {
+	// validatePortStr
+	for _, vt := range []struct {
 		in      string
 		wantErr bool
 	}{
 		{"8080", false}, {"1", false}, {"65535", false},
 		{"", true}, {"abc", true}, {"0", true}, {"65536", true}, {"-1", true},
 	} {
-		if err := validatePortStr(tt.in); (err != nil) != tt.wantErr {
-			t.Errorf("validatePortStr(%q)=%v wantErr=%v", tt.in, err, tt.wantErr)
+		if err := validatePortStr(vt.in); (err != nil) != vt.wantErr {
+			t.Errorf("validatePortStr(%q)=%v wantErr=%v", vt.in, err, vt.wantErr)
 		}
 	}
 }
 
-func TestSetupPanel_View_And_EscReset(t *testing.T) {
-	p := NewSetupPanel()
+func TestPanel_View_EscReset_TextInput(t *testing.T) {
+	p := New()
 	p.focused = true
 	p.hosts = []core.SSHHost{{Name: "h1", User: "u", HostName: "h1.example.com", Port: 22}}
 	p.SetSize(60, 20)
@@ -138,30 +124,26 @@ func TestSetupPanel_View_And_EscReset(t *testing.T) {
 	if p.step != StepIdle {
 		t.Errorf("Esc should reset to StepIdle, got %d", p.step)
 	}
-}
-
-func TestSetupPanel_TextInputKeystrokes(t *testing.T) {
-	// Port input
-	p := setupWizardAt(StepLocalPort)
-	p = typeRunes(p, "8080")
-	if got := p.portInput.Value(); got != "8080" {
+	// text input keystrokes
+	p2 := setupWizardAt(StepLocalPort)
+	p2 = typeRunes(p2, "8080")
+	if got := p2.portInput.Value(); got != "8080" {
 		t.Errorf("portInput=%q want 8080", got)
 	}
-	// Host input
-	p = setupWizardAt(StepLocalPort)
-	p = typeRunes(p, "3000")
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if p.step != StepRemoteHost {
-		t.Fatalf("expected StepRemoteHost, got %d", p.step)
+	p3 := setupWizardAt(StepLocalPort)
+	p3 = typeRunes(p3, "3000")
+	p3, _ = p3.Update(enter)
+	if p3.step != StepRemoteHost {
+		t.Fatalf("expected StepRemoteHost, got %d", p3.step)
 	}
-	p = typeRunes(p, "db.local")
-	if got := p.hostInput.Value(); got != "db.local" {
+	p3 = typeRunes(p3, "db.local")
+	if got := p3.hostInput.Value(); got != "db.local" {
 		t.Errorf("hostInput=%q want db.local", got)
 	}
 }
 
-func TestSetupPanel_UpdateIdle_CursorAndSelect(t *testing.T) {
-	p := NewSetupPanel()
+func TestPanel_UpdateIdle_CursorAndSelect(t *testing.T) {
+	p := New()
 	p.focused = true
 	p.SetHosts(makeHosts("h1", "h2", "h3"))
 	p.SetSize(60, 20)
@@ -187,7 +169,7 @@ func TestSetupPanel_UpdateIdle_CursorAndSelect(t *testing.T) {
 	}
 }
 
-func TestSetupPanel_UpdateSelectType_AllTypes(t *testing.T) {
+func TestPanel_UpdateSelectType_AllTypes(t *testing.T) {
 	for _, tt := range []struct {
 		downs    int
 		wantType core.ForwardType
@@ -205,51 +187,76 @@ func TestSetupPanel_UpdateSelectType_AllTypes(t *testing.T) {
 	}
 }
 
-func TestSetupPanel_AdvanceFromTextStep_FullWizard(t *testing.T) {
-	p := setupWizardAt(StepLocalPort)
+func TestPanel_AdvanceFromTextStep(t *testing.T) {
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	// full wizard
+	p := setupWizardAt(StepLocalPort)
 	p = typeRunes(p, "3000")
-	p, _ = p.Update(enter) // -> RemoteHost
+	p, _ = p.Update(enter)
 	if p.step != StepRemoteHost {
 		t.Fatalf("after localPort: step=%d", p.step)
 	}
-	p, _ = p.Update(enter) // empty host -> RemotePort
+	p, _ = p.Update(enter)
 	if p.step != StepRemotePort || p.remoteHost != "localhost" {
 		t.Fatalf("after remoteHost: step=%d host=%q", p.step, p.remoteHost)
 	}
 	p = typeRunes(p, "80")
-	p, _ = p.Update(enter) // -> RuleName
+	p, _ = p.Update(enter)
 	if p.step != StepRuleName {
 		t.Fatalf("after remotePort: step=%d", p.step)
 	}
-	p, _ = p.Update(enter) // empty name -> Confirm
+	p, _ = p.Update(enter)
 	if p.step != StepConfirm {
 		t.Fatalf("after ruleName: step=%d", p.step)
 	}
-}
-
-func TestSetupPanel_AdvanceFromTextStep_DynamicSkipsRemote(t *testing.T) {
-	p := setupWizardAt(StepSelectType)
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyDown})
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyDown})
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Dynamic
-	p = typeRunes(p, "1080")
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if p.step != StepRuleName {
-		t.Errorf("dynamic after localPort: step=%d want StepRuleName", p.step)
+	// dynamic skips remote
+	d := setupWizardAt(StepSelectType)
+	d, _ = d.Update(tea.KeyMsg{Type: tea.KeyDown})
+	d, _ = d.Update(tea.KeyMsg{Type: tea.KeyDown})
+	d, _ = d.Update(enter)
+	d = typeRunes(d, "1080")
+	d, _ = d.Update(enter)
+	if d.step != StepRuleName {
+		t.Errorf("dynamic: step=%d want StepRuleName", d.step)
+	}
+	// invalid port
+	inv := setupWizardAt(StepLocalPort)
+	inv = typeRunes(inv, "abc")
+	inv, _ = inv.Update(enter)
+	if inv.step != StepLocalPort {
+		t.Errorf("invalid port: step=%d want StepLocalPort", inv.step)
 	}
 }
 
-func TestSetupPanel_AdvanceFromTextStep_InvalidPort(t *testing.T) {
+func TestPanel_PlaceholderAutofill(t *testing.T) {
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	// 空 Enter でローカルポートの placeholder "8080" が採用される
 	p := setupWizardAt(StepLocalPort)
-	p = typeRunes(p, "abc")
-	p, _ = p.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if p.step != StepLocalPort {
-		t.Errorf("invalid port should stay at StepLocalPort, got %d", p.step)
+	p, _ = p.Update(enter)
+	if p.step != StepRemoteHost {
+		t.Fatalf("step=%d want StepRemoteHost", p.step)
+	}
+	if p.localPort != "8080" {
+		t.Errorf("localPort=%q want 8080", p.localPort)
+	}
+	// リモートポートの placeholder がローカルポートと一致し、空 Enter で採用される
+	p2 := setupWizardAt(StepLocalPort)
+	p2 = typeRunes(p2, "3000")
+	p2, _ = p2.Update(enter) // -> RemoteHost
+	p2, _ = p2.Update(enter) // -> RemotePort
+	if p2.portInput.Placeholder != "3000" {
+		t.Errorf("placeholder=%q want 3000", p2.portInput.Placeholder)
+	}
+	p2, _ = p2.Update(enter) // 空 Enter → placeholder "3000"
+	if p2.step != StepRuleName {
+		t.Fatalf("step=%d want StepRuleName", p2.step)
+	}
+	if p2.remotePort != "3000" {
+		t.Errorf("remotePort=%q want 3000", p2.remotePort)
 	}
 }
 
-func TestSetupPanel_UpdateConfirm(t *testing.T) {
+func TestPanel_Confirm_UpdateAndView(t *testing.T) {
 	p := setupWizardAt(StepLocalPort)
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	p = typeRunes(p, "8080")
@@ -275,26 +282,19 @@ func TestSetupPanel_UpdateConfirm(t *testing.T) {
 	if p.step != StepIdle {
 		t.Errorf("after confirm: step=%d want StepIdle", p.step)
 	}
-}
-
-func TestSetupPanel_ViewConfirm(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		typ  core.ForwardType
-	}{
-		{"Local", core.Local}, {"Dynamic", core.Dynamic},
-	} {
-		p := NewSetupPanel()
-		p.focused = true
-		p.SetSize(60, 20)
-		p.step = StepConfirm
-		p.selectedType = tt.typ
-		p.localPort = "8080"
-		p.remoteHost = "localhost"
-		p.remotePort = "80"
-		p.ruleName = "r"
-		if p.View() == "" {
-			t.Errorf("viewConfirm %s should produce non-empty output", tt.name)
+	// viewConfirm
+	for _, typ := range []core.ForwardType{core.Local, core.Dynamic} {
+		v := New()
+		v.focused = true
+		v.SetSize(60, 20)
+		v.step = StepConfirm
+		v.selectedType = typ
+		v.localPort = "8080"
+		v.remoteHost = "localhost"
+		v.remotePort = "80"
+		v.ruleName = "r"
+		if v.View() == "" {
+			t.Errorf("viewConfirm %v should produce non-empty output", typ)
 		}
 	}
 }
