@@ -91,8 +91,7 @@ func TestForwardManager_AddRule_Validation(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DynamicNoRemotePort(t *testing.T) {
-	// Dynamic では RemotePort は不要
-	if _, err := NewForwardManager(context.Background(), newMockSSHManager()).AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil {
+	if _, err := NewForwardManager(context.Background(), newMockSSHManager()).AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil { // Dynamic では RemotePort は不要
 		t.Fatalf("AddRule() error = %v (Dynamic should not require remote port)", err)
 	}
 }

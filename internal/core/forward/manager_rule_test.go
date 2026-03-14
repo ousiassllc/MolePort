@@ -75,7 +75,6 @@ func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
 
 func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	fm := NewForwardManager(context.Background(), newMockSSHManager())
-
 	// Local タイプで RemoteHost を指定しない場合、"localhost" がデフォルトになる
 	_, err := fm.AddRule(core.ForwardRule{Name: "web-local", Host: "server1", Type: core.Local, LocalPort: 8080, RemotePort: 80})
 	if err != nil {
@@ -88,7 +87,6 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	if rules[0].RemoteHost != "localhost" {
 		t.Errorf("RemoteHost = %q, want %q", rules[0].RemoteHost, "localhost")
 	}
-
 	// Remote タイプでも同様
 	_, err = fm.AddRule(core.ForwardRule{Name: "web-remote", Host: "server1", Type: core.Remote, LocalPort: 3000, RemotePort: 80})
 	if err != nil {
@@ -98,7 +96,6 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 	if rules[1].RemoteHost != "localhost" {
 		t.Errorf("RemoteHost = %q, want %q", rules[1].RemoteHost, "localhost")
 	}
-
 	// Dynamic タイプでは RemoteHost はそのまま空
 	_, err = fm.AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	if err != nil {

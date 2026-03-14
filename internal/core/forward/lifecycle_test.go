@@ -28,17 +28,12 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	}
 }
 
-// TestForwardManager_StartForward_UsesCallbackForConnect は、
-// StartForward にコールバックを渡した場合、未接続ホストへの接続に
-// ConnectWithCallback（コールバック付き）が使用されることを検証する。
-// これは Issue #20 の回帰テスト: 以前は Connect（コールバックなし）が使用され、
-// パスワード認証が必要なホストへの接続が失敗していた。
+// TestForwardManager_StartForward_UsesCallbackForConnect は Issue #20 の回帰テスト:
+// コールバック付き StartForward が ConnectWithCallback を使用することを検証する。
 func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	sm := newMockSSHManager()
 	mockConn := newMockConn(true, false)
-	// Connect（コールバックなし）は認証エラーを返す
 	sm.connectErr = fmt.Errorf("authentication required: no authentication methods available")
-	// ConnectWithCallback はコールバック付きなら成功する
 	var receivedCb core.CredentialCallback
 	sm.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
 		receivedCb = cb
@@ -52,15 +47,12 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-	// コールバック付きで StartForward を呼び出す
-	cb := func(req core.CredentialRequest) (core.CredentialResponse, error) {
+	cb := func(_ core.CredentialRequest) (core.CredentialResponse, error) {
 		return core.CredentialResponse{Value: "password123"}, nil
 	}
-	err := fm.StartForward("web", cb)
-	if err != nil {
+	if err := fm.StartForward("web", cb); err != nil {
 		t.Fatalf("StartForward() with callback should succeed, got error: %v", err)
 	}
-	// ConnectWithCallback にコールバックが渡されたことを確認
 	if receivedCb == nil {
 		t.Fatal("ConnectWithCallback should have received a non-nil callback")
 	}
@@ -75,7 +67,6 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
 	events := fm.Subscribe()
-
 	if err := fm.StartForward("web", nil); err != nil {
 		t.Fatalf("StartForward() error = %v", err)
 	}
@@ -93,7 +84,6 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		t.Errorf("session status = %v, want %v", ev.Session.Status, core.Active)
 	}
 	assertSessionStatus(t, fm, "web", core.Active)
-
 	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error for already active forward")
 	}
@@ -107,11 +97,9 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 	assertSessionStatus(t, fm, "web", core.Stopped)
 }
 
-// TestForwardManager_StartForward_ConcurrentSameRule は、同じルールに対する
-// 並行 StartForward 呼び出しで重複リスナーが作成されないことを検証する。
+// TestForwardManager_StartForward_ConcurrentSameRule は並行呼び出しで重複リスナーが作成されないことを検証する。
 func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 	sm := newMockSSHManager()
-	// ConnectWithCallback を遅延させて競合を発生しやすくする
 	sm.connectWithCbFn = func(hostName string, _ core.CredentialCallback) error {
 		sm.mu.Lock()
 		sm.connected[hostName] = true
@@ -135,8 +123,6 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	// 成功は1つだけであること
 	var successCount int
 	for _, err := range errs {
 		if err == nil {

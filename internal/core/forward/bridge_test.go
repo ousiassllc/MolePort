@@ -18,10 +18,7 @@ type halfCloseConn struct {
 	closeWriteCalled atomic.Bool
 }
 
-func (c *halfCloseConn) CloseWrite() error {
-	c.closeWriteCalled.Store(true)
-	return nil
-}
+func (c *halfCloseConn) CloseWrite() error { c.closeWriteCalled.Store(true); return nil }
 
 type plainConn struct {
 	net.Conn
@@ -36,20 +33,35 @@ func (c *plainConn) Close() error {
 	return c.Conn.Close()
 }
 
-func doSOCKS5Connect(t *testing.T, request []byte) string {
+func newSOCKS5TestPair(t *testing.T) (client, server net.Conn, fm *forwardManager) {
 	t.Helper()
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
+	c, s := net.Pipe()
+	t.Cleanup(func() { _ = c.Close(); _ = s.Close() })
+	return c, s, NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
+}
 
-	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
-		dialedAddr <- addr
+func newTestDialer(ch chan<- string) *mockSOCKS5Dialer {
+	return &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
+		ch <- addr
 		rc, _ := net.Pipe()
 		return rc, nil
 	}}
+}
+
+func runCopyBidirectional(t *testing.T, a, b net.Conn) <-chan struct{} {
+	t.Helper()
 	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
-	go fm.handleSOCKS5(&activeForward{}, serverConn, dialer)
+	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: t.Name()}}}
+	done := make(chan struct{})
+	go func() { defer close(done); fm.copyBidirectional(af, a, b) }()
+	return done
+}
+
+func doSOCKS5Connect(t *testing.T, request []byte) string {
+	t.Helper()
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
+	dialedAddr := make(chan string, 1)
+	go fm.handleSOCKS5(&activeForward{}, serverConn, newTestDialer(dialedAddr))
 
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
 	resp := make([]byte, 2)
@@ -77,13 +89,10 @@ func doSOCKS5Connect(t *testing.T, request []byte) string {
 }
 
 func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
-	// Domain type: example.com:80
 	domainReq := []byte{0x05, 0x01, 0x00, 0x03, byte(len("example.com"))} //nolint:gosec // domain length is always < 256
 	domainReq = append(domainReq, []byte("example.com")...)
 	domainReq = append(domainReq, 0x00, 0x50)
-	// IPv4 type: 192.168.1.1:8080
 	ipv4Req := []byte{0x05, 0x01, 0x00, 0x01, 192, 168, 1, 1, 0x1F, 0x90}
-	// IPv6 type: [::1]:443
 	ipv6Req := []byte{0x05, 0x01, 0x00, 0x04}
 	ipv6Req = append(ipv6Req, net.ParseIP("::1").To16()...)
 	ipv6Req = append(ipv6Req, 0x01, 0xBB)
@@ -99,8 +108,7 @@ func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := doSOCKS5Connect(t, tt.request)
-			if got != tt.want {
+			if got := doSOCKS5Connect(t, tt.request); got != tt.want {
 				t.Errorf("dialed addr = %q, want %q", got, tt.want)
 			}
 		})
@@ -108,17 +116,12 @@ func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
 }
 
 func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
-
-	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		fm.handleSOCKS5(&activeForward{}, serverConn, &mockSOCKS5Dialer{})
 	}()
-
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x02}) // username/password only
 	resp := make([]byte, 2)
 	if _, err := io.ReadFull(clientConn, resp); err != nil {
@@ -135,19 +138,10 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 }
 
 func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
-
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
 	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
-		dialedAddr <- addr
-		rc, _ := net.Pipe()
-		return rc, nil
-	}}
-	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "test"}}}
-	go fm.handleSOCKS5(af, serverConn, dialer)
+	go fm.handleSOCKS5(af, serverConn, newTestDialer(dialedAddr))
 
 	for _, b := range []byte{0x05, 0x01, 0x00} {
 		_, _ = clientConn.Write([]byte{b})
@@ -180,14 +174,10 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 func TestCopyBidirectional_HalfClose(t *testing.T) {
 	aClient, aServer := net.Pipe()
 	bClient, bServer := net.Pipe()
-	defer func() { _ = aClient.Close() }()
-	defer func() { _ = bClient.Close() }()
+	t.Cleanup(func() { _ = aClient.Close(); _ = bClient.Close() })
 	hcA := &halfCloseConn{Conn: aServer}
 	hcB := &halfCloseConn{Conn: bServer}
-	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
-	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "hc-test"}}}
-	done := make(chan struct{})
-	go func() { defer close(done); fm.copyBidirectional(af, hcA, hcB) }()
+	done := runCopyBidirectional(t, hcA, hcB)
 
 	_, _ = aClient.Write([]byte("hello"))
 	_ = aClient.Close()
@@ -212,14 +202,10 @@ func TestCopyBidirectional_HalfClose(t *testing.T) {
 func TestCopyBidirectional_FallbackClose(t *testing.T) {
 	aClient, aServer := net.Pipe()
 	bClient, bServer := net.Pipe()
-	defer func() { _ = aClient.Close() }()
-	defer func() { _ = bClient.Close() }()
+	t.Cleanup(func() { _ = aClient.Close(); _ = bClient.Close() })
 	pcA := &plainConn{Conn: aServer}
 	pcB := &plainConn{Conn: bServer}
-	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
-	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "fb-test"}}}
-	done := make(chan struct{})
-	go func() { defer close(done); fm.copyBidirectional(af, pcA, pcB) }()
+	done := runCopyBidirectional(t, pcA, pcB)
 
 	_ = aClient.Close()
 	_ = bClient.Close()

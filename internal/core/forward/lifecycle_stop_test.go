@@ -12,8 +12,7 @@ import (
 func TestForwardManager_StopForward_NotActive(t *testing.T) {
 	fm := NewForwardManager(context.Background(), newMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	// アクティブでないルールの停止はエラーにならない
-	if err := fm.StopForward("web"); err != nil {
+	if err := fm.StopForward("web"); err != nil { // アクティブでないルールの停止はエラーにならない
 		t.Fatalf("StopForward() error = %v", err)
 	}
 }
