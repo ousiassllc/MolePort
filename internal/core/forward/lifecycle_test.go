@@ -147,8 +147,10 @@ func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
 				Name: "remote-web", Host: "server1", Type: core.Remote, LocalPort: 3000, RemoteHost: "0.0.0.0", RemotePort: 80,
 			},
 			mockConn: &mockSSHConnection{
-				isAlive:        true,
-				remoteForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) { return newMockListener(), nil },
+				isAlive: true,
+				remoteForwardF: func(_ context.Context, _ int, _ string, _ string) (net.Listener, error) {
+					return newMockListener(), nil
+				},
 			},
 		},
 		{

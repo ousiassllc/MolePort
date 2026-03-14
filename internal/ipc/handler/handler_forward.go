@@ -54,13 +54,14 @@ func (h *Handler) forwardAdd(params json.RawMessage) (any, *protocol.RPCError) {
 	}
 
 	rule := core.ForwardRule{
-		Name:        p.Name,
-		Host:        p.Host,
-		Type:        fwdType,
-		LocalPort:   p.LocalPort,
-		RemoteHost:  p.RemoteHost,
-		RemotePort:  p.RemotePort,
-		AutoConnect: p.AutoConnect,
+		Name:           p.Name,
+		Host:           p.Host,
+		Type:           fwdType,
+		LocalPort:      p.LocalPort,
+		RemoteHost:     p.RemoteHost,
+		RemotePort:     p.RemotePort,
+		RemoteBindAddr: p.RemoteBindAddr,
+		AutoConnect:    p.AutoConnect,
 	}
 
 	name, err := h.fwdMgr.AddRule(rule)

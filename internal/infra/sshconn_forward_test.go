@@ -63,7 +63,7 @@ func TestSSHConnection_RemoteForwardSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ln, err := conn.RemoteForward(ctx, 0, "localhost:80")
+	ln, err := conn.RemoteForward(ctx, 0, "localhost:80", "")
 	if err != nil {
 		t.Fatalf("RemoteForward failed: %v", err)
 	}

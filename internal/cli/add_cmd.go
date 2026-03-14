@@ -19,6 +19,7 @@ func RunAdd(configDir string, args []string) {
 	remoteHost := fs.String("remote-host", "localhost", "リモートホスト")
 	remotePort := fs.Int("remote-port", 0, "リモートポート")
 	name := fs.String("name", "", "ルール名 (省略時は自動生成)")
+	remoteBindAddr := fs.String("remote-bind-addr", "", "リモート側バインドアドレス (デフォルト: 127.0.0.1)")
 	autoConnect := fs.Bool("auto-connect", false, "起動時に自動接続")
 
 	if err := fs.Parse(args); err != nil {
@@ -55,13 +56,14 @@ func RunAdd(configDir string, args []string) {
 	defer cleanup()
 
 	params := protocol.ForwardAddParams{
-		Name:        *name,
-		Host:        *host,
-		Type:        *fwdType,
-		LocalPort:   *localPort,
-		RemoteHost:  *remoteHost,
-		RemotePort:  *remotePort,
-		AutoConnect: *autoConnect,
+		Name:           *name,
+		Host:           *host,
+		Type:           *fwdType,
+		LocalPort:      *localPort,
+		RemoteHost:     *remoteHost,
+		RemotePort:     *remotePort,
+		RemoteBindAddr: *remoteBindAddr,
+		AutoConnect:    *autoConnect,
 	}
 
 	var result protocol.ForwardAddResult

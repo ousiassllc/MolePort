@@ -18,13 +18,14 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := protocol.ForwardAddParams{
-			Name:        msg.Name,
-			Host:        msg.Host,
-			Type:        msg.Type.String(),
-			LocalPort:   msg.LocalPort,
-			RemoteHost:  msg.RemoteHost,
-			RemotePort:  msg.RemotePort,
-			AutoConnect: msg.AutoConnect,
+			Name:           msg.Name,
+			Host:           msg.Host,
+			Type:           msg.Type.String(),
+			LocalPort:      msg.LocalPort,
+			RemoteHost:     msg.RemoteHost,
+			RemotePort:     msg.RemotePort,
+			RemoteBindAddr: msg.RemoteBindAddr,
+			AutoConnect:    msg.AutoConnect,
 		}
 		var result protocol.ForwardAddResult
 		if err := m.client.Call(ctx, "forward.add", params, &result); err != nil {
