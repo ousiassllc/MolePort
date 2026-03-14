@@ -86,6 +86,7 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 | `moleport config [--json]` | Show configuration |
 | `moleport reload` | Reload SSH config |
 | `moleport tui` | Launch the TUI dashboard |
+| `moleport update [--check]` | Auto-update to latest version (`--check`: check only) |
 | `moleport version` | Show version information |
 | `moleport help` | Show help |
 
@@ -98,6 +99,9 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 | `Tab` | Switch pane |
 | `d` | Disconnect selected forwarding |
 | `x` | Delete selected forwarding |
+| `t` | Change theme |
+| `l` | Change language |
+| `v` | Show version info |
 | `/` | Focus command input |
 | `?` | Show help |
 | `Esc` | Cancel |

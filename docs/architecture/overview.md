@@ -491,7 +491,7 @@ moleport/
 │   ├── ipc/                           # IPC 通信層（ベース）
 │   │   ├── server.go                  # IPCServer（JSON-RPC サーバー）
 │   │   ├── broker.go                  # EventBroker（イベント配信）
-│   │   ├── protocol/                  # JSON-RPC メッセージ型定義（10 ファイル）
+│   │   ├── protocol/                  # JSON-RPC メッセージ型定義（11 ファイル）
 │   │   │   ├── protocol.go            # コアプロトコル（Request/Response/Error）
 │   │   │   ├── convert.go             # コアエラー・型の RPC 変換
 │   │   │   ├── protocol_host.go       # ホスト管理メッセージ型
@@ -539,7 +539,9 @@ moleport/
 │   │   ├── reload_cmd.go              # moleport reload
 │   │   ├── help_cmd.go                # moleport help
 │   │   ├── version_cmd.go             # moleport version
-│   │   └── tui_cmd.go                 # moleport tui
+│   │   ├── tui_cmd.go                 # moleport tui
+│   │   └── updatecmd/                 # moleport update（サブパッケージ）
+│   │       └── updatecmd.go
 │   ├── tui/                           # TUI Layer（Atomic Design）
 │   │   ├── app/
 │   │   │   ├── app.go                 # MainModel（Init/Update/View）
@@ -568,7 +570,8 @@ moleport/
 │   │   │   ├── forwardpanel.go
 │   │   │   ├── logpanel.go
 │   │   │   ├── statusbar.go
-│   │   │   └── themegrid.go           # ThemeGrid コンポーネント
+│   │   │   ├── themegrid.go           # ThemeGrid コンポーネント
+│   │   │   └── panel_helper.go        # パネル共通ヘルパー
 │   │   └── pages/
 │   │       ├── dashboard.go           # DashboardPage（Init/Update/View）
 │   │       ├── dashboard_layout.go    # レイアウト計算・フォーカス管理
@@ -582,6 +585,7 @@ moleport/
 │   │   ├── types_events.go            # イベント型（SSHEvent, ForwardEvent）
 │   │   ├── types_credentials.go       # クレデンシャル型
 │   │   ├── config.go                  # ConfigManager
+│   │   ├── errors.go                  # コアエラー型定義
 │   │   ├── socks5.go                  # SOCKS5 プロキシ
 │   │   ├── ssh/                       # SSH 接続管理
 │   │   │   ├── manager.go             # SSHManager インターフェース・初期化
@@ -594,8 +598,9 @@ moleport/
 │   │   │   ├── bridge.go             # 接続ブリッジ（accept/dial/copy）
 │   │   │   ├── reconnect.go          # フォワード復元（MarkReconnecting/RestoreForwards/FailReconnecting）
 │   │   │   └── events.go             # セッション照会・イベント管理
-│   │   └── update/                    # バージョンチェック
-│   │       └── checker.go            # VersionChecker（GitHub API・キャッシュ・比較）
+│   │   └── update/                    # バージョンチェック・セルフアップデート
+│   │       ├── checker.go            # VersionChecker（GitHub API・キャッシュ・比較）
+│   │       └── updater.go            # Updater（ダウンロード・検証・バイナリ置換）
 │   ├── format/                        # フォーマットユーティリティ
 │   │   └── bytes.go                   # バイト数フォーマット関数
 │   └── infra/                         # Infrastructure Layer
@@ -1085,3 +1090,4 @@ flowchart LR
 | 3.1 | 2026-03-01 | ドキュメント乖離修正: ファイル名修正（theme.go/lang.go）、Atomic Design 階層図から ThemeCard/ColorSwatch 削除、並行処理モデル修正（Metrics Collector/Reconnect Monitor 削除、KeepAlive ベース再接続）、forward.stopAll メソッド追加、技術選定に golang.org/x/term 追加、i18n Resolver をパッケージレベル関数に修正、tui/app/ ファイル一覧更新、core/forward/ に reconnect.go 追加、ipc/protocol/ に convert.go 追加、handler/config サブパッケージ反映 | #40 ドキュメント乖離修正 |
 | 4.0 | 2026-03-04 | VersionChecker 追加: 技術選定に golang.org/x/mod/semver 追加、全体構成図に VersionChecker・GitHub API 追加、Core Layer に core/update/ サブパッケージ追加、JSON-RPC メソッドに version.check 追加、TUI 起動時最新バージョンチェックフロー追加、並行処理モデルに VersionChecker goroutine 追加、ディレクトリ構成に core/update/・handler_version.go・protocol_version.go 追加 | #44 最新バージョンチェック機能 |
 | 4.1 | 2026-03-08 | リリース・配布セクション追加: GoReleaser 設定（4プラットフォーム）、GitHub Actions リリースワークフロー、Makefile update ターゲット | #58 セルフアップデート機能 |
+| 4.2 | 2026-03-09 | ドキュメント乖離修正: ディレクトリ構成に updatecmd/ サブパッケージ・updater.go・errors.go・panel_helper.go を追加、ipc/protocol/ ファイル数を 11 に修正 | #62 ドキュメント乖離修正 |
