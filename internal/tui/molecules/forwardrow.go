@@ -33,13 +33,33 @@ func forwardTypeLabel(t core.ForwardType) string {
 }
 
 // View は ForwardRow を描画する。
-// 形式: "● [host] L :8080 ──▸ remote:80     2h15m  ↑1.2MB ↓340KB"
+// 形式: "● [host] name L :8080 ──▸ remote:80     2h15m  ↑1.2MB ↓340KB"
 func (r ForwardRow) View() string {
 	badge := atoms.RenderSessionBadge(r.Session.Status)
 
 	hostLabel := ""
 	if r.HostName != "" {
 		hostLabel = tui.MutedStyle().Render("["+r.HostName+"]") + " "
+	}
+
+	const (
+		maxNameWidth            = 20
+		narrowTerminalThreshold = 80
+		minNameWidth            = 6
+	)
+
+	nameLabel := ""
+	if r.Session.Rule.Name != "" {
+		name := r.Session.Rule.Name
+		limit := maxNameWidth
+		if r.Width > 0 && r.Width < narrowTerminalThreshold {
+			limit = min(limit, max(r.Width/5, minNameWidth))
+		}
+		runes := []rune(name)
+		if len(runes) > limit {
+			name = string(runes[:limit-1]) + "…"
+		}
+		nameLabel = tui.TextStyle().Bold(true).Render(name) + " "
 	}
 
 	typeLabel := tui.ActiveStyle().Render(forwardTypeLabel(r.Session.Rule.Type))
@@ -65,7 +85,7 @@ func (r ForwardRow) View() string {
 	traffic := atoms.RenderTraffic(r.Session.BytesSent, r.Session.BytesReceived)
 
 	row := lipgloss.JoinHorizontal(lipgloss.Top,
-		badge, " ", hostLabel, typeLabel, " ", localPort, " ", arrow, " ", route,
+		badge, " ", hostLabel, nameLabel, typeLabel, " ", localPort, " ", arrow, " ", route,
 	)
 	if uptime != "" {
 		row = lipgloss.JoinHorizontal(lipgloss.Top, row, "  ", uptime)
