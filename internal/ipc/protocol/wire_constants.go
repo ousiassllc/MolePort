@@ -36,3 +36,9 @@ const (
 	MethodCredentialRequest  = "credential.request"  //nolint:gosec // RPC method name, not a credential
 	MethodCredentialResponse = "credential.response" //nolint:gosec // RPC method name, not a credential
 )
+
+// IPC イベント通知メソッド名定数。
+const (
+	EventSSH     = "event.ssh"
+	EventForward = "event.forward"
+)

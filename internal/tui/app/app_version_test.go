@@ -31,8 +31,8 @@ func TestVersionCheckDone(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result, _ := newTestModel("2.0.0").Update(tt.msg)
 			u := result.(MainModel)
-			if u.showVersionConfirm != tt.wantConfirm {
-				t.Errorf("showVersionConfirm = %v, want %v", u.showVersionConfirm, tt.wantConfirm)
+			if u.dialog.showVersionConfirm != tt.wantConfirm {
+				t.Errorf("showVersionConfirm = %v, want %v", u.dialog.showVersionConfirm, tt.wantConfirm)
 			}
 			if got := u.dashboard.LogLineCount(); got != tt.wantLogs {
 				t.Errorf("LogLineCount() = %d, want %d", got, tt.wantLogs)
@@ -43,10 +43,10 @@ func TestVersionCheckDone(t *testing.T) {
 
 func TestVersionConfirmResult_No(t *testing.T) {
 	m := newTestModel("2.0.0")
-	m.showVersionConfirm = true
+	m.dialog.showVersionConfirm = true
 	result, cmd := m.Update(molecules.ConfirmResultMsg{Confirmed: false})
 	u := result.(MainModel)
-	if u.showVersionConfirm || cmd != nil {
+	if u.dialog.showVersionConfirm || cmd != nil {
 		t.Error("showVersionConfirm should be false and cmd should be nil")
 	}
 	if got := u.dashboard.LogLineCount(); got != 1 {
@@ -57,10 +57,10 @@ func TestVersionConfirmResult_No(t *testing.T) {
 func TestVersionConfirmResult_Yes(t *testing.T) {
 	m := NewMainModel(client.NewIPCClient("/tmp/nonexistent.sock"), "2.0.0", "/tmp/test")
 	m.dashboard.SetSize(80, 24)
-	m.showVersionConfirm = true
+	m.dialog.showVersionConfirm = true
 	result, cmd := m.Update(molecules.ConfirmResultMsg{Confirmed: true})
 	u := result.(MainModel)
-	if u.showVersionConfirm || !u.restarting {
+	if u.dialog.showVersionConfirm || !u.dialog.restarting {
 		t.Error("expected showVersionConfirm=false, restarting=true")
 	}
 	if cmd == nil {
@@ -82,11 +82,11 @@ func TestDaemonRestartDone(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMainModel(client.NewIPCClient("/tmp/old.sock"), "2.0.0", "/tmp/test")
 			m.dashboard.SetSize(80, 24)
-			m.restarting = true
+			m.dialog.restarting = true
 			m.subscriptionID = "sub-123"
 			result, cmd := m.Update(tt.msg)
 			u := result.(MainModel)
-			if u.restarting {
+			if u.dialog.restarting {
 				t.Error("restarting should be false")
 			}
 			if (cmd != nil) != tt.wantCmd {
@@ -120,7 +120,7 @@ func TestRestartGuards(t *testing.T) {
 	for _, tt := range msgs {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newTestModel("1.0.0")
-			m.restarting = true
+			m.dialog.restarting = true
 			result, _ := m.Update(tt.msg)
 			if got := result.(MainModel).dashboard.LogLineCount(); got != 0 {
 				t.Errorf("LogLineCount() = %d, want 0", got)
@@ -133,8 +133,8 @@ func TestView_ShowsDialogOverlays(t *testing.T) {
 	t.Run("confirm", func(t *testing.T) {
 		m := newTestModel("2.0.0")
 		m.width, m.height = 80, 24
-		m.showVersionConfirm = true
-		m.versionConfirm = molecules.NewConfirmDialog("バージョン不一致テスト")
+		m.dialog.showVersionConfirm = true
+		m.dialog.versionConfirm = molecules.NewConfirmDialog("バージョン不一致テスト")
 		view := m.View()
 		if !strings.Contains(view, "バージョン不一致テスト") {
 			t.Error("View should contain confirm dialog message")
@@ -143,8 +143,8 @@ func TestView_ShowsDialogOverlays(t *testing.T) {
 	t.Run("update_notify", func(t *testing.T) {
 		m := newTestModel("1.0.0")
 		m.width, m.height = 80, 24
-		m.showUpdateNotify = true
-		m.updateNotifyDialog = molecules.NewInfoDialog("MolePort 1.1.0 is available")
+		m.dialog.showUpdateNotify = true
+		m.dialog.updateNotifyDialog = molecules.NewInfoDialog("MolePort 1.1.0 is available")
 		if !strings.Contains(m.View(), "MolePort 1.1.0 is available") {
 			t.Error("View should contain update notify dialog message")
 		}
@@ -167,14 +167,14 @@ func TestUpdateCheckDone(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newTestModel("1.0.0")
-			m.showVersionConfirm = tt.versionConfirm
+			m.dialog.showVersionConfirm = tt.versionConfirm
 			result, _ := m.Update(tt.msg)
 			u := result.(MainModel)
-			if u.showUpdateNotify != tt.wantDialog {
-				t.Errorf("showUpdateNotify = %v, want %v", u.showUpdateNotify, tt.wantDialog)
+			if u.dialog.showUpdateNotify != tt.wantDialog {
+				t.Errorf("showUpdateNotify = %v, want %v", u.dialog.showUpdateNotify, tt.wantDialog)
 			}
-			if (u.pendingUpdateCheck != nil) != tt.wantPending {
-				t.Errorf("pendingUpdateCheck nil=%v, wantPending=%v", u.pendingUpdateCheck == nil, tt.wantPending)
+			if (u.dialog.pendingUpdateCheck != nil) != tt.wantPending {
+				t.Errorf("pendingUpdateCheck nil=%v, wantPending=%v", u.dialog.pendingUpdateCheck == nil, tt.wantPending)
 			}
 		})
 	}
@@ -182,23 +182,23 @@ func TestUpdateCheckDone(t *testing.T) {
 
 func TestInfoDismissedMsg_ClosesDialog(t *testing.T) {
 	m := newTestModel("1.0.0")
-	m.showUpdateNotify = true
-	m.updateNotifyDialog = molecules.NewInfoDialog("update available")
+	m.dialog.showUpdateNotify = true
+	m.dialog.updateNotifyDialog = molecules.NewInfoDialog("update available")
 	result, _ := m.Update(molecules.InfoDismissedMsg{})
-	if result.(MainModel).showUpdateNotify {
+	if result.(MainModel).dialog.showUpdateNotify {
 		t.Error("showUpdateNotify should be false")
 	}
 }
 
 func TestVersionConfirmNo_ShowsPendingUpdate(t *testing.T) {
 	m := newTestModel("1.0.0")
-	m.showVersionConfirm = true
-	m.pendingUpdateCheck = &tui.UpdateCheckDoneMsg{
+	m.dialog.showVersionConfirm = true
+	m.dialog.pendingUpdateCheck = &tui.UpdateCheckDoneMsg{
 		UpdateAvailable: true, CurrentVersion: "1.0.0", LatestVersion: "1.1.0",
 	}
 	result, _ := m.Update(molecules.ConfirmResultMsg{Confirmed: false})
 	u := result.(MainModel)
-	if u.showVersionConfirm || !u.showUpdateNotify || u.pendingUpdateCheck != nil {
+	if u.dialog.showVersionConfirm || !u.dialog.showUpdateNotify || u.dialog.pendingUpdateCheck != nil {
 		t.Error("expected showVersionConfirm=false, showUpdateNotify=true, pendingUpdateCheck=nil")
 	}
 }

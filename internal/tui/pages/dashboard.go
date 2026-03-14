@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
@@ -21,6 +22,7 @@ type DashboardPage struct {
 	log           organisms.LogPanel
 	statusBar     organisms.StatusBar
 	passwordInput molecules.PasswordInput
+	keys          tui.KeyMap
 
 	focusedPane tui.FocusPane
 	width       int
@@ -36,6 +38,7 @@ func NewDashboardPage(version string) DashboardPage {
 		log:           organisms.NewLogPanel(),
 		statusBar:     organisms.NewStatusBar(),
 		passwordInput: molecules.NewPasswordInput(),
+		keys:          tui.DefaultKeyMap(),
 		focusedPane:   tui.PaneSetup,
 		version:       version,
 	}
@@ -83,13 +86,13 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Tab でフォーカス切替
-		if msg.String() == "tab" {
+		if key.Matches(msg, d.keys.Tab) {
 			d.cycleFocus()
 			return d, nil
 		}
 
 		// / でセットアップパネルにフォーカス（テキスト入力中でない場合）
-		if msg.String() == "/" && !d.IsInputActive() {
+		if key.Matches(msg, d.keys.Search) && !d.IsInputActive() {
 			d.setFocus(tui.PaneSetup)
 			return d, nil
 		}

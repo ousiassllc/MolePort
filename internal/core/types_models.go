@@ -1,6 +1,9 @@
 package core
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // SSHHost は SSH config から読み込んだホスト情報と実行時の接続状態を保持する。
 type SSHHost struct {
@@ -123,6 +126,20 @@ type State struct {
 	LastUpdated    time.Time     `yaml:"last_updated"`
 	ActiveForwards []ForwardRule `yaml:"active_forwards"`
 	SelectedHost   string        `yaml:"selected_host"`
+}
+
+// MinPort はポート番号の最小値。
+const MinPort = 1
+
+// MaxPort はポート番号の最大値。
+const MaxPort = 65535
+
+// ValidatePort はポート番号が有効範囲内かを検証する。
+func ValidatePort(port int) error {
+	if port < MinPort || port > MaxPort {
+		return fmt.Errorf("port must be between %d and %d, got %d", MinPort, MaxPort, port)
+	}
+	return nil
 }
 
 // DefaultConfig はデフォルト設定を返す。

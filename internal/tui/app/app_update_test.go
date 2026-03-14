@@ -13,18 +13,18 @@ func TestUncoveredBranches(t *testing.T) {
 		t.Error("ctrl+c")
 	}
 	m := newTestModel("1")
-	m.showUpdateNotify, m.updateNotifyDialog = true, molecules.NewInfoDialog("t")
+	m.dialog.showUpdateNotify, m.dialog.updateNotifyDialog = true, molecules.NewInfoDialog("t")
 	if _, _, ok := m.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}); !ok {
 		t.Error("updateNotify")
 	}
 	m2 := newTestModel("1")
-	m2.showVersionConfirm, m2.versionConfirm = true, molecules.NewConfirmDialog("t")
+	m2.dialog.showVersionConfirm, m2.dialog.versionConfirm = true, molecules.NewConfirmDialog("t")
 	if _, _, ok := m2.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}); !ok {
 		t.Error("versionConfirm")
 	}
 	for _, p := range []string{pageTheme, pageLang} {
 		m3 := newTestModel("1")
-		m3.currentPage = p
+		m3.page.currentPage = p
 		if _, _, ok := m3.handleKeyMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}); !ok {
 			t.Errorf("page %s", p)
 		}

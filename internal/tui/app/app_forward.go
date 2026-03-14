@@ -33,26 +33,34 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 
 		// AutoConnect が設定されている場合はフォワードも開始
 		if msg.AutoConnect {
-			startCtx, startCancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
-			defer startCancel()
-			startParams := protocol.ForwardStartParams(result)
-			var startResult protocol.ForwardStartResult
-			if err := m.client.Call(startCtx, "forward.start", startParams, &startResult); err != nil {
-				// 開始に失敗したルールを削除（ロールバック）
-				delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
-				defer delCancel()
-				delParams := protocol.ForwardDeleteParams(result)
-				var delResult protocol.ForwardDeleteResult
-				if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
-					return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_rollback_error", map[string]any{"Name": result.Name, "Error": err, "DeleteError": delErr}), Level: tui.LogError}
-				}
-				return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": result.Name, "Error": err}), Level: tui.LogError}
+			if errMsg := m.startAndRollback(result); errMsg != nil {
+				return *errMsg
 			}
 			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added_started", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 		}
 
 		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 	}
+}
+
+// startAndRollback はフォワードの開始を試み、失敗時にルールを削除してロールバックする。
+// 成功時は nil を返す。
+func (m *MainModel) startAndRollback(result protocol.ForwardAddResult) *tui.LogOutputMsg {
+	startCtx, startCancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
+	defer startCancel()
+	startParams := protocol.ForwardStartParams(result)
+	var startResult protocol.ForwardStartResult
+	if err := m.client.Call(startCtx, "forward.start", startParams, &startResult); err != nil {
+		delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		defer delCancel()
+		delParams := protocol.ForwardDeleteParams(result)
+		var delResult protocol.ForwardDeleteResult
+		if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
+			return &tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_rollback_error", map[string]any{"Name": result.Name, "Error": err, "DeleteError": delErr}), Level: tui.LogError}
+		}
+		return &tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": result.Name, "Error": err}), Level: tui.LogError}
+	}
+	return nil
 }
 
 func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {

@@ -57,26 +57,26 @@ func (m MainModel) handleVersionCheckDone(msg tui.VersionCheckDoneMsg) (MainMode
 		return m, nil
 	}
 	message := i18n.T("tui.version.mismatch", map[string]any{"DaemonVersion": msg.DaemonVersion, "TUIVersion": msg.TUIVersion})
-	m.versionConfirm = molecules.NewConfirmDialog(message)
-	m.showVersionConfirm = true
+	m.dialog.versionConfirm = molecules.NewConfirmDialog(message)
+	m.dialog.showVersionConfirm = true
 	return m, nil
 }
 
 // handleVersionConfirmResult はバージョン確認ダイアログの結果を処理する。
 func (m MainModel) handleVersionConfirmResult(confirmed bool) (MainModel, tea.Cmd) {
-	m.showVersionConfirm = false
+	m.dialog.showVersionConfirm = false
 	if confirmed {
-		m.restarting = true
-		m.pendingUpdateCheck = nil // 再起動するのでアップデート通知は不要
+		m.dialog.restarting = true
+		m.dialog.pendingUpdateCheck = nil // 再起動するのでアップデート通知は不要
 		m.dashboard.AppendLog(i18n.T("tui.version.restarting"), tui.LogInfo)
 		return m, m.restartDaemon()
 	}
 	m.dashboard.SetVersionWarning(true)
 	m.dashboard.AppendLog(i18n.T("tui.version.mismatch_continue"), tui.LogInfo)
 	// バッファリングされたアップデート通知があれば表示する
-	if m.pendingUpdateCheck != nil {
-		pending := *m.pendingUpdateCheck
-		m.pendingUpdateCheck = nil
+	if m.dialog.pendingUpdateCheck != nil {
+		pending := *m.dialog.pendingUpdateCheck
+		m.dialog.pendingUpdateCheck = nil
 		m = m.showUpdateNotifyDialog(pending)
 	}
 	return m, nil
@@ -124,7 +124,7 @@ func (m *MainModel) restartDaemon() tea.Cmd {
 // handleDaemonRestartDone はデーモン再起動完了を処理する。
 // メインの Update ループで実行されるため、m.client の入れ替えはスレッドセーフ。
 func (m MainModel) handleDaemonRestartDone(msg daemonRestartDoneMsg) (MainModel, tea.Cmd) {
-	m.restarting = false
+	m.dialog.restarting = false
 	if msg.err != nil {
 		m.dashboard.AppendLog(i18n.T("tui.version.restart_error", map[string]any{"Error": msg.err}), tui.LogError)
 		return m, nil
@@ -142,7 +142,7 @@ func (m MainModel) handleDaemonRestartDone(msg daemonRestartDoneMsg) (MainModel,
 
 // renderVersionConfirmOverlay はバージョン確認ダイアログのオーバーレイを描画する。
 func (m MainModel) renderVersionConfirmOverlay() string {
-	dialog := m.versionConfirm.View()
+	dialog := m.dialog.versionConfirm.View()
 	return lipgloss.Place(m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
 		dialog,

@@ -193,7 +193,7 @@ func validatePortStr(s string) error {
 	if err != nil {
 		return errors.New(i18n.T("tui.setup_panel.port_not_number"))
 	}
-	if port < 1 || port > 65535 {
+	if port < core.MinPort || port > core.MaxPort {
 		return errors.New(i18n.T("tui.setup_panel.port_out_of_range"))
 	}
 	return nil

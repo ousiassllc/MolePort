@@ -17,8 +17,8 @@ func TestMainModel_ConfigLoaded_LangUnset(t *testing.T) {
 	cleanupTheme(t)
 	cleanupLang(t)
 	u := updModel(newTestModel("test"), tui.ConfigLoadedMsg{})
-	if u.currentPage != pageLang || !u.isFirstLaunch {
-		t.Errorf("page=%q first=%v", u.currentPage, u.isFirstLaunch)
+	if u.page.currentPage != pageLang || !u.page.isFirstLaunch {
+		t.Errorf("page=%q first=%v", u.page.currentPage, u.page.isFirstLaunch)
 	}
 }
 
@@ -27,22 +27,22 @@ func TestMainModel_LangSelected(t *testing.T) {
 		cleanupTheme(t)
 		cleanupLang(t)
 		m := newTestModel("test")
-		m.currentPage = pageLang
-		m.isFirstLaunch = true
+		m.page.currentPage = pageLang
+		m.page.isFirstLaunch = true
 		result, cmd := m.Update(tui.LangSelectedMsg{Lang: "ja"})
 		u := result.(MainModel)
-		if u.currentPage != pageTheme || u.currentLang != "ja" || cmd == nil {
-			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		if u.page.currentPage != pageTheme || u.page.currentLang != "ja" || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.page.currentPage, u.page.currentLang, cmd)
 		}
 	})
 	t.Run("normal", func(t *testing.T) {
 		cleanupLang(t)
 		m := newTestModel("test")
-		m.currentPage = pageLang
+		m.page.currentPage = pageLang
 		result, cmd := m.Update(tui.LangSelectedMsg{Lang: "en"})
 		u := result.(MainModel)
-		if u.currentPage != pageDashboard || u.currentLang != "en" || cmd == nil {
-			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		if u.page.currentPage != pageDashboard || u.page.currentLang != "en" || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.page.currentPage, u.page.currentLang, cmd)
 		}
 	})
 }
@@ -52,22 +52,22 @@ func TestMainModel_LangCancelled(t *testing.T) {
 		cleanupTheme(t)
 		cleanupLang(t)
 		m := newTestModel("test")
-		m.currentPage = pageLang
-		m.isFirstLaunch = true
+		m.page.currentPage = pageLang
+		m.page.isFirstLaunch = true
 		result, cmd := m.Update(tui.LangCancelledMsg{})
 		u := result.(MainModel)
-		if u.currentPage != pageTheme || u.currentLang != string(i18n.DefaultLang()) || cmd == nil {
-			t.Errorf("page=%q lang=%q cmd=%v", u.currentPage, u.currentLang, cmd)
+		if u.page.currentPage != pageTheme || u.page.currentLang != string(i18n.DefaultLang()) || cmd == nil {
+			t.Errorf("page=%q lang=%q cmd=%v", u.page.currentPage, u.page.currentLang, cmd)
 		}
 	})
 	t.Run("normal", func(t *testing.T) {
 		cleanupLang(t)
 		m := newTestModel("test")
-		m.currentPage = pageLang
+		m.page.currentPage = pageLang
 		result, cmd := m.Update(tui.LangCancelledMsg{})
 		u := result.(MainModel)
-		if u.currentPage != pageDashboard || cmd != nil {
-			t.Errorf("page=%q cmd=%v", u.currentPage, cmd)
+		if u.page.currentPage != pageDashboard || cmd != nil {
+			t.Errorf("page=%q cmd=%v", u.page.currentPage, cmd)
 		}
 	})
 }

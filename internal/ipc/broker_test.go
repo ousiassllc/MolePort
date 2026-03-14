@@ -156,8 +156,8 @@ func TestEventBroker_HandleSSHEvent(t *testing.T) {
 		t.Errorf("notification should go to client-ssh, got %q", entries[0].ClientID)
 	}
 
-	if entries[0].Notification.Method != "event.ssh" {
-		t.Errorf("method = %q, want %q", entries[0].Notification.Method, "event.ssh")
+	if entries[0].Notification.Method != protocol.EventSSH {
+		t.Errorf("method = %q, want %q", entries[0].Notification.Method, protocol.EventSSH)
 	}
 
 	var notif protocol.SSHEventNotification

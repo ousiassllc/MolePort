@@ -18,7 +18,7 @@ func (m *MainModel) shutdown() tea.Cmd {
 	if m.subscriptionID != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcShutdownTimeout)
 		defer cancel()
-		_ = m.client.Unsubscribe(ctx, m.subscriptionID)
+		_ = m.client.Unsubscribe(ctx, m.subscriptionID) // ベストエフォート: シャットダウン中のため失敗しても無視
 	}
 	return tea.Quit
 }
