@@ -425,11 +425,19 @@ type ForwardSession struct {
     LastError      string        // 最後のエラーメッセージ
 }
 
+// フォワード復元結果
+type ForwardRestoreResult struct {
+    RuleName string // ルール名
+    OK       bool   // 復元成功フラグ
+    Error    string // エラーメッセージ（失敗時）
+}
+
 // バージョンチェック結果（デーモンがメモリにキャッシュ）
 type VersionCheckResult struct {
-    LatestVersion string    // 最新リリースのバージョン（例: "v0.2.0"）
-    ReleaseURL    string    // GitHub リリースページの URL
-    CheckedAt     time.Time // チェック実行日時
+    LatestVersion   string    // 最新リリースのバージョン（例: "v0.2.0"）
+    ReleaseURL      string    // GitHub リリースページの URL
+    CheckedAt       time.Time // チェック実行日時
+    UpdateAvailable bool      // アップデートが利用可能か
 }
 
 ```

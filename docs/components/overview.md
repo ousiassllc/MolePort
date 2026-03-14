@@ -56,7 +56,7 @@ graph TD
         Dashboard["pages/dashboard.go"]
         ThemePg["pages/theme.go"]
         LangPg["pages/lang.go"]
-        SP["organisms/setuppanel.go"]
+        SP["organisms/setuppanel/<br/>setuppanel.go"]
         FP["organisms/forwardpanel.go"]
         LP["organisms/logpanel.go"]
         SB["organisms/statusbar.go"]
