@@ -117,18 +117,22 @@ func buildAuthMethods(host core.SSHHost, cb core.CredentialCallback) ([]ssh.Auth
 		agentCloser = conn
 	}
 
-	// ホスト固有の IdentityFile
-	if host.IdentityFile != "" {
-		if keyAuth, err := tryKeyFileWithPassphrase(host.IdentityFile, cb, host); err == nil {
+	// ホスト固有の IdentityFiles
+	for _, idFile := range host.IdentityFiles {
+		if keyAuth, err := tryKeyFileWithPassphrase(idFile, cb, host); err == nil {
 			methods = append(methods, keyAuth)
 		} else {
-			slog.Debug("failed to load identity file", "path", host.IdentityFile, "error", err)
+			slog.Debug("failed to load identity file", "path", idFile, "error", err)
 		}
 	}
 
 	// デフォルト鍵パス
+	hostKeySet := make(map[string]bool, len(host.IdentityFiles))
+	for _, f := range host.IdentityFiles {
+		hostKeySet[f] = true
+	}
 	for _, keyPath := range defaultKeyPaths() {
-		if host.IdentityFile == keyPath {
+		if hostKeySet[keyPath] {
 			continue // 重複を避ける
 		}
 		if keyAuth, err := tryKeyFileWithPassphrase(keyPath, cb, host); err == nil {

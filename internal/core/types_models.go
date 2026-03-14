@@ -11,7 +11,7 @@ type SSHHost struct {
 	HostName              string
 	Port                  int
 	User                  string
-	IdentityFile          string
+	IdentityFiles         []string
 	ProxyJump             []string
 	ProxyCommand          string
 	StrictHostKeyChecking string

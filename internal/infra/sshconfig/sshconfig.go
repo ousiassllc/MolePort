@@ -55,7 +55,7 @@ func (p *sshConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
 				HostName:              getConfigValue(cfg, alias, "HostName", alias),
 				Port:                  getConfigPort(cfg, alias),
 				User:                  getConfigValue(cfg, alias, "User", currentUser),
-				IdentityFile:          expandIdentityFile(getConfigValue(cfg, alias, "IdentityFile", "")),
+				IdentityFiles:         expandIdentityFiles(cfg, alias),
 				ProxyJump:             parseProxyJump(getConfigValue(cfg, alias, "ProxyJump", "")),
 				ProxyCommand:          getConfigValue(cfg, alias, "ProxyCommand", ""),
 				StrictHostKeyChecking: getConfigValue(cfg, alias, "StrictHostKeyChecking", ""),
@@ -107,6 +107,20 @@ func expandIdentityFile(path string) string {
 		return path
 	}
 	return expanded
+}
+
+func expandIdentityFiles(cfg *ssh_config.Config, alias string) []string {
+	vals, err := cfg.GetAll(alias, "IdentityFile")
+	if err != nil || len(vals) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(vals))
+	for _, v := range vals {
+		if expanded := expandIdentityFile(v); expanded != "" {
+			result = append(result, expanded)
+		}
+	}
+	return result
 }
 
 func parseProxyJump(val string) []string {
