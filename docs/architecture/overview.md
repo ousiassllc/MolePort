@@ -514,7 +514,8 @@ moleport/
 │   │   │   ├── handler_version.go    # version.check
 │   │   │   └── handler_events.go      # events.subscribe/unsubscribe
 │   │   └── client/                    # JSON-RPC クライアント
-│   │       └── client.go              # IPCClient（メソッド呼び出し・イベント受信）
+│   │       ├── client.go              # IPCClient（メソッド呼び出し・イベント受信）
+│   │       └── client_credential.go   # クレデンシャルハンドラ（設定・応答処理）
 │   ├── i18n/                           # 多言語対応（i18n）
 │   │   ├── i18n.go                    # Localizer（翻訳テキスト取得・SetLang）
 │   │   ├── resolver.go                # Resolver（言語解決: config → 環境変数 → デフォルト）
@@ -564,9 +565,10 @@ moleport/
 │   │   ├── atoms/
 │   │   ├── molecules/
 │   │   ├── organisms/
-│   │   │   ├── setuppanel.go          # SetupPanel コア
-│   │   │   ├── setuppanel_update.go   # SetupPanel Update ハンドラ
-│   │   │   ├── setuppanel_view.go     # SetupPanel View レンダリング
+│   │   │   ├── setuppanel/            # SetupPanel コンポーネント（サブディレクトリ）
+│   │   │   │   ├── setuppanel.go      # SetupPanel コア
+│   │   │   │   ├── setuppanel_update.go # SetupPanel Update ハンドラ
+│   │   │   │   └── setuppanel_view.go # SetupPanel View レンダリング
 │   │   │   ├── forwardpanel.go
 │   │   │   ├── logpanel.go
 │   │   │   ├── statusbar.go
@@ -597,7 +599,8 @@ moleport/
 │   │   │   ├── lifecycle.go           # Start/Stop ライフサイクル
 │   │   │   ├── bridge.go             # 接続ブリッジ（accept/dial/copy）
 │   │   │   ├── reconnect.go          # フォワード復元（MarkReconnecting/RestoreForwards/FailReconnecting）
-│   │   │   └── events.go             # セッション照会・イベント管理
+│   │   │   ├── events.go             # セッション照会・イベント管理
+│   │   │   └── forward_helper.go     # ヘルパー関数（openListener 等）
 │   │   └── update/                    # バージョンチェック・セルフアップデート
 │   │       ├── checker.go            # VersionChecker（GitHub API・キャッシュ・比較）
 │   │       └── updater.go            # Updater（ダウンロード・検証・バイナリ置換）
