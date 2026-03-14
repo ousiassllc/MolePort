@@ -92,6 +92,15 @@ forwards:
     remote_port: 5432
     auto_connect: true
 
+  - name: "prod-remote"
+    host: "prod-server"
+    type: "remote"
+    local_port: 3000
+    remote_host: "localhost"
+    remote_port: 3000
+    remote_bind_addr: "0.0.0.0"  # 省略時は 127.0.0.1（ループバック）
+    auto_connect: false
+
   - name: "proxy"
     host: "staging"
     type: "dynamic"
@@ -143,13 +152,14 @@ type LogConfig struct {
 }
 
 type ForwardRule struct {
-    Name        string      `yaml:"name"`
-    Host        string      `yaml:"host"`
-    Type        ForwardType `yaml:"type"`                // ForwardType は YAML 上は文字列としてシリアライズされる
-    LocalPort   int         `yaml:"local_port"`
-    RemoteHost  string      `yaml:"remote_host,omitempty"` // dynamic の場合は不要
-    RemotePort  int         `yaml:"remote_port,omitempty"` // dynamic の場合は不要
-    AutoConnect bool        `yaml:"auto_connect"`
+    Name           string      `yaml:"name"`
+    Host           string      `yaml:"host"`
+    Type           ForwardType `yaml:"type"`                     // ForwardType は YAML 上は文字列としてシリアライズされる
+    LocalPort      int         `yaml:"local_port"`
+    RemoteHost     string      `yaml:"remote_host,omitempty"`    // dynamic の場合は不要
+    RemotePort     int         `yaml:"remote_port,omitempty"`    // dynamic の場合は不要
+    RemoteBindAddr string      `yaml:"remote_bind_addr,omitempty"` // remote 転送のバインドアドレス（デフォルト: "127.0.0.1"）
+    AutoConnect    bool        `yaml:"auto_connect"`
 }
 ```
 
@@ -216,7 +226,7 @@ classDiagram
         +string HostName
         +int Port
         +string User
-        +string IdentityFile
+        +[]string IdentityFiles
         +[]string ProxyJump
         +string ProxyCommand
         +string StrictHostKeyChecking
@@ -231,6 +241,7 @@ classDiagram
         +int LocalPort
         +string RemoteHost
         +int RemotePort
+        +string RemoteBindAddr
         +bool AutoConnect
     }
 
@@ -299,7 +310,7 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | HostName | string | 実際のホストアドレス |
 | Port | int | SSH ポート番号（デフォルト: 22） |
 | User | string | 接続ユーザー名 |
-| IdentityFile | string | 秘密鍵のパス |
+| IdentityFiles | []string | 秘密鍵のパス一覧（SSH config の IdentityFile 指定順。未指定時はデフォルト鍵をフォールバック） |
 | ProxyJump | []string | 踏み台サーバー |
 | ProxyCommand | string | プロキシコマンド |
 | StrictHostKeyChecking | string | ホスト鍵検証の設定（`"no"` の場合は検証をスキップ） |
@@ -364,7 +375,7 @@ type SSHHost struct {
     HostName              string          // 実際のホストアドレス
     Port                  int             // SSH ポート（デフォルト: 22）
     User                  string          // 接続ユーザー名
-    IdentityFile          string          // 秘密鍵のパス
+    IdentityFiles         []string        // 秘密鍵のパス一覧（SSH config の指定順）
     ProxyJump             []string        // 踏み台サーバー
     ProxyCommand          string          // プロキシコマンド
     StrictHostKeyChecking string          // ホスト鍵検証（"no" で検証スキップ）
@@ -525,24 +536,26 @@ type ForwardListResult struct {
     Forwards []ForwardInfo `json:"forwards"`
 }
 type ForwardInfo struct {
-    Name       string `json:"name"`
-    Host       string `json:"host"`
-    Type       string `json:"type"`        // "local" | "remote" | "dynamic"
-    LocalPort  int    `json:"local_port"`
-    RemoteHost string `json:"remote_host,omitempty"`
-    RemotePort int    `json:"remote_port,omitempty"`
-    AutoConnect bool  `json:"auto_connect"`
+    Name           string `json:"name"`
+    Host           string `json:"host"`
+    Type           string `json:"type"`                       // "local" | "remote" | "dynamic"
+    LocalPort      int    `json:"local_port"`
+    RemoteHost     string `json:"remote_host,omitempty"`
+    RemotePort     int    `json:"remote_port,omitempty"`
+    RemoteBindAddr string `json:"remote_bind_addr,omitempty"` // remote 転送時のバインドアドレス
+    AutoConnect    bool   `json:"auto_connect"`
 }
 
 // forward.add
 type ForwardAddParams struct {
-    Name        string `json:"name,omitempty"`  // 省略時は自動生成
-    Host        string `json:"host"`
-    Type        string `json:"type"`
-    LocalPort   int    `json:"local_port"`
-    RemoteHost  string `json:"remote_host,omitempty"`
-    RemotePort  int    `json:"remote_port,omitempty"`
-    AutoConnect bool   `json:"auto_connect"`
+    Name           string `json:"name,omitempty"`            // 省略時は自動生成
+    Host           string `json:"host"`
+    Type           string `json:"type"`
+    LocalPort      int    `json:"local_port"`
+    RemoteHost     string `json:"remote_host,omitempty"`
+    RemotePort     int    `json:"remote_port,omitempty"`
+    RemoteBindAddr string `json:"remote_bind_addr,omitempty"` // remote 転送のバインドアドレス（省略時: "127.0.0.1"）
+    AutoConnect    bool   `json:"auto_connect"`
 }
 type ForwardAddResult struct {
     Name string `json:"name"`
@@ -819,3 +832,4 @@ type CredentialResponseResult struct {
 | 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
 | 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
 | 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
+| 3.0 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
