@@ -17,8 +17,6 @@ import (
 
 const (
 	// metricsInterval はメトリクス更新の間隔。
-	// TODO(#68): セッション数が多い場合にボトルネックになる可能性があるため、
-	// イベント購読と組み合わせたプッシュ型への移行を検討する。
 	metricsInterval = 2 * time.Second
 	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
 	ipcReadTimeout = 5 * time.Second
