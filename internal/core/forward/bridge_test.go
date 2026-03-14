@@ -2,6 +2,7 @@ package forward
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"sync"
@@ -47,7 +48,7 @@ func doSOCKS5Connect(t *testing.T, request []byte) string {
 		rc, _ := net.Pipe()
 		return rc, nil
 	}}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	go fm.handleSOCKS5(&activeForward{}, serverConn, dialer)
 
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
@@ -111,7 +112,7 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	defer func() { _ = clientConn.Close() }()
 	defer func() { _ = serverConn.Close() }()
 
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -144,7 +145,7 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 		rc, _ := net.Pipe()
 		return rc, nil
 	}}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "test"}}}
 	go fm.handleSOCKS5(af, serverConn, dialer)
 
@@ -183,7 +184,7 @@ func TestCopyBidirectional_HalfClose(t *testing.T) {
 	defer func() { _ = bClient.Close() }()
 	hcA := &halfCloseConn{Conn: aServer}
 	hcB := &halfCloseConn{Conn: bServer}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "hc-test"}}}
 	done := make(chan struct{})
 	go func() { defer close(done); fm.copyBidirectional(af, hcA, hcB) }()
@@ -215,7 +216,7 @@ func TestCopyBidirectional_FallbackClose(t *testing.T) {
 	defer func() { _ = bClient.Close() }()
 	pcA := &plainConn{Conn: aServer}
 	pcB := &plainConn{Conn: bServer}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "fb-test"}}}
 	done := make(chan struct{})
 	go func() { defer close(done); fm.copyBidirectional(af, pcA, pcB) }()

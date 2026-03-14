@@ -103,14 +103,17 @@ func New(configDir string, version string) (*Daemon, error) {
 	}
 
 	parser := sshconfig.NewSSHConfigParser()
+
+	ctx, cancel := context.WithCancel(context.Background())
 	sshMgr := ssh.NewSSHManager(
+		ctx,
 		parser,
 		func() core.SSHConnection { return infra.NewSSHConnection() },
 		sshConfigPath,
 		cfg.Reconnect,
 		cfg.Hosts,
 	)
-	fwdMgr := forward.NewForwardManager(sshMgr)
+	fwdMgr := forward.NewForwardManager(ctx, sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
 	var warnings []string
@@ -133,6 +136,8 @@ func New(configDir string, version string) (*Daemon, error) {
 		fwdMgr:         fwdMgr,
 		versionChecker: versionChecker,
 		pidFile:        pidFile,
+		ctx:            ctx,
+		cancel:         cancel,
 		warnings:       warnings,
 	}
 
@@ -169,7 +174,14 @@ func (d *Daemon) Start(ctx context.Context) error {
 		return fmt.Errorf("acquire pid file: %w", err)
 	}
 
-	d.ctx, d.cancel = context.WithCancel(ctx)
+	// 呼び出し元のコンテキストがキャンセルされたら、デーモンのコンテキストもキャンセルする
+	go func() {
+		select {
+		case <-ctx.Done():
+			d.cancel()
+		case <-d.ctx.Done():
+		}
+	}()
 	d.startedAt = time.Now()
 	d.stopped = false
 

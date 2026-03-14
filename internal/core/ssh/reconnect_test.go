@@ -61,6 +61,7 @@ func TestSSHManager_HandleDisconnect_WithReconnect(t *testing.T) {
 
 	parser := &mockSSHConfigParser{hosts: hosts}
 	sm := NewSSHManager(
+		context.Background(),
 		parser,
 		func() core.SSHConnection {
 			mu.Lock()
@@ -127,6 +128,7 @@ func TestSSHManager_Disconnect_StopsReconnect(t *testing.T) {
 
 	parser := &mockSSHConfigParser{hosts: hosts}
 	sm := NewSSHManager(
+		context.Background(),
 		parser,
 		func() core.SSHConnection {
 			mu.Lock()

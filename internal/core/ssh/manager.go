@@ -34,6 +34,7 @@ type hostConnection struct {
 
 type sshManager struct {
 	mu           sync.RWMutex
+	ctx          context.Context
 	parser       core.SSHConfigParser
 	connFactory  func() core.SSHConnection
 	configPath   string
@@ -51,6 +52,7 @@ type sshManager struct {
 
 // NewSSHManager は SSHManager の実装を返す。
 func NewSSHManager(
+	ctx context.Context,
 	parser core.SSHConfigParser,
 	connFactory func() core.SSHConnection,
 	configPath string,
@@ -61,6 +63,7 @@ func NewSSHManager(
 		hostConfigs = make(map[string]core.HostConfig)
 	}
 	return &sshManager{
+		ctx:              ctx,
 		parser:           parser,
 		connFactory:      connFactory,
 		configPath:       configPath,

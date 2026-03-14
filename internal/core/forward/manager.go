@@ -25,6 +25,7 @@ type activeForward struct {
 
 type forwardManager struct {
 	mu          sync.RWMutex
+	ctx         context.Context
 	sshManager  core.SSHManager
 	rules       map[string]core.ForwardRule
 	ruleOrder   []string // 追加順序を保持
@@ -35,8 +36,9 @@ type forwardManager struct {
 }
 
 // NewForwardManager は ForwardManager の実装を返す。
-func NewForwardManager(sshManager core.SSHManager) core.ForwardManager {
+func NewForwardManager(ctx context.Context, sshManager core.SSHManager) core.ForwardManager {
 	return &forwardManager{
+		ctx:        ctx,
 		sshManager: sshManager,
 		rules:      make(map[string]core.ForwardRule),
 		active:     make(map[string]*activeForward),

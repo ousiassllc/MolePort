@@ -14,7 +14,7 @@ func TestForwardManager_MarkReconnecting(t *testing.T) {
 	mockConn := newMockConn(true, true)
 	sm.setConnected("server1", mockConn)
 	sm.setConnected("server2", mockConn)
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -55,7 +55,7 @@ func TestForwardManager_RestoreForwards(t *testing.T) {
 		},
 	}
 	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -109,7 +109,7 @@ func TestForwardManager_RestoreForwards_Error(t *testing.T) {
 		},
 	}
 	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -139,7 +139,7 @@ func TestForwardManager_RestoreForwards_Error(t *testing.T) {
 func TestForwardManager_FailReconnecting(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(true, false))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})

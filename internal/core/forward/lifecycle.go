@@ -54,7 +54,7 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		return fmt.Errorf("failed to get SSH client: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx)
 
 	listener, err := openListener(ctx, sshConn, rule)
 

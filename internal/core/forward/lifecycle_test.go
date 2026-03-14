@@ -11,7 +11,7 @@ import (
 )
 
 func TestForwardManager_StartForward_RuleNotFound(t *testing.T) {
-	if err := NewForwardManager(newMockSSHManager()).StartForward("nonexistent", nil); err == nil {
+	if err := NewForwardManager(context.Background(), newMockSSHManager()).StartForward("nonexistent", nil); err == nil {
 		t.Fatal("StartForward() should return error for nonexistent rule")
 	}
 }
@@ -19,7 +19,7 @@ func TestForwardManager_StartForward_RuleNotFound(t *testing.T) {
 func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.connectErr = fmt.Errorf("connection refused")
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -48,7 +48,7 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 		sm.mu.Unlock()
 		return nil
 	}
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -70,7 +70,7 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(true, false))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -119,7 +119,7 @@ func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
 		sm.mu.Unlock()
 		return nil
 	}
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -175,7 +175,7 @@ func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sm := newMockSSHManager()
 			sm.setConnected("server1", tt.mockConn)
-			fm := NewForwardManager(sm)
+			fm := NewForwardManager(context.Background(), sm)
 			_, _ = fm.AddRule(tt.rule)
 			if err := fm.StartForward(tt.rule.Name, nil); err != nil {
 				t.Fatalf("StartForward() error = %v", err)

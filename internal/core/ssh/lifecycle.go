@@ -88,7 +88,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		return fmt.Errorf("failed to connect to %s: %w", hostName, err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
 	hc := &hostConnection{
 		conn:   conn,
 		client: client,
