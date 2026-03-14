@@ -195,7 +195,7 @@ func (m *sshManager) Subscribe() <-chan core.SSHEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.SSHEvent, 16)
+	ch := make(chan core.SSHEvent, eventChannelBuffer)
 	m.subscribers = append(m.subscribers, ch)
 	return ch
 }

@@ -11,6 +11,9 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// eventChannelBuffer はイベントチャネルのバッファサイズ。
+const eventChannelBuffer = 16
+
 // activeForward は実行中のフォワーディングセッションを保持する。
 // starting が true の場合、起動処理中のプレースホルダーを表す。
 type activeForward struct {
@@ -209,7 +212,7 @@ func (m *forwardManager) Subscribe() <-chan core.ForwardEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.ForwardEvent, 16)
+	ch := make(chan core.ForwardEvent, eventChannelBuffer)
 	m.subscribers = append(m.subscribers, ch)
 	return ch
 }

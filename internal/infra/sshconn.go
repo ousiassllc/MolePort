@@ -35,6 +35,7 @@ func NewSSHConnection() core.SSHConnection {
 	return &sshConnection{}
 }
 
+// Dial は指定ホストへ SSH 接続を確立する。
 func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
 	authMethods, agentCloser := buildAuthMethods(host, cb)
 	// authMethods が空でも早期リターンしない。
@@ -163,6 +164,7 @@ func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, er
 	return callback, nil
 }
 
+// Close は SSH 接続とエージェント接続を閉じる。
 func (c *sshConnection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -266,6 +268,7 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 	return listener, nil
 }
 
+// IsAlive は keepalive リクエストで接続の生存を確認する。
 func (c *sshConnection) IsAlive() bool {
 	client := c.getClient()
 	if client == nil {
@@ -276,6 +279,7 @@ func (c *sshConnection) IsAlive() bool {
 	return err == nil
 }
 
+// KeepAlive は定期的に keepalive リクエストを送信する。
 func (c *sshConnection) KeepAlive(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
