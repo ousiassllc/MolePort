@@ -113,7 +113,7 @@ func (b *EventBroker) HandleSSHEvent(evt core.SSHEvent) {
 		notif.Error = evt.Error.Error()
 	}
 
-	b.distribute("ssh", "event.ssh", notif)
+	b.distribute("ssh", protocol.EventSSH, notif)
 }
 
 // HandleForwardEvent はポートフォワーディングイベントを変換し、購読者に配信する。
@@ -129,7 +129,7 @@ func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent) {
 		notif.Error = evt.Error.Error()
 	}
 
-	b.distribute("forward", "event.forward", notif)
+	b.distribute("forward", protocol.EventForward, notif)
 }
 
 // distribute は指定イベント種別の購読者全員に通知を送信する。

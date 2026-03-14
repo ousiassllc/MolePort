@@ -88,7 +88,7 @@ func TestNotification_JSONRoundtrip(t *testing.T) {
 	params := json.RawMessage(`{"type":"connected","host":"prod"}`)
 	notif := Notification{
 		JSONRPC: JSONRPCVersion,
-		Method:  "event.ssh",
+		Method:  EventSSH,
 		Params:  params,
 	}
 
@@ -116,7 +116,7 @@ func TestNotification_JSONRoundtrip(t *testing.T) {
 func TestNotification_OmitsIDField(t *testing.T) {
 	notif := Notification{
 		JSONRPC: JSONRPCVersion,
-		Method:  "event.ssh",
+		Method:  EventSSH,
 	}
 
 	data, err := json.Marshal(notif)
@@ -132,7 +132,7 @@ func TestNotification_OmitsIDField(t *testing.T) {
 func TestRequest_NilID_OmitsIDField(t *testing.T) {
 	req := Request{
 		JSONRPC: JSONRPCVersion,
-		Method:  "event.ssh",
+		Method:  EventSSH,
 	}
 
 	data, err := json.Marshal(req)

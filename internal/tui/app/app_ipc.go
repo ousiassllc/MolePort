@@ -153,7 +153,7 @@ func (m *MainModel) saveTheme(presetID string) tea.Cmd {
 
 func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	switch notif.Method {
-	case "event.ssh":
+	case protocol.EventSSH:
 		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
 			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
@@ -164,7 +164,7 @@ func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 		if evt.Error != "" {
 			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error), tui.LogInfo)
 		}
-	case "event.forward":
+	case protocol.EventForward:
 		var evt protocol.ForwardEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
 			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
