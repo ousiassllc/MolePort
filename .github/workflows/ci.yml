@@ -43,6 +43,12 @@ jobs:
         with:
           version: v2.8.0
 
+      - name: Install linterly
+        run: go install github.com/ousiassllc/linterly/cmd/linterly@v0.3.3
+
+      - name: linterly check
+        run: linterly check .
+
   test:
     name: Test
     runs-on: ubuntu-latest
