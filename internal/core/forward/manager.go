@@ -11,6 +11,9 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// eventChannelBuffer はイベントチャネルのバッファサイズ。
+const eventChannelBuffer = 16
+
 // activeForward は実行中のフォワーディングセッションを保持する。
 // starting が true の場合、起動処理中のプレースホルダーを表す。
 type activeForward struct {
@@ -25,6 +28,7 @@ type activeForward struct {
 
 type forwardManager struct {
 	mu          sync.RWMutex
+	ctx         context.Context
 	sshManager  core.SSHManager
 	rules       map[string]core.ForwardRule
 	ruleOrder   []string // 追加順序を保持
@@ -35,8 +39,9 @@ type forwardManager struct {
 }
 
 // NewForwardManager は ForwardManager の実装を返す。
-func NewForwardManager(sshManager core.SSHManager) core.ForwardManager {
+func NewForwardManager(ctx context.Context, sshManager core.SSHManager) core.ForwardManager {
 	return &forwardManager{
+		ctx:        ctx,
 		sshManager: sshManager,
 		rules:      make(map[string]core.ForwardRule),
 		active:     make(map[string]*activeForward),
@@ -207,7 +212,7 @@ func (m *forwardManager) Subscribe() <-chan core.ForwardEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.ForwardEvent, 16)
+	ch := make(chan core.ForwardEvent, eventChannelBuffer)
 	m.subscribers = append(m.subscribers, ch)
 	return ch
 }

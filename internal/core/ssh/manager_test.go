@@ -106,7 +106,7 @@ func testHosts() []core.SSHHost {
 
 func newTestSSHManager(hosts []core.SSHHost, connFactory func() core.SSHConnection) core.SSHManager {
 	parser := &mockSSHConfigParser{hosts: hosts}
-	return NewSSHManager(parser, connFactory, "/fake/ssh/config", core.ReconnectConfig{
+	return NewSSHManager(context.Background(), parser, connFactory, "/fake/ssh/config", core.ReconnectConfig{
 		Enabled:      false,
 		MaxRetries:   3,
 		InitialDelay: core.Duration{Duration: 10 * time.Millisecond},

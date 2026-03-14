@@ -34,7 +34,7 @@ func RunStatus(configDir string, args []string) {
 
 func runSessionGet(configDir string, name string, jsonOutput bool) {
 	client := cli.ConnectDaemon(configDir)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx, cancel := cli.CallCtx()
 	defer cancel()
@@ -64,10 +64,10 @@ func runSessionGet(configDir string, name string, jsonOutput bool) {
 	fmt.Println(i18n.T("cli.status.session_bytes_sent", map[string]any{"Bytes": format.Bytes(session.BytesSent)}))
 	fmt.Println(i18n.T("cli.status.session_bytes_received", map[string]any{"Bytes": format.Bytes(session.BytesReceived)}))
 	if session.ReconnectCount > 0 {
-		fmt.Printf("  Reconnects:     %d\n", session.ReconnectCount)
+		fmt.Println(i18n.T("cli.status.session_reconnects", map[string]any{"Count": session.ReconnectCount}))
 	}
 	if session.LastError != "" {
-		fmt.Printf("  Last Error:     %s\n", session.LastError)
+		fmt.Println(i18n.T("cli.status.session_last_error", map[string]any{"Error": session.LastError}))
 	}
 }
 
@@ -83,7 +83,7 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx, cancel := cli.CallCtx()
 	defer cancel()

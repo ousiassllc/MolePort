@@ -120,13 +120,13 @@ func (m *mockSSHManager) setConnected(hostName string, sshConn core.SSHConnectio
 var _ core.SSHManager = (*mockSSHManager)(nil)
 
 type mockSSHConnection struct {
-	mu         sync.Mutex
-	dialErr    error
-	client     *ssh.Client
-	closed     bool
-	isAlive    bool
-	keepAliveF func(ctx context.Context, interval time.Duration)
+	mu      sync.Mutex
+	dialErr error
+	client  *ssh.Client
+	closed  bool
+	isAlive bool
 
+	keepAliveF      func(ctx context.Context, interval time.Duration)
 	localForwardF   func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
 	remoteForwardF  func(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
 	dynamicForwardF func(ctx context.Context, localPort int) (net.Listener, error)

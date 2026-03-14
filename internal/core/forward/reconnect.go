@@ -91,7 +91,7 @@ func (m *forwardManager) restoreSingleForward(
 		return core.ForwardRestoreResult{RuleName: rule.Name, OK: false, Error: sshClientErr.Error()}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx)
 
 	listener, err := openListener(ctx, sshConn, rule)
 

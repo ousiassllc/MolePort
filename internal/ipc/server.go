@@ -142,7 +142,7 @@ func (s *IPCServer) BroadcastNotification(notification protocol.Notification) {
 
 	for _, c := range clients {
 		// 個々の送信エラーは無視する（切断中のクライアントなど）
-		c.send(notification)
+		_ = c.send(notification)
 	}
 }
 

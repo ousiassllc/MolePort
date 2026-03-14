@@ -10,10 +10,9 @@ import (
 )
 
 func TestForwardManager_StopForward_NotActive(t *testing.T) {
-	fm := NewForwardManager(newMockSSHManager())
+	fm := NewForwardManager(context.Background(), newMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
-	// アクティブでないルールの停止はエラーにならない
-	if err := fm.StopForward("web"); err != nil {
+	if err := fm.StopForward("web"); err != nil { // アクティブでないルールの停止はエラーにならない
 		t.Fatalf("StopForward() error = %v", err)
 	}
 }
@@ -21,7 +20,7 @@ func TestForwardManager_StopForward_NotActive(t *testing.T) {
 func TestForwardManager_StopAllForwards(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(false, true))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
 	_ = fm.StartForward("fwd1", nil)
@@ -39,7 +38,7 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(false, true))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
 	if err := fm.DeleteRule("web"); err != nil {
@@ -53,7 +52,7 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 func TestForwardManager_Close(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(false, true))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	events := fm.Subscribe()
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
@@ -71,7 +70,7 @@ func TestForwardManager_StartForward_ListenerError(t *testing.T) {
 			return nil, fmt.Errorf("address already in use")
 		},
 	})
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -87,7 +86,7 @@ func TestForwardManager_StopForward_ClosesListener(t *testing.T) {
 		isAlive:         true,
 		dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return ml, nil },
 	})
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
 	_ = fm.StopForward("web")

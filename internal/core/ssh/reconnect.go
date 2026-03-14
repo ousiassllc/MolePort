@@ -111,7 +111,7 @@ func (m *sshManager) cleanupDisconnected(hostName string) (disconnectState, bool
 
 // reconnectLoop は指数バックオフ付きで再接続を試行する。
 func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
-	reconnectCtx, reconnectCancel := context.WithCancel(context.Background())
+	reconnectCtx, reconnectCancel := context.WithCancel(m.ctx)
 	defer reconnectCancel()
 
 	m.registerReconnectCancel(hostName, reconnectCancel)
@@ -190,7 +190,7 @@ func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
 		return false
 	}
 
-	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
+	ctx, cancel := context.WithCancel(m.ctx) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
 	hc := &hostConnection{
 		conn:   conn,
 		client: client,

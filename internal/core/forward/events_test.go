@@ -1,20 +1,21 @@
 package forward
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
 func TestForwardManager_GetSession_NotFound(t *testing.T) {
-	_, err := NewForwardManager(newMockSSHManager()).GetSession("nonexistent")
+	_, err := NewForwardManager(context.Background(), newMockSSHManager()).GetSession("nonexistent")
 	if err == nil {
 		t.Fatal("GetSession() should return error for nonexistent rule")
 	}
 }
 
 func TestForwardManager_GetSession_Inactive(t *testing.T) {
-	fm := NewForwardManager(newMockSSHManager())
+	fm := NewForwardManager(context.Background(), newMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	session, err := fm.GetSession("web")
 	if err != nil {
@@ -31,7 +32,7 @@ func TestForwardManager_GetSession_Inactive(t *testing.T) {
 func TestForwardManager_GetAllSessions(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(false, true))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
 	_ = fm.StartForward("fwd1", nil)
@@ -51,7 +52,7 @@ func TestForwardManager_GetAllSessions(t *testing.T) {
 func TestForwardManager_Subscribe_MultipleSubscribers(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.setConnected("server1", newMockConn(false, true))
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	ch1 := fm.Subscribe()
 	ch2 := fm.Subscribe()
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
