@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -30,7 +31,7 @@ func RunAdd(configDir string, args []string) {
 	if *localPort == 0 {
 		ExitError("%s", i18n.T("cli.add.local_port_required"))
 	}
-	if *localPort < 1 || *localPort > 65535 {
+	if *localPort < core.MinPort || *localPort > core.MaxPort {
 		ExitError("%s", i18n.T("cli.add.port_range"))
 	}
 
@@ -45,7 +46,7 @@ func RunAdd(configDir string, args []string) {
 		if *remotePort == 0 {
 			ExitError("%s", i18n.T("cli.add.remote_port_required"))
 		}
-		if *remotePort < 1 || *remotePort > 65535 {
+		if *remotePort < core.MinPort || *remotePort > core.MaxPort {
 			ExitError("%s", i18n.T("cli.add.port_range"))
 		}
 	}

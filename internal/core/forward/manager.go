@@ -67,13 +67,13 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 		return "", fmt.Errorf("host is required")
 	}
 
-	if rule.LocalPort < 1 || rule.LocalPort > 65535 {
-		return "", fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
+	if err := core.ValidatePort(rule.LocalPort); err != nil {
+		return "", fmt.Errorf("local_port: %w", err)
 	}
 
 	if rule.Type == core.Local || rule.Type == core.Remote {
-		if rule.RemotePort < 1 || rule.RemotePort > 65535 {
-			return "", fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
+		if err := core.ValidatePort(rule.RemotePort); err != nil {
+			return "", fmt.Errorf("remote_port: %w", err)
 		}
 		if rule.RemoteHost == "" {
 			rule.RemoteHost = "localhost"

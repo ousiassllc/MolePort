@@ -185,3 +185,23 @@ func TestConfig_YAMLRoundtrip_WithHosts(t *testing.T) {
 		t.Errorf("Hosts[\"prod\"].Reconnect.MaxDelay = %v, want 2m0s", hc.Reconnect.MaxDelay)
 	}
 }
+
+func TestValidatePort(t *testing.T) {
+	tests := []struct {
+		port    int
+		wantErr bool
+	}{
+		{0, true},
+		{-1, true},
+		{1, false},
+		{80, false},
+		{65535, false},
+		{65536, true},
+	}
+	for _, tt := range tests {
+		err := ValidatePort(tt.port)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ValidatePort(%d) error = %v, wantErr %v", tt.port, err, tt.wantErr)
+		}
+	}
+}
