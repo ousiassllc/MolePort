@@ -60,7 +60,7 @@ func TestSSHConnection_DialWithPublicKeyAuth(t *testing.T) {
 	}
 
 	s := newTestSSHServer(t, withPublicKeyAuth(sshPubKey))
-	dialTestServer(t, s, nil, func(h *core.SSHHost) { h.IdentityFile = keyPath })
+	dialTestServer(t, s, nil, func(h *core.SSHHost) { h.IdentityFiles = []string{keyPath} })
 }
 
 func TestSSHConnection_DialWithPasswordAuth(t *testing.T) {

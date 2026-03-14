@@ -47,7 +47,7 @@ func TestSSHConnection_LocalForwardNotConnected(t *testing.T) {
 func TestSSHConnection_RemoteForwardNotConnected(t *testing.T) {
 	conn := NewSSHConnection()
 	ctx := context.Background()
-	_, err := conn.RemoteForward(ctx, 8080, "localhost:80")
+	_, err := conn.RemoteForward(ctx, 8080, "localhost:80", "")
 	if err == nil {
 		t.Error("RemoteForward should return error when not connected")
 	}

@@ -19,6 +19,7 @@ type SessionInfo struct {
 	LocalPort      int    `json:"local_port"`
 	RemoteHost     string `json:"remote_host,omitempty"`
 	RemotePort     int    `json:"remote_port,omitempty"`
+	RemoteBindAddr string `json:"remote_bind_addr,omitempty"`
 	Status         string `json:"status"`
 	ConnectedAt    string `json:"connected_at,omitempty"`
 	BytesSent      int64  `json:"bytes_sent"`

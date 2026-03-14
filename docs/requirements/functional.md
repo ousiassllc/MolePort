@@ -76,7 +76,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 
 - **アクター**: ユーザー
 - **概要**: 新しいポート転送ルールを追加する
-- **CLI**: `moleport add --host <host> --type <type> --local-port <port> [--remote-host <host>] [--remote-port <port>] [--name <name>] [--auto-connect]`
+- **CLI**: `moleport add --host <host> --type <type> --local-port <port> [--remote-host <host>] [--remote-port <port>] [--remote-bind-addr <addr>] [--name <name>] [--auto-connect]`
 - **TUI**: SetupPanel でホストを選択し `Enter` キーでフォワード追加ウィザードを開始
 - **基本フロー**:
   1. CLI フラグで対象ホスト（`--host`）・転送種別（`--type`: local/remote/dynamic）・ポート情報を指定する
@@ -407,9 +407,9 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 
 | ID | 機能名 | 説明 | 優先度 |
 |----|--------|------|--------|
-| F-01 | SSH config 解析 | `~/.ssh/config` + Include ディレクティブを解析しホスト一覧を取得 | 必須 |
+| F-01 | SSH config 解析 | `~/.ssh/config` + Include ディレクティブを解析しホスト一覧を取得。複数 `IdentityFile` に対応 | 必須 |
 | F-02 | ローカル転送 (-L) | ローカルポート → リモートホスト:ポート の転送を管理 | 必須 |
-| F-03 | リモート転送 (-R) | リモートポート → ローカルホスト:ポート の逆方向転送を管理 | 必須 |
+| F-03 | リモート転送 (-R) | リモートポート → ローカルホスト:ポート の逆方向転送を管理。バインドアドレスはデフォルト `127.0.0.1`、明示指定可能 | 必須 |
 | F-04 | ダイナミック転送 (-D) | SOCKS プロキシとしてのダイナミック転送を管理 | 必須 |
 | F-05 | デーモン管理 | バックグラウンドデーモンの起動・停止・状態確認・強制終了 | 必須 |
 | F-06 | IPC 通信 | Unix ドメインソケット上の JSON-RPC 2.0 によるクライアント通信 | 必須 |
@@ -457,6 +457,12 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 | F-48 | アップデート確認モード | `moleport update --check` で更新の有無を確認するのみ（ダウンロード・置換は行わない） | 必須 |
 | F-49 | アップデート時のデーモン管理 | セルフアップデート時にデーモンが稼働中であれば停止し、バイナリ置換後に再起動する | 必須 |
 | F-50 | ウィザード placeholder 自動入力 | フォワード追加ウィザードの全テキスト入力ステップで空 Enter 時に placeholder 値を自動採用。リモートポートの placeholder はローカルポートと同じ値を設定 | 必須 |
+| F-51 | RemoteForward バインドアドレス指定 | リモート転送のバインドアドレスをルールごとに指定可能にする。デフォルトは `127.0.0.1`（OpenSSH 準拠）。`ForwardRule` に `remote_bind_addr` フィールドを追加し、CLI の `--remote-bind-addr` フラグと TUI ウィザードで設定可能 | 必須 |
+| F-52 | IdentityFile 複数対応 | SSH config に複数の `IdentityFile` が指定されている場合、全鍵を順にトライする（OpenSSH 準拠）。`SSHHost.IdentityFile` を `SSHHost.IdentityFiles` (`[]string`) に変更。未指定時は従来通りデフォルト鍵（id_rsa, id_ed25519 等）をフォールバック | 必須 |
+| F-53 | ProxyJump 代替案内 | ProxyJump は現在未サポート。接続時に `ProxyCommand ssh -W %h:%p <jumphost>` による代替手段をログ警告で案内する | 必須 |
+| F-54 | IdentitiesOnly 対応 | SSH config の `IdentitiesOnly yes` を尊重し、ssh-agent の鍵を使用せず `IdentityFile` で指定された鍵のみをトライする | 将来 |
+| F-55 | IdentityAgent 対応 | SSH config の `IdentityAgent` を尊重し、ホストごとに異なる SSH agent ソケットを使用する | 将来 |
+| F-56 | Match ブロック対応 | SSH config の `Match` ブロックによる条件付き設定を解析・適用する | 将来 |
 
 ## CLI サブコマンド体系
 
@@ -482,7 +488,7 @@ moleport <subcommand> [options] [arguments]
 | `daemon kill` | — | 応答しないデーモンを強制終了（SIGKILL） |
 | `connect` | `<host>` | SSH ホストに接続（auto_connect ルールも開始） |
 | `disconnect` | `<host>` | SSH ホストを切断（全転送も停止） |
-| `add` | `--host <host> --type <type> --local-port <port> [options]` | 転送ルールをフラグ指定で追加 |
+| `add` | `--host <host> --type <type> --local-port <port> [options]` | 転送ルールをフラグ指定で追加（Remote 転送時 `--remote-bind-addr` でバインドアドレス指定可） |
 | `delete` | `<name>` | 転送ルールを削除 |
 | `start` | `<name>` | 転送ルールのフォワーディングを開始 |
 | `stop` | `<name>` | 転送ルールのフォワーディングを停止 |
@@ -731,3 +737,4 @@ moleport daemon kill（応答しない場合の緊急手段）
 | 6.0 | 2026-03-04 | UC-21/UC-22/UC-23 追加、F-41〜F-46 追加: 最新バージョンチェック機能（GitHub Releases API、デーモン定期チェック、CLI/TUI 通知、アップデートチェック設定）。UC-10 に update_check 設定追加、UC-12 に最新バージョン確認ステップ追加、version サブコマンド説明更新 | #44 最新バージョンチェック機能 |
 | 7.0 | 2026-03-09 | UC-24 追加、F-47〜F-49 追加: セルフアップデート機能。サブコマンド一覧に update 追加、F-07 に update 追加、list/status/config に --json フラグ追加、グローバルフラグ --config-dir 追加 | #62 ドキュメント乖離修正 |
 | 7.1 | 2026-03-14 | F-50 追加、フォワード追加ウィザードに placeholder 自動入力・空 Enter 採用の動作を追記。リモートポートの placeholder をローカルポートと同じ値に変更 | #66 ウィザード placeholder 自動入力 |
+| 8.0 | 2026-03-14 | F-51〜F-56 追加: SSH 互換性改善。F-51（RemoteForward バインドアドレス指定）、F-52（IdentityFile 複数対応）、F-53（ProxyJump 代替案内）、F-54〜F-56（将来対応: IdentitiesOnly/IdentityAgent/Match）。F-01/F-03 説明更新、UC-5 に `--remote-bind-addr` フラグ追加、add サブコマンド説明更新 | #74 SSH 互換性改善 |

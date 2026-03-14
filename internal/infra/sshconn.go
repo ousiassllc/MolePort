@@ -75,9 +75,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		handshakeTimeout = defaultHandshakeTimeout
 	}
 
-	// ProxyJump が設定されていても現在は未対応のため警告を出力
+	// ProxyJump が設定されていても現在は未対応のため警告を出力し、代替手段を案内
 	if len(host.ProxyJump) > 0 {
-		slog.Warn("ProxyJump is not supported, ignoring",
+		slog.Warn("ProxyJump is not supported; use ProxyCommand instead (e.g. ProxyCommand ssh -W %h:%p <jumphost>)",
 			"host", host.Name, "proxy_jump", host.ProxyJump)
 	}
 
@@ -220,13 +220,16 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 // このメソッドはリモート側リスナーの作成のみを行い、accept ループやデータ転送は行わない。
 // 呼び出し元（ForwardManager）が返されたリスナーで accept ループを実行し、
 // Dial() で取得した ssh.Client を使ってローカルへのデータブリッジを行う。
-func (c *sshConnection) RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error) {
+func (c *sshConnection) RemoteForward(ctx context.Context, remotePort int, localAddr string, remoteBindAddr string) (net.Listener, error) {
 	client := c.getClient()
 	if client == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%d", remotePort)
+	if remoteBindAddr == "" {
+		remoteBindAddr = core.LocalhostAddr
+	}
+	addr := net.JoinHostPort(remoteBindAddr, fmt.Sprintf("%d", remotePort))
 	listener, err := client.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen remotely on %s: %w", addr, err)

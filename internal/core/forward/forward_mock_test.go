@@ -128,7 +128,7 @@ type mockSSHConnection struct {
 
 	keepAliveF      func(ctx context.Context, interval time.Duration)
 	localForwardF   func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
-	remoteForwardF  func(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
+	remoteForwardF  func(ctx context.Context, remotePort int, localAddr string, remoteBindAddr string) (net.Listener, error)
 	dynamicForwardF func(ctx context.Context, localPort int) (net.Listener, error)
 }
 
@@ -155,9 +155,9 @@ func (m *mockSSHConnection) LocalForward(ctx context.Context, p int, addr string
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockSSHConnection) RemoteForward(ctx context.Context, p int, addr string) (net.Listener, error) {
+func (m *mockSSHConnection) RemoteForward(ctx context.Context, p int, addr string, remoteBindAddr string) (net.Listener, error) {
 	if m.remoteForwardF != nil {
-		return m.remoteForwardF(ctx, p, addr)
+		return m.remoteForwardF(ctx, p, addr, remoteBindAddr)
 	}
 	return nil, fmt.Errorf("not implemented")
 }

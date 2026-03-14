@@ -18,7 +18,7 @@ func openListener(
 		return sshConn.LocalForward(ctx, rule.LocalPort, remoteAddr)
 	case core.Remote:
 		localAddr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", rule.LocalPort))
-		return sshConn.RemoteForward(ctx, rule.RemotePort, localAddr)
+		return sshConn.RemoteForward(ctx, rule.RemotePort, localAddr, rule.RemoteBindAddr)
 	case core.Dynamic:
 		return sshConn.DynamicForward(ctx, rule.LocalPort)
 	default:

@@ -30,7 +30,8 @@ type SSHConnection interface {
 
 	// RemoteForward はリモートポートフォワーディングのリスナーを作成する。
 	// リモート側の remotePort でリッスンし、ローカルの localAddr へ転送する。
-	RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
+	// remoteBindAddr が空の場合は LocalhostAddr (127.0.0.1) にバインドする。
+	RemoteForward(ctx context.Context, remotePort int, localAddr string, remoteBindAddr string) (net.Listener, error)
 
 	// DynamicForward は SOCKS5 プロキシとして動作するリスナーを作成する。
 	DynamicForward(ctx context.Context, localPort int) (net.Listener, error)

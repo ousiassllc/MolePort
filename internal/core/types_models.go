@@ -11,7 +11,7 @@ type SSHHost struct {
 	HostName              string
 	Port                  int
 	User                  string
-	IdentityFile          string
+	IdentityFiles         []string
 	ProxyJump             []string
 	ProxyCommand          string
 	StrictHostKeyChecking string
@@ -21,13 +21,14 @@ type SSHHost struct {
 
 // ForwardRule はポートフォワーディングのルール定義。
 type ForwardRule struct {
-	Name        string      `yaml:"name"`
-	Host        string      `yaml:"host"`
-	Type        ForwardType `yaml:"type"`
-	LocalPort   int         `yaml:"local_port"`
-	RemoteHost  string      `yaml:"remote_host,omitempty"`
-	RemotePort  int         `yaml:"remote_port,omitempty"`
-	AutoConnect bool        `yaml:"auto_connect"`
+	Name           string      `yaml:"name"`
+	Host           string      `yaml:"host"`
+	Type           ForwardType `yaml:"type"`
+	LocalPort      int         `yaml:"local_port"`
+	RemoteHost     string      `yaml:"remote_host,omitempty"`
+	RemotePort     int         `yaml:"remote_port,omitempty"`
+	RemoteBindAddr string      `yaml:"remote_bind_addr,omitempty"`
+	AutoConnect    bool        `yaml:"auto_connect"`
 }
 
 // ForwardSession は実行中のポートフォワーディングセッションの状態とメトリクスを保持する。

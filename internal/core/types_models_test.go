@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -183,6 +184,46 @@ func TestConfig_YAMLRoundtrip_WithHosts(t *testing.T) {
 	}
 	if hc.Reconnect.MaxDelay == nil || hc.Reconnect.MaxDelay.Duration != 120*time.Second {
 		t.Errorf("Hosts[\"prod\"].Reconnect.MaxDelay = %v, want 2m0s", hc.Reconnect.MaxDelay)
+	}
+}
+
+func TestForwardRule_YAMLRoundtrip_RemoteBindAddr(t *testing.T) {
+	original := ForwardRule{
+		Name:           "remote-fwd",
+		Host:           "prod",
+		Type:           Remote,
+		LocalPort:      3000,
+		RemotePort:     8080,
+		RemoteBindAddr: "0.0.0.0",
+	}
+
+	data, err := yaml.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var got ForwardRule
+	if err := yaml.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if got.RemoteBindAddr != "0.0.0.0" {
+		t.Errorf("RemoteBindAddr = %q, want %q", got.RemoteBindAddr, "0.0.0.0")
+	}
+
+	// omitempty: 空の場合は YAML 出力に含まれない
+	empty := ForwardRule{
+		Name:      "local-fwd",
+		Host:      "prod",
+		Type:      Local,
+		LocalPort: 8080,
+	}
+	emptyData, err := yaml.Marshal(empty)
+	if err != nil {
+		t.Fatalf("Marshal empty: %v", err)
+	}
+	if strings.Contains(string(emptyData), "remote_bind_addr") {
+		t.Errorf("empty RemoteBindAddr should be omitted from YAML, got: %s", emptyData)
 	}
 }
 

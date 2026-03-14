@@ -79,13 +79,14 @@ func ToHostInfo(host core.SSHHost) HostInfo {
 // ToForwardInfo は core.ForwardRule を ForwardInfo に変換する。
 func ToForwardInfo(rule core.ForwardRule) ForwardInfo {
 	return ForwardInfo{
-		Name:        rule.Name,
-		Host:        rule.Host,
-		Type:        forwardTypeToWire(rule.Type),
-		LocalPort:   rule.LocalPort,
-		RemoteHost:  rule.RemoteHost,
-		RemotePort:  rule.RemotePort,
-		AutoConnect: rule.AutoConnect,
+		Name:           rule.Name,
+		Host:           rule.Host,
+		Type:           forwardTypeToWire(rule.Type),
+		LocalPort:      rule.LocalPort,
+		RemoteHost:     rule.RemoteHost,
+		RemotePort:     rule.RemotePort,
+		RemoteBindAddr: rule.RemoteBindAddr,
+		AutoConnect:    rule.AutoConnect,
 	}
 }
 
@@ -99,6 +100,7 @@ func ToSessionInfo(s core.ForwardSession) SessionInfo {
 		LocalPort:      s.Rule.LocalPort,
 		RemoteHost:     s.Rule.RemoteHost,
 		RemotePort:     s.Rule.RemotePort,
+		RemoteBindAddr: s.Rule.RemoteBindAddr,
 		Status:         sessionStatusToWire(s.Status),
 		BytesSent:      s.BytesSent,
 		BytesReceived:  s.BytesReceived,

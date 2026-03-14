@@ -55,13 +55,14 @@ type MetricsTickMsg struct{}
 
 // ForwardAddRequestMsg はセットアップウィザード完了時に発行される。
 type ForwardAddRequestMsg struct {
-	Host        string
-	Type        core.ForwardType
-	LocalPort   int
-	RemoteHost  string
-	RemotePort  int
-	Name        string
-	AutoConnect bool
+	Host           string
+	Type           core.ForwardType
+	LocalPort      int
+	RemoteHost     string
+	RemotePort     int
+	RemoteBindAddr string
+	Name           string
+	AutoConnect    bool
 }
 
 // LogLevel はログ行の種類を表す。
