@@ -8,6 +8,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// wrapError はエラーを別のメッセージでラップする（errors.As/Is テスト用）。
+func wrapError(msg string, err error) error {
+	return fmt.Errorf("%s: %w", msg, err)
+}
+
 func TestToRPCError(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -16,62 +21,109 @@ func TestToRPCError(t *testing.T) {
 		wantCode    int
 		wantMsg     string
 	}{
+		// 構造化エラー型
 		{
 			name:        "host not found",
-			err:         fmt.Errorf("host not found"),
+			err:         &core.NotFoundError{Resource: "host", Name: "prod"},
 			defaultCode: InternalError,
 			wantCode:    HostNotFound,
-			wantMsg:     "host not found",
+			wantMsg:     `host "prod" not found`,
 		},
 		{
 			name:        "rule not found",
-			err:         fmt.Errorf("rule not found"),
+			err:         &core.NotFoundError{Resource: "rule", Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    RuleNotFound,
-			wantMsg:     "rule not found",
+			wantMsg:     `rule "web" not found`,
 		},
 		{
 			name:        "already exists",
-			err:         fmt.Errorf("rule already exists"),
+			err:         &core.AlreadyExistsError{Resource: "rule", Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    RuleAlreadyExists,
-			wantMsg:     "rule already exists",
+			wantMsg:     `rule "web" already exists`,
 		},
 		{
 			name:        "already active",
-			err:         fmt.Errorf("connection already active"),
+			err:         &core.AlreadyActiveError{Name: "web"},
 			defaultCode: InternalError,
 			wantCode:    AlreadyConnected,
-			wantMsg:     "connection already active",
+			wantMsg:     `"web" is already active`,
 		},
 		{
 			name:        "not connected",
-			err:         fmt.Errorf("host is not connected"),
+			err:         &core.NotConnectedError{HostName: "prod"},
 			defaultCode: InternalError,
 			wantCode:    NotConnected,
-			wantMsg:     "host is not connected",
+			wantMsg:     `host "prod" is not connected`,
 		},
 		{
-			name:        "already connected",
-			err:         fmt.Errorf("host already connected"),
+			name:        "auth required",
+			err:         &core.AuthRequiredError{HostName: "prod", Err: fmt.Errorf("ssh: unable to authenticate")},
 			defaultCode: InternalError,
-			wantCode:    AlreadyConnected,
-			wantMsg:     "host already connected",
+			wantCode:    AuthenticationFailed,
+			wantMsg:     "authentication required for prod: ssh: unable to authenticate",
 		},
+		// センチネルエラー
 		{
 			name:        "credential timeout",
-			err:         fmt.Errorf("credential timeout"),
+			err:         core.ErrCredentialTimeout,
 			defaultCode: InternalError,
 			wantCode:    CredentialTimeout,
 			wantMsg:     "credential timeout",
 		},
 		{
 			name:        "credential cancelled",
-			err:         fmt.Errorf("credential cancelled"),
+			err:         core.ErrCredentialCancelled,
 			defaultCode: InternalError,
 			wantCode:    CredentialCancelled,
 			wantMsg:     "credential cancelled",
 		},
+		// ラップされた構造化エラー（errors.As で検出可能）
+		{
+			name:        "wrapped host not found",
+			err:         wrapError("operation failed", &core.NotFoundError{Resource: "host", Name: "staging"}),
+			defaultCode: InternalError,
+			wantCode:    HostNotFound,
+			wantMsg:     `operation failed: host "staging" not found`,
+		},
+		{
+			name:        "wrapped credential timeout",
+			err:         wrapError("connect failed", core.ErrCredentialTimeout),
+			defaultCode: InternalError,
+			wantCode:    CredentialTimeout,
+			wantMsg:     "connect failed: credential timeout",
+		},
+		// 外部起因エラー（文字列マッチフォールバック）
+		{
+			name:        "address already in use",
+			err:         fmt.Errorf("listen tcp :8080: bind: address already in use"),
+			defaultCode: InternalError,
+			wantCode:    PortConflict,
+			wantMsg:     "listen tcp :8080: bind: address already in use",
+		},
+		{
+			name:        "unable to authenticate",
+			err:         fmt.Errorf("ssh: unable to authenticate"),
+			defaultCode: InternalError,
+			wantCode:    AuthenticationFailed,
+			wantMsg:     "ssh: unable to authenticate",
+		},
+		{
+			name:        "no authentication methods available",
+			err:         fmt.Errorf("ssh: no authentication methods available"),
+			defaultCode: InternalError,
+			wantCode:    AuthenticationFailed,
+			wantMsg:     "ssh: no authentication methods available",
+		},
+		{
+			name:        "no supported methods remain",
+			err:         fmt.Errorf("ssh: no supported methods remain"),
+			defaultCode: InternalError,
+			wantCode:    AuthenticationFailed,
+			wantMsg:     "ssh: no supported methods remain",
+		},
+		// デフォルトコード
 		{
 			name:        "generic error uses defaultCode",
 			err:         fmt.Errorf("something unexpected happened"),
@@ -100,44 +152,27 @@ func TestToHostInfo(t *testing.T) {
 		host core.SSHHost
 		want HostInfo
 	}{
-		{
-			name: "connected host",
-			host: core.SSHHost{
-				Name:               "prod",
-				HostName:           "192.168.1.1",
-				Port:               22,
-				User:               "admin",
-				State:              core.Connected,
-				ActiveForwardCount: 3,
-			},
-			want: HostInfo{
-				Name:               "prod",
-				HostName:           "192.168.1.1",
-				Port:               22,
-				User:               "admin",
-				State:              "connected",
-				ActiveForwardCount: 3,
-			},
-		},
-		{
-			name: "disconnected host",
-			host: core.SSHHost{
-				Name:               "staging",
-				HostName:           "10.0.0.1",
-				Port:               2222,
-				User:               "deploy",
-				State:              core.Disconnected,
-				ActiveForwardCount: 0,
-			},
-			want: HostInfo{
-				Name:               "staging",
-				HostName:           "10.0.0.1",
-				Port:               2222,
-				User:               "deploy",
-				State:              "disconnected",
-				ActiveForwardCount: 0,
-			},
-		},
+		{"connected host", core.SSHHost{
+			Name: "prod", HostName: "192.168.1.1", Port: 22, User: "admin",
+			State: core.Connected, ActiveForwardCount: 3,
+		}, HostInfo{
+			Name: "prod", HostName: "192.168.1.1", Port: 22, User: "admin",
+			State: "connected", ActiveForwardCount: 3,
+		}},
+		{"disconnected host", core.SSHHost{
+			Name: "staging", HostName: "10.0.0.1", Port: 2222, User: "deploy",
+			State: core.Disconnected,
+		}, HostInfo{
+			Name: "staging", HostName: "10.0.0.1", Port: 2222, User: "deploy",
+			State: "disconnected",
+		}},
+		{"pending_auth host uses snake_case wire format", core.SSHHost{
+			Name: "auth-host", HostName: "10.0.0.2", Port: 22, User: "user",
+			State: core.PendingAuth,
+		}, HostInfo{
+			Name: "auth-host", HostName: "10.0.0.2", Port: 22, User: "user",
+			State: "pending_auth",
+		}},
 	}
 
 	for _, tt := range tests {
@@ -156,27 +191,13 @@ func TestToForwardInfo(t *testing.T) {
 		rule core.ForwardRule
 		want ForwardInfo
 	}{
-		{
-			name: "local forward rule",
-			rule: core.ForwardRule{
-				Name:        "web",
-				Host:        "prod",
-				Type:        core.Local,
-				LocalPort:   8080,
-				RemoteHost:  "localhost",
-				RemotePort:  80,
-				AutoConnect: true,
-			},
-			want: ForwardInfo{
-				Name:        "web",
-				Host:        "prod",
-				Type:        "local",
-				LocalPort:   8080,
-				RemoteHost:  "localhost",
-				RemotePort:  80,
-				AutoConnect: true,
-			},
-		},
+		{"local forward rule", core.ForwardRule{
+			Name: "web", Host: "prod", Type: core.Local,
+			LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80, AutoConnect: true,
+		}, ForwardInfo{
+			Name: "web", Host: "prod", Type: "local",
+			LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80, AutoConnect: true,
+		}},
 	}
 
 	for _, tt := range tests {
@@ -197,67 +218,25 @@ func TestToSessionInfo(t *testing.T) {
 		sess core.ForwardSession
 		want SessionInfo
 	}{
-		{
-			name: "non-zero ConnectedAt formatted as RFC3339",
-			sess: core.ForwardSession{
-				ID: "prod-local-8080",
-				Rule: core.ForwardRule{
-					Name:       "web",
-					Host:       "prod",
-					Type:       core.Local,
-					LocalPort:  8080,
-					RemoteHost: "localhost",
-					RemotePort: 80,
-				},
-				Status:         core.Active,
-				ConnectedAt:    connectedAt,
-				BytesSent:      1024,
-				BytesReceived:  2048,
-				ReconnectCount: 1,
-				LastError:      "connection reset",
-			},
-			want: SessionInfo{
-				ID:             "prod-local-8080",
-				Name:           "web",
-				Host:           "prod",
-				Type:           "local",
-				LocalPort:      8080,
-				RemoteHost:     "localhost",
-				RemotePort:     80,
-				Status:         "active",
-				ConnectedAt:    connectedAt.Format(time.RFC3339),
-				BytesSent:      1024,
-				BytesReceived:  2048,
-				ReconnectCount: 1,
-				LastError:      "connection reset",
-			},
-		},
-		{
-			name: "zero ConnectedAt results in empty string",
-			sess: core.ForwardSession{
-				ID: "staging-local-3000",
-				Rule: core.ForwardRule{
-					Name:       "api",
-					Host:       "staging",
-					Type:       core.Local,
-					LocalPort:  3000,
-					RemoteHost: "localhost",
-					RemotePort: 3000,
-				},
-				Status:      core.Stopped,
-				ConnectedAt: time.Time{},
-			},
-			want: SessionInfo{
-				ID:         "staging-local-3000",
-				Name:       "api",
-				Host:       "staging",
-				Type:       "local",
-				LocalPort:  3000,
-				RemoteHost: "localhost",
-				RemotePort: 3000,
-				Status:     "stopped",
-			},
-		},
+		{"non-zero ConnectedAt formatted as RFC3339", core.ForwardSession{
+			ID:     "prod-local-8080",
+			Rule:   core.ForwardRule{Name: "web", Host: "prod", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80},
+			Status: core.Active, ConnectedAt: connectedAt,
+			BytesSent: 1024, BytesReceived: 2048, ReconnectCount: 1, LastError: "connection reset",
+		}, SessionInfo{
+			ID: "prod-local-8080", Name: "web", Host: "prod", Type: "local",
+			LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+			Status: "active", ConnectedAt: connectedAt.Format(time.RFC3339),
+			BytesSent: 1024, BytesReceived: 2048, ReconnectCount: 1, LastError: "connection reset",
+		}},
+		{"zero ConnectedAt results in empty string", core.ForwardSession{
+			ID:     "staging-local-3000",
+			Rule:   core.ForwardRule{Name: "api", Host: "staging", Type: core.Local, LocalPort: 3000, RemoteHost: "localhost", RemotePort: 3000},
+			Status: core.Stopped, ConnectedAt: time.Time{},
+		}, SessionInfo{
+			ID: "staging-local-3000", Name: "api", Host: "staging", Type: "local",
+			LocalPort: 3000, RemoteHost: "localhost", RemotePort: 3000, Status: "stopped",
+		}},
 	}
 
 	for _, tt := range tests {

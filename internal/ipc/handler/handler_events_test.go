@@ -55,6 +55,30 @@ func TestHandler_EventsUnsubscribe(t *testing.T) {
 	}
 }
 
+func TestHandler_EventsSubscribe_EmptyTypes(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.EventsSubscribeParams{Types: []string{}})
+	_, rpcErr := h.Handle("client-1", "events.subscribe", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty types")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	}
+}
+
+func TestHandler_EventsUnsubscribe_EmptySubscriptionID(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.EventsUnsubscribeParams{SubscriptionID: ""})
+	_, rpcErr := h.Handle("client-1", "events.unsubscribe", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty subscription_id")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	}
+}
+
 func TestHandler_EventsSubscribe_InvalidType(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 

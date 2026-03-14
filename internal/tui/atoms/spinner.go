@@ -9,6 +9,6 @@ import (
 func NewSpinner() spinner.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = tui.ReconnectingStyle
+	s.Style = tui.ReconnectingStyle()
 	return s
 }

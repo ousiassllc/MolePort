@@ -16,33 +16,13 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/infra/proxycommand"
 )
 
-// SSHConnection は SSH 接続とポートフォワーディングの低レベル操作を提供する。
-type SSHConnection interface {
-	// Dial はホストへ SSH 接続を確立する。
-	// cb が nil の場合、SSH エージェントと鍵ファイルのみで認証する。
-	// cb が非 nil の場合、パスワード・パスフレーズ・keyboard-interactive 認証も試行する。
-	Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error)
-
-	// Close は接続を閉じる。
-	Close() error
-
-	// LocalForward はローカルポートフォワーディングのリスナーを開始する。
-	LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
-
-	// RemoteForward はリモートポートフォワーディングのリスナーを開始する。
-	RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
-
-	// DynamicForward はダイナミックフォワーディング（SOCKS）のリスナーを開始する。
-	DynamicForward(ctx context.Context, localPort int) (net.Listener, error)
-
-	// IsAlive は接続が生きているかを返す。
-	IsAlive() bool
-
-	// KeepAlive はキープアライブのティッカーループを実行する。
-	KeepAlive(ctx context.Context, interval time.Duration)
-}
+const (
+	defaultDialTimeout      = 10 * time.Second
+	defaultHandshakeTimeout = 120 * time.Second
+)
 
 type sshConnection struct {
 	mu          sync.Mutex
@@ -50,11 +30,12 @@ type sshConnection struct {
 	agentCloser io.Closer
 }
 
-// NewSSHConnection は SSHConnection の実装を返す。
-func NewSSHConnection() SSHConnection {
+// NewSSHConnection は core.SSHConnection の実装を返す。
+func NewSSHConnection() core.SSHConnection {
 	return &sshConnection{}
 }
 
+// Dial は指定ホストへ SSH 接続を確立する。
 func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
 	authMethods, agentCloser := buildAuthMethods(host, cb)
 	// authMethods が空でも早期リターンしない。
@@ -66,7 +47,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 
 	closeAgent := func() {
 		if agentCloser != nil {
-			agentCloser.Close()
+			if err := agentCloser.Close(); err != nil {
+				slog.Debug("failed to close SSH agent connection", "error", err)
+			}
 		}
 	}
 
@@ -83,21 +66,27 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	}
 
 	addr := net.JoinHostPort(host.HostName, fmt.Sprintf("%d", host.Port))
-	dialTimeout := 10 * time.Second
+	dialTimeout := defaultDialTimeout
 
 	// クレデンシャルコールバックがある場合、ハンドシェイク中にユーザー入力を待つため
 	// デッドラインを長くする。
 	handshakeTimeout := dialTimeout
 	if cb != nil {
-		handshakeTimeout = 120 * time.Second
+		handshakeTimeout = defaultHandshakeTimeout
+	}
+
+	// ProxyJump が設定されていても現在は未対応のため警告を出力
+	if len(host.ProxyJump) > 0 {
+		slog.Warn("ProxyJump is not supported, ignoring",
+			"host", host.Name, "proxy_jump", host.ProxyJump)
 	}
 
 	// 接続（ProxyCommand の有無で分岐）
 	// ProxyCommand が設定されている場合は ProxyJump より優先する（OpenSSH の挙動に準拠）。
 	var conn net.Conn
 	if host.ProxyCommand != "" {
-		expandedCmd := ExpandProxyCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
-		conn, err = dialViaProxyCommand(expandedCmd)
+		expandedCmd := proxycommand.ExpandCommand(host.ProxyCommand, host.HostName, host.Port, host.User)
+		conn, err = proxycommand.Dial(expandedCmd)
 		if err != nil {
 			closeAgent()
 			return nil, fmt.Errorf("failed to connect via ProxyCommand: %w", err)
@@ -161,6 +150,8 @@ func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, er
 			if mkErr := os.WriteFile(knownHostsPath, nil, 0600); mkErr != nil {
 				return nil, fmt.Errorf("failed to create known_hosts: %w", mkErr)
 			}
+			slog.Warn("known_hosts is empty; to trust host keys, run: ssh <host> manually",
+				"path", knownHostsPath)
 			// 空ファイルで再読込（全ホストキーを未知として扱う）
 			callback, err = knownhosts.New(knownHostsPath)
 			if err != nil {
@@ -173,12 +164,15 @@ func buildHostKeyCallback(strictHostKeyChecking string) (ssh.HostKeyCallback, er
 	return callback, nil
 }
 
+// Close は SSH 接続とエージェント接続を閉じる。
 func (c *sshConnection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.agentCloser != nil {
-		c.agentCloser.Close()
+		if err := c.agentCloser.Close(); err != nil {
+			slog.Debug("failed to close SSH agent connection", "error", err)
+		}
 		c.agentCloser = nil
 	}
 
@@ -206,7 +200,7 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
@@ -214,7 +208,9 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close local forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
@@ -238,7 +234,9 @@ func (c *sshConnection) RemoteForward(ctx context.Context, remotePort int, local
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close remote forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
@@ -254,7 +252,7 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 		return nil, fmt.Errorf("not connected")
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
+	addr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", localPort))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
@@ -262,12 +260,15 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close dynamic forward listener", "addr", addr, "error", err)
+		}
 	}()
 
 	return listener, nil
 }
 
+// IsAlive は keepalive リクエストで接続の生存を確認する。
 func (c *sshConnection) IsAlive() bool {
 	client := c.getClient()
 	if client == nil {
@@ -278,6 +279,7 @@ func (c *sshConnection) IsAlive() bool {
 	return err == nil
 }
 
+// KeepAlive は定期的に keepalive リクエストを送信する。
 func (c *sshConnection) KeepAlive(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

@@ -3,6 +3,7 @@ package forward
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -10,7 +11,11 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// eventChannelBuffer はイベントチャネルのバッファサイズ。
+const eventChannelBuffer = 16
+
 // activeForward は実行中のフォワーディングセッションを保持する。
+// starting が true の場合、起動処理中のプレースホルダーを表す。
 type activeForward struct {
 	session  core.ForwardSession
 	listener net.Listener
@@ -18,10 +23,12 @@ type activeForward struct {
 	cancel   context.CancelFunc
 	sent     atomic.Int64
 	received atomic.Int64
+	starting bool
 }
 
 type forwardManager struct {
 	mu          sync.RWMutex
+	ctx         context.Context
 	sshManager  core.SSHManager
 	rules       map[string]core.ForwardRule
 	ruleOrder   []string // 追加順序を保持
@@ -32,8 +39,9 @@ type forwardManager struct {
 }
 
 // NewForwardManager は ForwardManager の実装を返す。
-func NewForwardManager(sshManager core.SSHManager) core.ForwardManager {
+func NewForwardManager(ctx context.Context, sshManager core.SSHManager) core.ForwardManager {
 	return &forwardManager{
+		ctx:        ctx,
 		sshManager: sshManager,
 		rules:      make(map[string]core.ForwardRule),
 		active:     make(map[string]*activeForward),
@@ -46,29 +54,26 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 名前が空の場合は自動生成
 	if rule.Name == "" {
 		m.nextID++
 		rule.Name = fmt.Sprintf("forward-%d", m.nextID)
 	}
 
-	// 名前の一意性チェック
 	if _, exists := m.rules[rule.Name]; exists {
-		return "", fmt.Errorf("rule %q already exists", rule.Name)
+		return "", &core.AlreadyExistsError{Resource: "rule", Name: rule.Name}
 	}
 
-	// バリデーション
 	if rule.Host == "" {
 		return "", fmt.Errorf("host is required")
 	}
 
-	if rule.LocalPort < 1 || rule.LocalPort > 65535 {
-		return "", fmt.Errorf("local_port must be between 1 and 65535, got %d", rule.LocalPort)
+	if err := core.ValidatePort(rule.LocalPort); err != nil {
+		return "", fmt.Errorf("local_port: %w", err)
 	}
 
 	if rule.Type == core.Local || rule.Type == core.Remote {
-		if rule.RemotePort < 1 || rule.RemotePort > 65535 {
-			return "", fmt.Errorf("remote_port must be between 1 and 65535, got %d", rule.RemotePort)
+		if err := core.ValidatePort(rule.RemotePort); err != nil {
+			return "", fmt.Errorf("remote_port: %w", err)
 		}
 		if rule.RemoteHost == "" {
 			rule.RemoteHost = "localhost"
@@ -85,14 +90,13 @@ func (m *forwardManager) DeleteRule(name string) error {
 	m.mu.Lock()
 	if _, exists := m.rules[name]; !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("rule %q not found", name)
+		return &core.NotFoundError{Resource: "rule", Name: name}
 	}
 
 	// アクティブな場合は停止（ロックを保持したまま）
 	session := m.stopForwardLocked(name)
 
 	delete(m.rules, name)
-	// ruleOrder から削除
 	for i, n := range m.ruleOrder {
 		if n == name {
 			m.ruleOrder = append(m.ruleOrder[:i], m.ruleOrder[i+1:]...)
@@ -148,6 +152,67 @@ func (m *forwardManager) emit(event core.ForwardEvent) {
 		select {
 		case ch <- event:
 		default:
+			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
 		}
 	}
+}
+
+// GetSession はルール名からセッション情報を返す。
+func (m *forwardManager) GetSession(ruleName string) (*core.ForwardSession, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if af, exists := m.active[ruleName]; exists && !af.starting {
+		session := af.session
+		session.BytesSent = af.sent.Load()
+		session.BytesReceived = af.received.Load()
+		return &session, nil
+	}
+
+	rule, exists := m.rules[ruleName]
+	if !exists {
+		return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
+	}
+
+	return &core.ForwardSession{
+		Rule:   rule,
+		Status: core.Stopped,
+	}, nil
+}
+
+// GetAllSessions は全ルールのセッション情報を返す。
+func (m *forwardManager) GetAllSessions() []core.ForwardSession {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	sessions := make([]core.ForwardSession, 0, len(m.ruleOrder))
+	for _, name := range m.ruleOrder {
+		rule, ok := m.rules[name]
+		if !ok {
+			continue
+		}
+
+		if af, active := m.active[name]; active && !af.starting {
+			session := af.session
+			session.BytesSent = af.sent.Load()
+			session.BytesReceived = af.received.Load()
+			sessions = append(sessions, session)
+		} else {
+			sessions = append(sessions, core.ForwardSession{
+				Rule:   rule,
+				Status: core.Stopped,
+			})
+		}
+	}
+	return sessions
+}
+
+// Subscribe はイベントチャネルを返す。
+func (m *forwardManager) Subscribe() <-chan core.ForwardEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ch := make(chan core.ForwardEvent, eventChannelBuffer)
+	m.subscribers = append(m.subscribers, ch)
+	return ch
 }

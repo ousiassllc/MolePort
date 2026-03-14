@@ -75,7 +75,7 @@ func (m *sshManager) GetHost(name string) (*core.SSHHost, error) {
 
 	idx, ok := m.hostsMap[name]
 	if !ok {
-		return nil, fmt.Errorf("host %q not found", name)
+		return nil, &core.NotFoundError{Resource: "host", Name: name}
 	}
 	h := m.hosts[idx]
 	return &h, nil

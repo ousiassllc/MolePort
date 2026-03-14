@@ -14,7 +14,7 @@ func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 		HostName:           info.HostName,
 		Port:               info.Port,
 		User:               info.User,
-		State:              parseConnectionState(info.State),
+		State:              protocol.ParseConnectionState(info.State),
 		ActiveForwardCount: info.ActiveForwardCount,
 	}
 }
@@ -25,7 +25,7 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 	status := parseSessionStatus(info.Status)
 	var connectedAt time.Time
 	if info.ConnectedAt != "" {
-		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt)
+		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt) // パース失敗時はゼロ値（表示上は空欄）
 	}
 	return core.ForwardSession{
 		ID: info.ID,
@@ -46,32 +46,15 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 	}
 }
 
-func parseConnectionState(s string) core.ConnectionState {
-	switch s {
-	case "connected":
-		return core.Connected
-	case "connecting":
-		return core.Connecting
-	case "reconnecting":
-		return core.Reconnecting
-	case "pending_auth":
-		return core.PendingAuth
-	case "error":
-		return core.ConnectionError
-	default:
-		return core.Disconnected
-	}
-}
-
 func parseSessionStatus(s string) core.SessionStatus {
 	switch s {
-	case "active":
+	case protocol.SessionActive:
 		return core.Active
-	case "starting":
+	case protocol.SessionStarting:
 		return core.Starting
-	case "reconnecting":
+	case protocol.SessionReconnecting:
 		return core.SessionReconnecting
-	case "error":
+	case protocol.SessionError:
 		return core.SessionError
 	default:
 		return core.Stopped

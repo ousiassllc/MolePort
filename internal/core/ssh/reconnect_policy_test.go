@@ -95,6 +95,7 @@ func TestSSHManager_PerHostReconnectDisabled(t *testing.T) {
 
 	parser := &mockSSHConfigParser{hosts: hosts}
 	sm := NewSSHManager(
+		context.Background(),
 		parser,
 		func() core.SSHConnection {
 			mu.Lock()

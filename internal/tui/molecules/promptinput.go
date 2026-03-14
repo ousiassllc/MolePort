@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/atoms"
 )
@@ -21,8 +22,8 @@ type PromptInput struct {
 // NewPromptInput は新しい PromptInput を生成する。
 func NewPromptInput() PromptInput {
 	ti := textinput.New()
-	ti.Prompt = tui.ActiveStyle.Render("> ") + " "
-	ti.Placeholder = "コマンドを入力..."
+	ti.Prompt = tui.ActiveStyle().Render("> ") + " "
+	ti.Placeholder = i18n.T("tui.prompt.placeholder")
 	ti.CharLimit = 256
 	return PromptInput{textInput: ti}
 }

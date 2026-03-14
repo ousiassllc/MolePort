@@ -130,7 +130,11 @@ func (d *Daemon) saveState() {
 	}
 
 	if err := d.cfgMgr.SaveState(state); err != nil {
-		slog.Warn("failed to save state", "error", err)
+		slog.Warn("failed to save state, retrying", "error", err)
+		time.Sleep(100 * time.Millisecond)
+		if err := d.cfgMgr.SaveState(state); err != nil {
+			slog.Warn("failed to save state after retry", "error", err)
+		}
 	}
 }
 
@@ -160,11 +164,13 @@ func (d *Daemon) Status() protocol.DaemonStatusResult {
 	}
 
 	return protocol.DaemonStatusResult{
+		Version:              d.version,
 		PID:                  os.Getpid(),
 		StartedAt:            d.startedAt.Format(time.RFC3339),
 		Uptime:               time.Since(d.startedAt).Truncate(time.Second).String(),
 		ConnectedClients:     connectedClients,
 		ActiveSSHConnections: activeSSH,
 		ActiveForwards:       activeForwards,
+		Warnings:             d.warnings,
 	}
 }

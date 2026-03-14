@@ -16,6 +16,7 @@ import (
 
 type mockSSHManager struct {
 	hosts           []core.SSHHost
+	reloadHosts     []core.SSHHost // ReloadHosts 用の別ホストリスト（設定時のみ使用）
 	loadErr         error
 	reloadErr       error
 	connectFn       func(hostName string) error
@@ -35,6 +36,9 @@ func (m *mockSSHManager) ReloadHosts() ([]core.SSHHost, error) {
 	if m.reloadErr != nil {
 		return nil, m.reloadErr
 	}
+	if m.reloadHosts != nil {
+		m.hosts = m.reloadHosts
+	}
 	return m.hosts, nil
 }
 
@@ -48,7 +52,7 @@ func (m *mockSSHManager) GetHost(name string) (*core.SSHHost, error) {
 			return &h, nil
 		}
 	}
-	return nil, fmt.Errorf("host %q not found", name)
+	return nil, &core.NotFoundError{Resource: "host", Name: name}
 }
 
 func (m *mockSSHManager) Connect(hostName string) error {
@@ -86,10 +90,8 @@ func (m *mockSSHManager) GetConnection(_ string) (*ssh.Client, error) {
 func (m *mockSSHManager) GetSSHConnection(_ string) (core.SSHConnection, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (m *mockSSHManager) Subscribe() <-chan core.SSHEvent {
-	return make(chan core.SSHEvent)
-}
-func (m *mockSSHManager) Close() {}
+func (m *mockSSHManager) Subscribe() <-chan core.SSHEvent { return make(chan core.SSHEvent) }
+func (m *mockSSHManager) Close()                          {}
 
 type mockForwardManager struct {
 	rules         []core.ForwardRule
@@ -165,7 +167,7 @@ func (m *mockForwardManager) GetSession(ruleName string) (*core.ForwardSession, 
 			return &s, nil
 		}
 	}
-	return nil, fmt.Errorf("rule %q not found", ruleName)
+	return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
 }
 
 func (m *mockForwardManager) GetAllSessions() []core.ForwardSession {
@@ -174,9 +176,7 @@ func (m *mockForwardManager) GetAllSessions() []core.ForwardSession {
 
 func (m *mockForwardManager) MarkReconnecting(hostName string) {}
 
-func (m *mockForwardManager) RestoreForwards(hostName string) []core.ForwardRestoreResult {
-	return nil
-}
+func (m *mockForwardManager) RestoreForwards(string) []core.ForwardRestoreResult { return nil }
 
 func (m *mockForwardManager) FailReconnecting(hostName string) {}
 
@@ -239,44 +239,28 @@ func (m *mockDaemonInfo) Shutdown(purge bool) error {
 // --- Test helpers ---
 
 func newTestHandler() (*Handler, *mockSSHManager, *mockForwardManager, *mockConfigManager) {
-	sshMgr := &mockSSHManager{
-		hosts: []core.SSHHost{
-			{Name: "prod", HostName: "prod.example.com", Port: 22, User: "deploy", State: core.Connected},
-			{Name: "staging", HostName: "staging.example.com", Port: 22, User: "deploy", State: core.Disconnected},
-		},
-	}
-
+	sshMgr := &mockSSHManager{hosts: []core.SSHHost{
+		{Name: "prod", HostName: "prod.example.com", Port: 22, User: "deploy", State: core.Connected},
+		{Name: "staging", HostName: "staging.example.com", Port: 22, User: "deploy", State: core.Disconnected},
+	}}
 	fwdMgr := &mockForwardManager{
 		rules: []core.ForwardRule{
 			{Name: "web", Host: "prod", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80},
 		},
-		sessions: []core.ForwardSession{
-			{
-				ID:          "web-123",
-				Rule:        core.ForwardRule{Name: "web", Host: "prod", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80},
-				Status:      core.Active,
-				ConnectedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-				BytesSent:   1024,
-			},
-		},
+		sessions: []core.ForwardSession{{
+			ID: "web-123", Status: core.Active, BytesSent: 1024,
+			Rule:        core.ForwardRule{Name: "web", Host: "prod", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80},
+			ConnectedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		}},
 	}
-
 	cfgMgr := &mockConfigManager{}
-
-	sender := func(_ string, _ protocol.Notification) error { return nil }
-	broker := ipc.NewEventBroker(sender)
-
-	daemon := &mockDaemonInfo{
-		status: protocol.DaemonStatusResult{
-			PID:              1234,
-			StartedAt:        "2025-01-01T00:00:00Z",
-			Uptime:           "1h0m0s",
-			ConnectedClients: 2,
-		},
-	}
-
-	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemon)
-	return handler, sshMgr, fwdMgr, cfgMgr
+	broker := ipc.NewEventBroker(func(_ string, _ protocol.Notification) error { return nil })
+	daemon := &mockDaemonInfo{status: protocol.DaemonStatusResult{
+		Version: "test", PID: 1234, StartedAt: "2025-01-01T00:00:00Z",
+		Uptime: "1h0m0s", ConnectedClients: 2,
+		Warnings: []string{"test warning"},
+	}}
+	return NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemon, nil), sshMgr, fwdMgr, cfgMgr
 }
 
 func mustMarshal(t *testing.T, v any) json.RawMessage {

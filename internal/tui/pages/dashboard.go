@@ -1,12 +1,15 @@
 package pages
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
+	"github.com/ousiassllc/moleport/internal/tui/organisms/setuppanel"
 )
 
 // DashboardPage は3パネル + ステータスバーで構成されるレイアウト。
@@ -15,10 +18,11 @@ import (
 // Bottom: LogPanel (ログ出力) + StatusBar
 type DashboardPage struct {
 	forward       organisms.ForwardPanel
-	setup         organisms.SetupPanel
+	setup         setuppanel.Panel
 	log           organisms.LogPanel
 	statusBar     organisms.StatusBar
 	passwordInput molecules.PasswordInput
+	keys          tui.KeyMap
 
 	focusedPane tui.FocusPane
 	width       int
@@ -30,10 +34,11 @@ type DashboardPage struct {
 func NewDashboardPage(version string) DashboardPage {
 	d := DashboardPage{
 		forward:       organisms.NewForwardPanel(),
-		setup:         organisms.NewSetupPanel(),
+		setup:         setuppanel.New(),
 		log:           organisms.NewLogPanel(),
 		statusBar:     organisms.NewStatusBar(),
 		passwordInput: molecules.NewPasswordInput(),
+		keys:          tui.DefaultKeyMap(),
 		focusedPane:   tui.PaneSetup,
 		version:       version,
 	}
@@ -81,13 +86,13 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 
 	case tea.KeyMsg:
 		// Tab でフォーカス切替
-		if msg.String() == "tab" {
+		if key.Matches(msg, d.keys.Tab) {
 			d.cycleFocus()
 			return d, nil
 		}
 
 		// / でセットアップパネルにフォーカス（テキスト入力中でない場合）
-		if msg.String() == "/" && !d.IsInputActive() {
+		if key.Matches(msg, d.keys.Search) && !d.IsInputActive() {
 			d.setFocus(tui.PaneSetup)
 			return d, nil
 		}
@@ -113,7 +118,7 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 	case tui.SSHEventMsg:
 		d.handleSSHEvent(msg.Event)
 	case tui.LogOutputMsg:
-		d.log.AppendOutput(msg.Text)
+		d.log.AppendOutput(msg.Text, msg.Level)
 	}
 
 	// SetupPanel にメッセージを転送（テキスト入力の blink 等）
@@ -137,8 +142,8 @@ func (d DashboardPage) Update(msg tea.Msg) (DashboardPage, tea.Cmd) {
 
 // renderHeader は1行ヘッダーを描画する。
 func (d DashboardPage) renderHeader() string {
-	appName := tui.HeaderStyle.Render("  MolePort")
-	version := tui.MutedStyle.Render(d.version)
+	appName := tui.HeaderStyle().Render("  MolePort")
+	version := tui.MutedStyle().Render(d.version)
 
 	gap := d.width - lipgloss.Width(appName) - lipgloss.Width(version) - 1
 	if gap < 1 {
@@ -199,8 +204,8 @@ func (d *DashboardPage) UpdateHostState(hostName string, state core.ConnectionSt
 }
 
 // AppendLog はログ出力を追加する。
-func (d *DashboardPage) AppendLog(text string) {
-	d.log.AppendOutput(text)
+func (d *DashboardPage) AppendLog(text string, level tui.LogLevel) {
+	d.log.AppendOutput(text, level)
 }
 
 // LogLineCount はログ出力の行数を返す。
@@ -224,6 +229,15 @@ func (d DashboardPage) IsInputActive() bool {
 // ShowPasswordInput はパスワード入力を表示する。
 func (d *DashboardPage) ShowPasswordInput(prompt string) tea.Cmd {
 	return d.passwordInput.Show(prompt)
+}
+
+// SetVersionWarning はバージョン不一致の警告表示を切り替える。
+func (d *DashboardPage) SetVersionWarning(show bool) {
+	if show {
+		d.statusBar.SetWarning(i18n.T("tui.version.mismatch_warning"))
+	} else {
+		d.statusBar.SetWarning("")
+	}
 }
 
 // SetSize はサイズを設定する。

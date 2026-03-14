@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -58,9 +57,37 @@ func TestHandler_ForwardAdd_Success(t *testing.T) {
 	}
 }
 
+func TestHandler_ForwardParamValidation(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		params any
+	}{
+		{"add_empty_host", "forward.add", protocol.ForwardAddParams{Host: "", Type: "local", LocalPort: 8080}},
+		{"add_empty_type", "forward.add", protocol.ForwardAddParams{Host: "prod", Type: "", LocalPort: 8080}},
+		{"add_zero_port", "forward.add", protocol.ForwardAddParams{Host: "prod", Type: "local", LocalPort: 0}},
+		{"delete_empty", "forward.delete", protocol.ForwardDeleteParams{Name: ""}},
+		{"start_empty", "forward.start", protocol.ForwardStartParams{Name: ""}},
+		{"stop_empty", "forward.stop", protocol.ForwardStopParams{Name: ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, _, _, _ := newTestHandler()
+			params := mustMarshal(t, tt.params)
+			_, rpcErr := h.Handle("client-1", tt.method, params)
+			if rpcErr == nil {
+				t.Fatal("expected RPC error")
+			}
+			if rpcErr.Code != protocol.InvalidParams {
+				t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+			}
+		})
+	}
+}
+
 func TestHandler_ForwardAdd_RuleAlreadyExists(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
-	fwdMgr.addErr = fmt.Errorf("rule %q already exists", "web")
+	fwdMgr.addErr = &core.AlreadyExistsError{Resource: "rule", Name: "web"}
 
 	params := mustMarshal(t, protocol.ForwardAddParams{
 		Name:       "web",
@@ -100,7 +127,7 @@ func TestHandler_ForwardDelete_Success(t *testing.T) {
 
 func TestHandler_ForwardDelete_NotFound(t *testing.T) {
 	h, _, fwdMgr, _ := newTestHandler()
-	fwdMgr.deleteErr = fmt.Errorf("rule %q not found", "nonexistent")
+	fwdMgr.deleteErr = &core.NotFoundError{Resource: "rule", Name: "nonexistent"}
 
 	params := mustMarshal(t, protocol.ForwardDeleteParams{Name: "nonexistent"})
 	_, rpcErr := h.Handle("client-1", "forward.delete", params)

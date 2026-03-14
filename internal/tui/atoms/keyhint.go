@@ -16,7 +16,7 @@ func RenderKeyHint(bindings ...key.Binding) string {
 		}
 		keys := b.Help().Key
 		desc := b.Help().Desc
-		part := tui.KeyStyle.Render("["+keys+"]") + " " + tui.DescStyle.Render(desc)
+		part := tui.KeyStyle().Render("["+keys+"]") + " " + tui.DescStyle().Render(desc)
 		parts = append(parts, part)
 	}
 	return strings.Join(parts, "  ")

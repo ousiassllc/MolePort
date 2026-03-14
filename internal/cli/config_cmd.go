@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -13,35 +14,32 @@ func RunConfig(configDir string, args []string) {
 	jsonFlag := fs.Bool("json", false, "JSON 形式で出力")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	client := connectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := callCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	var result protocol.ConfigGetResult
 	if err := client.Call(ctx, "config.get", nil, &result); err != nil {
-		exitError("設定の取得に失敗しました: %v", err)
+		ExitError("%s", i18n.T("cli.config.get_failed", map[string]any{"Error": err}))
 	}
 
 	if *jsonFlag {
-		printJSON(result)
+		PrintJSON(result)
 		return
 	}
 
-	fmt.Println("MolePort Config:")
-	fmt.Printf("  SSH Config:     %s\n", result.SSHConfigPath)
-	fmt.Println("  Reconnect:")
-	fmt.Printf("    Enabled:      %v\n", result.Reconnect.Enabled)
-	fmt.Printf("    Max Retries:  %d\n", result.Reconnect.MaxRetries)
-	fmt.Printf("    Initial Delay: %s\n", result.Reconnect.InitialDelay)
-	fmt.Printf("    Max Delay:    %s\n", result.Reconnect.MaxDelay)
-	fmt.Println("  Session:")
-	fmt.Printf("    Auto Restore: %v\n", result.Session.AutoRestore)
-	fmt.Println("  Log:")
-	fmt.Printf("    Level:        %s\n", result.Log.Level)
-	fmt.Printf("    File:         %s\n", result.Log.File)
+	fmt.Println(i18n.T("cli.config.header"))
+	fmt.Println(i18n.T("cli.config.ssh_config", map[string]any{"Path": result.SSHConfigPath}))
+	fmt.Println(i18n.T("cli.config.reconnect_header"))
+	fmt.Println(i18n.T("cli.config.reconnect_enabled", map[string]any{"Value": result.Reconnect.Enabled}))
+	fmt.Println(i18n.T("cli.config.reconnect_max_retries", map[string]any{"Value": result.Reconnect.MaxRetries}))
+	fmt.Println(i18n.T("cli.config.reconnect_initial_delay", map[string]any{"Value": result.Reconnect.InitialDelay}))
+	fmt.Println(i18n.T("cli.config.reconnect_max_delay", map[string]any{"Value": result.Reconnect.MaxDelay}))
+	fmt.Println(i18n.T("cli.config.session_header"))
+	fmt.Println(i18n.T("cli.config.session_auto_restore", map[string]any{"Value": result.Session.AutoRestore}))
+	fmt.Println(i18n.T("cli.config.log_header"))
+	fmt.Println(i18n.T("cli.config.log_level", map[string]any{"Value": result.Log.Level}))
+	fmt.Println(i18n.T("cli.config.log_file", map[string]any{"Value": result.Log.File}))
 }

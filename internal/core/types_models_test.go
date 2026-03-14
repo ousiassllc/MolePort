@@ -43,6 +43,12 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Forwards != nil {
 		t.Errorf("Forwards should be nil, got %v", cfg.Forwards)
 	}
+	if !cfg.UpdateCheck.Enabled {
+		t.Error("UpdateCheck.Enabled should be true")
+	}
+	if cfg.UpdateCheck.Interval.Duration != 24*time.Hour {
+		t.Errorf("UpdateCheck.Interval = %v, want 24h0m0s", cfg.UpdateCheck.Interval.Duration)
+	}
 }
 
 func TestConfig_YAMLRoundtrip(t *testing.T) {
@@ -54,8 +60,9 @@ func TestConfig_YAMLRoundtrip(t *testing.T) {
 			InitialDelay: Duration{Duration: 2 * time.Second},
 			MaxDelay:     Duration{Duration: 30 * time.Second},
 		},
-		Session: SessionConfig{AutoRestore: true},
-		Log:     LogConfig{Level: "debug", File: "/tmp/test.log"},
+		Session:     SessionConfig{AutoRestore: true},
+		Log:         LogConfig{Level: "debug", File: "/tmp/test.log"},
+		UpdateCheck: UpdateCheckConfig{Enabled: true, Interval: Duration{Duration: 12 * time.Hour}},
 		Forwards: []ForwardRule{
 			{
 				Name:        "test-web",
@@ -94,6 +101,12 @@ func TestConfig_YAMLRoundtrip(t *testing.T) {
 	}
 	if got.Reconnect.InitialDelay.Duration != original.Reconnect.InitialDelay.Duration {
 		t.Errorf("Reconnect.InitialDelay = %v, want %v", got.Reconnect.InitialDelay.Duration, original.Reconnect.InitialDelay.Duration)
+	}
+	if got.UpdateCheck.Enabled != original.UpdateCheck.Enabled {
+		t.Errorf("UpdateCheck.Enabled = %v, want %v", got.UpdateCheck.Enabled, original.UpdateCheck.Enabled)
+	}
+	if got.UpdateCheck.Interval.Duration != original.UpdateCheck.Interval.Duration {
+		t.Errorf("UpdateCheck.Interval = %v, want %v", got.UpdateCheck.Interval.Duration, original.UpdateCheck.Interval.Duration)
 	}
 	if len(got.Forwards) != 2 {
 		t.Fatalf("len(Forwards) = %d, want 2", len(got.Forwards))
@@ -170,5 +183,25 @@ func TestConfig_YAMLRoundtrip_WithHosts(t *testing.T) {
 	}
 	if hc.Reconnect.MaxDelay == nil || hc.Reconnect.MaxDelay.Duration != 120*time.Second {
 		t.Errorf("Hosts[\"prod\"].Reconnect.MaxDelay = %v, want 2m0s", hc.Reconnect.MaxDelay)
+	}
+}
+
+func TestValidatePort(t *testing.T) {
+	tests := []struct {
+		port    int
+		wantErr bool
+	}{
+		{0, true},
+		{-1, true},
+		{1, false},
+		{80, false},
+		{65535, false},
+		{65536, true},
+	}
+	for _, tt := range tests {
+		err := ValidatePort(tt.port)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ValidatePort(%d) error = %v, wantErr %v", tt.port, err, tt.wantErr)
+		}
 	}
 }

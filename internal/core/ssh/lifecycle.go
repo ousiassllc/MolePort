@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	cryptossh "golang.org/x/crypto/ssh"
 
@@ -13,13 +12,7 @@ import (
 
 // isAuthFailure はエラーが認証失敗を示すかどうかを判定する。
 func isAuthFailure(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "unable to authenticate") ||
-		strings.Contains(msg, "no authentication methods available") ||
-		strings.Contains(msg, "no supported methods remain")
+	return core.IsAuthFailure(err)
 }
 
 // Connect はホストへ SSH 接続を確立する。
@@ -51,7 +44,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	idx, ok := m.hostsMap[hostName]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("host %q not found", hostName)
+		return &core.NotFoundError{Resource: "host", Name: hostName}
 	}
 
 	// 既に接続中または接続処理中の場合は何もしない
@@ -84,7 +77,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 			}
 			m.mu.Unlock()
 			m.emit(core.SSHEvent{Type: core.SSHEventPendingAuth, HostName: hostName})
-			return fmt.Errorf("authentication required for %s: %w", hostName, err)
+			return &core.AuthRequiredError{HostName: hostName, Err: err}
 		}
 
 		if i, ok := m.hostsMap[hostName]; ok {
@@ -95,7 +88,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		return fmt.Errorf("failed to connect to %s: %w", hostName, err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
 	hc := &hostConnection{
 		conn:   conn,
 		client: client,
@@ -180,7 +173,7 @@ func (m *sshManager) GetConnection(hostName string) (*cryptossh.Client, error) {
 
 	hc, exists := m.conns[hostName]
 	if !exists || hc.state != core.Connected {
-		return nil, fmt.Errorf("host %q is not connected", hostName)
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	return hc.client, nil
 }
@@ -192,7 +185,7 @@ func (m *sshManager) GetSSHConnection(hostName string) (core.SSHConnection, erro
 
 	hc, exists := m.conns[hostName]
 	if !exists || hc.state != core.Connected {
-		return nil, fmt.Errorf("host %q is not connected", hostName)
+		return nil, &core.NotConnectedError{HostName: hostName}
 	}
 	return hc.conn, nil
 }
@@ -202,7 +195,7 @@ func (m *sshManager) Subscribe() <-chan core.SSHEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.SSHEvent, 16)
+	ch := make(chan core.SSHEvent, eventChannelBuffer)
 	m.subscribers = append(m.subscribers, ch)
 	return ch
 }

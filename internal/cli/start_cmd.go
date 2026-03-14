@@ -3,27 +3,25 @@ package cli
 import (
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // RunStart は start サブコマンドを実行する。
 func RunStart(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("ルール名を指定してください: moleport start <name>")
+		ExitError("%s", i18n.T("cli.start.name_required"))
 	}
 
 	name := args[0]
-	client := connectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := callCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.ForwardStartParams{Name: name}
 	var result protocol.ForwardStartResult
 	if err := client.Call(ctx, "forward.start", params, &result); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	fmt.Printf("%s を開始しました\n", result.Name)
+	fmt.Println(i18n.T("cli.start.success", map[string]any{"Name": result.Name}))
 }

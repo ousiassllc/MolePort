@@ -54,6 +54,18 @@ func TestHandler_SessionGet_Success(t *testing.T) {
 	}
 }
 
+func TestHandler_SessionGet_EmptyName(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.SessionGetParams{Name: ""})
+	_, rpcErr := h.Handle("client-1", "session.get", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty name")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	}
+}
+
 func TestHandler_SessionGet_NotFound(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 

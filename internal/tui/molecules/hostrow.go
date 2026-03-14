@@ -21,23 +21,23 @@ type HostRow struct {
 func (r HostRow) View() string {
 	badge := atoms.RenderConnectionBadge(r.Host.State)
 
-	nameStyle := tui.TextStyle
+	nameStyle := tui.TextStyle()
 	if r.Selected {
-		nameStyle = nameStyle.Bold(true).Foreground(tui.Accent)
+		nameStyle = nameStyle.Bold(true).Foreground(tui.AccentColor())
 	}
 	name := nameStyle.Render(r.Host.Name)
 
-	addr := tui.MutedStyle.Render(
+	addr := tui.MutedStyle().Render(
 		fmt.Sprintf("%s@%s:%d", r.Host.User, r.Host.HostName, r.Host.Port),
 	)
 
 	var forwards string
 	if r.Host.ActiveForwardCount > 0 {
-		forwards = tui.ActiveStyle.Render(
+		forwards = tui.ActiveStyle().Render(
 			fmt.Sprintf("%d fwd", r.Host.ActiveForwardCount),
 		)
 	} else {
-		forwards = tui.MutedStyle.Render("0 fwd")
+		forwards = tui.MutedStyle().Render("0 fwd")
 	}
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,

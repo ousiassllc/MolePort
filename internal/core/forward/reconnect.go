@@ -3,7 +3,6 @@ package forward
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 
@@ -16,6 +15,9 @@ func (m *forwardManager) MarkReconnecting(hostName string) {
 
 	m.mu.Lock()
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.Active {
 			_ = af.listener.Close()
 			af.cancel()
@@ -43,6 +45,9 @@ func (m *forwardManager) RestoreForwards(hostName string) []core.ForwardRestoreR
 	m.mu.RLock()
 	var targets []*activeForward
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.SessionReconnecting {
 			targets = append(targets, af)
 		}
@@ -86,25 +91,9 @@ func (m *forwardManager) restoreSingleForward(
 		return core.ForwardRestoreResult{RuleName: rule.Name, OK: false, Error: sshClientErr.Error()}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx)
 
-	var listener net.Listener
-	var err error
-	switch rule.Type {
-	case core.Local:
-		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
-		listener, err = sshConn.LocalForward(ctx, rule.LocalPort, remoteAddr)
-	case core.Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
-		listener, err = sshConn.RemoteForward(ctx, rule.RemotePort, localAddr)
-	case core.Dynamic:
-		listener, err = sshConn.DynamicForward(ctx, rule.LocalPort)
-	default:
-		cancel()
-		errMsg := fmt.Sprintf("unsupported forward type: %v", rule.Type)
-		m.setForwardError(af, errMsg)
-		return core.ForwardRestoreResult{RuleName: rule.Name, OK: false, Error: errMsg}
-	}
+	listener, err := openListener(ctx, sshConn, rule)
 
 	if err != nil {
 		cancel()
@@ -174,6 +163,9 @@ func (m *forwardManager) FailReconnecting(hostName string) {
 
 	m.mu.Lock()
 	for _, af := range m.active {
+		if af.starting {
+			continue
+		}
 		if af.session.Rule.Host == hostName && af.session.Status == core.SessionReconnecting {
 			af.session.Status = core.SessionError
 			af.session.LastError = "reconnection failed"

@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -20,40 +22,37 @@ func RunAdd(configDir string, args []string) {
 	autoConnect := fs.Bool("auto-connect", false, "起動時に自動接続")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
 	if *host == "" {
-		exitError("--host フラグは必須です")
+		ExitError("%s", i18n.T("cli.add.host_required"))
 	}
 	if *localPort == 0 {
-		exitError("--local-port フラグは必須です")
+		ExitError("%s", i18n.T("cli.add.local_port_required"))
 	}
-	if *localPort < 1 || *localPort > 65535 {
-		exitError("ポート番号は 1〜65535 の範囲で入力してください")
+	if *localPort < core.MinPort || *localPort > core.MaxPort {
+		ExitError("%s", i18n.T("cli.add.port_range"))
 	}
 
 	switch *fwdType {
 	case "local", "remote", "dynamic":
 		// OK
 	default:
-		exitError("--type は local, remote, dynamic のいずれかを指定してください")
+		ExitError("%s", i18n.T("cli.add.type_invalid"))
 	}
 
 	if *fwdType != "dynamic" {
 		if *remotePort == 0 {
-			exitError("--remote-port フラグは local/remote 転送で必須です")
+			ExitError("%s", i18n.T("cli.add.remote_port_required"))
 		}
-		if *remotePort < 1 || *remotePort > 65535 {
-			exitError("ポート番号は 1〜65535 の範囲で入力してください")
+		if *remotePort < core.MinPort || *remotePort > core.MaxPort {
+			ExitError("%s", i18n.T("cli.add.port_range"))
 		}
 	}
 
-	client := connectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := callCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	params := protocol.ForwardAddParams{
 		Name:        *name,
@@ -67,8 +66,8 @@ func RunAdd(configDir string, args []string) {
 
 	var result protocol.ForwardAddResult
 	if err := client.Call(ctx, "forward.add", params, &result); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	fmt.Printf("ルール '%s' を追加しました\n", result.Name)
+	fmt.Println(i18n.T("cli.add.success", map[string]any{"Name": result.Name}))
 }

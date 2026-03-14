@@ -9,13 +9,30 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// setupReconnectTest creates a ForwardManager with a single local rule on "server1",
+// starts the forward, subscribes to events, and marks the host as reconnecting.
+// It drains the reconnecting event before returning.
+func setupReconnectTest(t *testing.T, mockConn *mockSSHConnection) (core.ForwardManager, <-chan core.ForwardEvent) {
+	t.Helper()
+	sm := newMockSSHManager()
+	sm.setConnected("server1", mockConn)
+	fm := NewForwardManager(context.Background(), sm)
+	_, _ = fm.AddRule(core.ForwardRule{
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+	})
+	_ = fm.StartForward("web", nil)
+	events := fm.Subscribe()
+	fm.MarkReconnecting("server1")
+	drainEvent(t, events)
+	return fm, events
+}
+
 func TestForwardManager_MarkReconnecting(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := newMockLocalAndDynamicDefaultConn()
+	mockConn := newMockConn(true, true)
 	sm.setConnected("server1", mockConn)
 	sm.setConnected("server2", mockConn)
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -29,7 +46,7 @@ func TestForwardManager_MarkReconnecting(t *testing.T) {
 	fm.MarkReconnecting("server1")
 
 	reconnecting := make(map[string]bool)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		ev := drainEvent(t, events)
 		if ev.Type != core.ForwardEventReconnecting {
 			t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventReconnecting)
@@ -46,31 +63,15 @@ func TestForwardManager_MarkReconnecting(t *testing.T) {
 }
 
 func TestForwardManager_RestoreForwards(t *testing.T) {
-	sm := newMockSSHManager()
-	startListener := newMockListener()
-	restoreListener := newMockListener()
 	callCount := 0
 	mockConn := &mockSSHConnection{
 		isAlive: true,
 		localForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) {
 			callCount++
-			if callCount == 1 {
-				return startListener, nil
-			}
-			return restoreListener, nil
+			return newMockListener(), nil
 		},
 	}
-	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
-	_, _ = fm.AddRule(core.ForwardRule{
-		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
-	})
-	_ = fm.StartForward("web", nil)
-	events := fm.Subscribe()
-
-	fm.MarkReconnecting("server1")
-	drainEvent(t, events)
-
+	fm, events := setupReconnectTest(t, mockConn)
 	results := fm.RestoreForwards("server1")
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
@@ -103,7 +104,6 @@ func TestForwardManager_RestoreForwards(t *testing.T) {
 }
 
 func TestForwardManager_RestoreForwards_Error(t *testing.T) {
-	sm := newMockSSHManager()
 	callCount := 0
 	mockConn := &mockSSHConnection{
 		isAlive: true,
@@ -115,17 +115,7 @@ func TestForwardManager_RestoreForwards_Error(t *testing.T) {
 			return nil, fmt.Errorf("address already in use")
 		},
 	}
-	sm.setConnected("server1", mockConn)
-	fm := NewForwardManager(sm)
-	_, _ = fm.AddRule(core.ForwardRule{
-		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
-	})
-	_ = fm.StartForward("web", nil)
-	events := fm.Subscribe()
-
-	fm.MarkReconnecting("server1")
-	drainEvent(t, events)
-
+	fm, events := setupReconnectTest(t, mockConn)
 	results := fm.RestoreForwards("server1")
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
@@ -145,18 +135,7 @@ func TestForwardManager_RestoreForwards_Error(t *testing.T) {
 }
 
 func TestForwardManager_FailReconnecting(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockLocalDefaultConn())
-	fm := NewForwardManager(sm)
-	_, _ = fm.AddRule(core.ForwardRule{
-		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
-	})
-	_ = fm.StartForward("web", nil)
-	events := fm.Subscribe()
-
-	fm.MarkReconnecting("server1")
-	drainEvent(t, events)
-
+	fm, events := setupReconnectTest(t, newMockConn(true, false))
 	fm.FailReconnecting("server1")
 	ev := drainEvent(t, events)
 	if ev.Type != core.ForwardEventError {

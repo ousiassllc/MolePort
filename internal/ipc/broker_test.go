@@ -156,8 +156,8 @@ func TestEventBroker_HandleSSHEvent(t *testing.T) {
 		t.Errorf("notification should go to client-ssh, got %q", entries[0].ClientID)
 	}
 
-	if entries[0].Notification.Method != "event.ssh" {
-		t.Errorf("method = %q, want %q", entries[0].Notification.Method, "event.ssh")
+	if entries[0].Notification.Method != protocol.EventSSH {
+		t.Errorf("method = %q, want %q", entries[0].Notification.Method, protocol.EventSSH)
 	}
 
 	var notif protocol.SSHEventNotification
@@ -195,6 +195,22 @@ func TestEventBroker_HandleSSHEvent_WithError(t *testing.T) {
 	}
 	if notif.Error != "connection refused" {
 		t.Errorf("error = %q, want %q", notif.Error, "connection refused")
+	}
+}
+
+func TestEventBroker_Distribute_MarshalError(t *testing.T) {
+	sender, log := collectingSender()
+	broker := NewEventBroker(sender)
+
+	broker.Subscribe("client-1", []string{"test"})
+
+	// json.Marshal が失敗する値（chan 型）を渡し、パニックせず通知が送信されないことを確認
+	broker.distribute("test", "event.test", make(chan int))
+
+	// 少し待って通知が送信されていないことを確認
+	entries := log.get()
+	if len(entries) != 0 {
+		t.Errorf("expected 0 notifications for unmarshalable payload, got %d", len(entries))
 	}
 }
 

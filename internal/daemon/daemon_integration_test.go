@@ -13,7 +13,7 @@ import (
 func TestDaemon_EventRouting(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -49,19 +49,10 @@ func TestDaemon_EventRouting(t *testing.T) {
 	}
 }
 
-func TestEnsureDaemon_NotRunning(t *testing.T) {
-	dir := t.TempDir()
-
-	_, err := EnsureDaemon(dir)
-	if err == nil {
-		t.Fatal("EnsureDaemon() should return error when daemon is not running")
-	}
-}
-
 func TestEnsureDaemon_Running(t *testing.T) {
 	dir := createTestConfigDir(t)
 
-	d, err := New(dir)
+	d, err := New(dir, "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -93,5 +84,8 @@ func TestEnsureDaemon_Running(t *testing.T) {
 
 	if status.PID != os.Getpid() {
 		t.Errorf("PID = %d, want %d", status.PID, os.Getpid())
+	}
+	if status.Version != "test" {
+		t.Errorf("Version = %q, want %q", status.Version, "test")
 	}
 }

@@ -40,8 +40,8 @@ func TestEventBroker_HandleForwardEvent(t *testing.T) {
 		t.Errorf("notification should go to client-fwd, got %q", entries[0].ClientID)
 	}
 
-	if entries[0].Notification.Method != "event.forward" {
-		t.Errorf("method = %q, want %q", entries[0].Notification.Method, "event.forward")
+	if entries[0].Notification.Method != protocol.EventForward {
+		t.Errorf("method = %q, want %q", entries[0].Notification.Method, protocol.EventForward)
 	}
 
 	var notif protocol.ForwardEventNotification

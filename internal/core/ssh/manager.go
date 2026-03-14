@@ -2,6 +2,8 @@ package ssh
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -10,8 +12,13 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-// defaultKeepAliveInterval は KeepAliveInterval が未設定時のフォールバック値。
-const defaultKeepAliveInterval = 30 * time.Second
+const (
+	// defaultKeepAliveInterval は KeepAliveInterval が未設定時のフォールバック値。
+	defaultKeepAliveInterval = 30 * time.Second
+
+	// eventChannelBuffer はイベントチャネルのバッファサイズ。
+	eventChannelBuffer = 16
+)
 
 // keepAliveInterval は設定された KeepAlive 間隔を返す。未設定の場合はデフォルト値を返す。
 func (m *sshManager) keepAliveInterval() time.Duration {
@@ -32,6 +39,7 @@ type hostConnection struct {
 
 type sshManager struct {
 	mu           sync.RWMutex
+	ctx          context.Context
 	parser       core.SSHConfigParser
 	connFactory  func() core.SSHConnection
 	configPath   string
@@ -49,6 +57,7 @@ type sshManager struct {
 
 // NewSSHManager は SSHManager の実装を返す。
 func NewSSHManager(
+	ctx context.Context,
 	parser core.SSHConfigParser,
 	connFactory func() core.SSHConnection,
 	configPath string,
@@ -59,6 +68,7 @@ func NewSSHManager(
 		hostConfigs = make(map[string]core.HostConfig)
 	}
 	return &sshManager{
+		ctx:              ctx,
 		parser:           parser,
 		connFactory:      connFactory,
 		configPath:       configPath,
@@ -79,6 +89,7 @@ func (m *sshManager) emit(event core.SSHEvent) {
 		select {
 		case ch <- event:
 		default:
+			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
 		}
 	}
 }

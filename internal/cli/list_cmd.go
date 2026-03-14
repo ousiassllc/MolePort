@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -14,30 +15,27 @@ func RunList(configDir string, args []string) {
 	hostFlag := fs.String("host", "", "特定ホストのルールのみ表示")
 
 	if err := fs.Parse(args); err != nil {
-		exitError("%v", err)
+		ExitError("%v", err)
 	}
 
-	client := connectDaemon(configDir)
-	defer client.Close()
-
-	ctx, cancel := callCtx()
-	defer cancel()
+	client, ctx, cleanup := DaemonCall(configDir)
+	defer cleanup()
 
 	// ホスト一覧を取得
 	var hosts protocol.HostListResult
 	if err := client.Call(ctx, "host.list", nil, &hosts); err != nil {
-		exitError("ホスト一覧の取得に失敗しました: %v", err)
+		ExitError("%s", i18n.T("cli.list.get_hosts_failed", map[string]any{"Error": err}))
 	}
 
 	// フォワードルール一覧を取得
 	fwdParams := protocol.ForwardListParams{Host: *hostFlag}
 	var forwards protocol.ForwardListResult
 	if err := client.Call(ctx, "forward.list", fwdParams, &forwards); err != nil {
-		exitError("転送ルール一覧の取得に失敗しました: %v", err)
+		ExitError("%s", i18n.T("cli.list.get_forwards_failed", map[string]any{"Error": err}))
 	}
 
 	if *jsonFlag {
-		printJSON(struct {
+		PrintJSON(struct {
 			Hosts    []protocol.HostInfo    `json:"hosts"`
 			Forwards []protocol.ForwardInfo `json:"forwards"`
 		}{
@@ -50,12 +48,13 @@ func RunList(configDir string, args []string) {
 	// ホスト数と接続数をカウント
 	connectedCount := 0
 	for _, h := range hosts.Hosts {
-		if h.State == "connected" {
+		if h.State == protocol.StateConnected {
 			connectedCount++
 		}
 	}
 
-	fmt.Printf("SSH Hosts (%d hosts, %d connected):\n\n", len(hosts.Hosts), connectedCount)
+	fmt.Println(i18n.T("cli.list.hosts_header", map[string]any{"Total": len(hosts.Hosts), "Connected": connectedCount}))
+	fmt.Println()
 
 	// ホスト別に転送ルールをまとめて表示
 	fwdByHost := make(map[string][]protocol.ForwardInfo)
@@ -70,9 +69,9 @@ func RunList(configDir string, args []string) {
 
 		icon := "○"
 		switch h.State {
-		case "connected":
+		case protocol.StateConnected:
 			icon = "●"
-		case "pending_auth":
+		case protocol.StatePendingAuth:
 			icon = "◎"
 		}
 
@@ -80,7 +79,7 @@ func RunList(configDir string, args []string) {
 
 		rules := fwdByHost[h.Name]
 		if len(rules) == 0 {
-			fmt.Println("  (転送ルールなし)")
+			fmt.Println("  " + i18n.T("cli.list.no_rules"))
 		} else {
 			for _, f := range rules {
 				printForwardLine(f)
@@ -93,13 +92,13 @@ func RunList(configDir string, args []string) {
 func printForwardLine(f protocol.ForwardInfo) {
 	typeChar := "L"
 	switch f.Type {
-	case "remote":
+	case protocol.ForwardTypeRemote:
 		typeChar = "R"
-	case "dynamic":
+	case protocol.ForwardTypeDynamic:
 		typeChar = "D"
 	}
 
-	if f.Type == "dynamic" {
+	if f.Type == protocol.ForwardTypeDynamic {
 		fmt.Printf("  %s  :%d\n", typeChar, f.LocalPort)
 	} else {
 		fmt.Printf("  %s  :%d  ->  %s:%d\n", typeChar, f.LocalPort, f.RemoteHost, f.RemotePort)

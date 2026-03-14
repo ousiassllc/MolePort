@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/atoms"
 )
@@ -57,25 +58,25 @@ func (m ConfirmDialog) Update(msg tea.Msg) (ConfirmDialog, tea.Cmd) {
 
 // View は Bubble Tea の View メソッド。
 func (m ConfirmDialog) View() string {
-	msg := tui.TextStyle.Render(m.message)
+	msg := tui.TextStyle().Render(m.message)
 
-	yesStyle := tui.MutedStyle
-	noStyle := tui.MutedStyle
+	yesStyle := tui.MutedStyle()
+	noStyle := tui.MutedStyle()
 	if m.focused {
-		yesStyle = tui.SelectedStyle
+		yesStyle = tui.SelectedStyle()
 	} else {
-		noStyle = tui.SelectedStyle
+		noStyle = tui.SelectedStyle()
 	}
 
 	buttons := fmt.Sprintf("  %s  %s",
-		yesStyle.Render(" Yes "),
-		noStyle.Render(" No "),
+		yesStyle.Render(" "+i18n.T("tui.confirm.yes")+" "),
+		noStyle.Render(" "+i18n.T("tui.confirm.no")+" "),
 	)
 
 	hints := atoms.RenderKeyHint(
-		key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "はい")),
-		key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "いいえ")),
-		key.NewBinding(key.WithKeys("←/→"), key.WithHelp("←/→", "切替")),
+		key.NewBinding(key.WithKeys("y"), key.WithHelp("y", i18n.T("tui.confirm.yes"))),
+		key.NewBinding(key.WithKeys("n"), key.WithHelp("n", i18n.T("tui.confirm.no"))),
+		key.NewBinding(key.WithKeys("←/→"), key.WithHelp("←/→", i18n.T("tui.confirm.switch_hint"))),
 	)
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
@@ -84,5 +85,5 @@ func (m ConfirmDialog) View() string {
 		hints,
 	)
 
-	return tui.FocusedBorder.Render(content)
+	return tui.FocusedBorder().Render(content)
 }

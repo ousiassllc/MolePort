@@ -84,6 +84,7 @@ moleport tui
 | `moleport config [--json]` | 設定を表示 |
 | `moleport reload` | SSH config を再読み込み |
 | `moleport tui` | TUI ダッシュボードを起動 |
+| `moleport update [--check]` | 最新バージョンに自動アップデート（`--check`: 確認のみ） |
 | `moleport version` | バージョン情報を表示 |
 | `moleport help` | ヘルプを表示 |
 
@@ -96,6 +97,9 @@ moleport tui
 | `Tab` | ペイン切り替え |
 | `d` | 選択中の転送を切断 |
 | `x` | 選択中の転送を削除 |
+| `t` | テーマ変更 |
+| `l` | 言語切替 |
+| `v` | バージョン情報表示 |
 | `/` | コマンド入力にフォーカス |
 | `?` | ヘルプ表示 |
 | `Esc` | キャンセル |
@@ -127,6 +131,7 @@ reconnect:
   max_retries: 10
   initial_delay: "1s"
   max_delay: "60s"
+  keepalive_interval: "30s"
 
 session:
   auto_restore: true
@@ -134,6 +139,17 @@ session:
 log:
   level: "info"
   file: "~/.config/moleport/moleport.log"
+
+language: "ja"
+
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+
+update_check:
+  enabled: true            # false でアップデートチェックを無効化
+  interval: "24h"          # チェック間隔
 ```
 
 ## ホスト鍵検証
@@ -161,15 +177,17 @@ Host ts-host1 ts-host2 ts-host3
 ## 開発
 
 ```bash
-make help       # 利用可能なターゲットを表示
-make build      # ビルド
-make run        # ビルドして実行
-make test       # テスト実行
-make test-race  # race detector 付きテスト
-make vet        # go vet
-make fmt        # go fmt
-make lint       # golangci-lint を実行
-make clean      # ビルド成果物を削除
+make help        # 利用可能なターゲットを表示
+make build       # ビルド
+make run         # ビルドして実行
+make test        # テスト実行
+make test-race   # race detector 付きテスト
+make vet         # go vet
+make fmt         # go fmt
+make lint        # golangci-lint を実行
+make linterly    # linterly でファイル行数チェック
+make setup-tools # 開発ツールをインストール（linterly, golangci-lint）
+make clean       # ビルド成果物を削除
 ```
 
 ### Git Hooks (lefthook)

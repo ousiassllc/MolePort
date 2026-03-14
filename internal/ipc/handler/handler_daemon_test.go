@@ -19,18 +19,24 @@ func TestHandler_DaemonStatus(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want protocol.DaemonStatusResult", result)
 	}
+	if statusResult.Version != "test" {
+		t.Errorf("Version = %q, want %q", statusResult.Version, "test")
+	}
 	if statusResult.PID != 1234 {
 		t.Errorf("PID = %d, want %d", statusResult.PID, 1234)
 	}
 	if statusResult.ConnectedClients != 2 {
 		t.Errorf("ConnectedClients = %d, want %d", statusResult.ConnectedClients, 2)
 	}
+	if len(statusResult.Warnings) != 1 || statusResult.Warnings[0] != "test warning" {
+		t.Errorf("Warnings = %v, want [\"test warning\"]", statusResult.Warnings)
+	}
 }
 
 func TestHandler_DaemonStatus_NilDaemon(t *testing.T) {
 	sender := func(_ string, _ protocol.Notification) error { return nil }
 	broker := ipc.NewEventBroker(sender)
-	h := NewHandler(&mockSSHManager{}, &mockForwardManager{}, &mockConfigManager{}, broker, nil)
+	h := NewHandler(&mockSSHManager{}, &mockForwardManager{}, &mockConfigManager{}, broker, nil, nil)
 
 	_, rpcErr := h.Handle("client-1", "daemon.status", nil)
 	if rpcErr == nil {
@@ -88,7 +94,7 @@ func TestHandler_DaemonShutdown_PurgeFlag(t *testing.T) {
 	broker := ipc.NewEventBroker(sender)
 	daemonMock := &mockDaemonInfo{}
 
-	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock)
+	handler := NewHandler(sshMgr, fwdMgr, cfgMgr, broker, daemonMock, nil)
 
 	params := mustMarshal(t, protocol.DaemonShutdownParams{Purge: true})
 	_, rpcErr := handler.Handle("client-1", "daemon.shutdown", params)

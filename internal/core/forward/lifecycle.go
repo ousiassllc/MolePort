@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -17,51 +16,51 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	rule, exists := m.rules[ruleName]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("rule %q not found", ruleName)
+		return &core.NotFoundError{Resource: "rule", Name: ruleName}
 	}
 
 	if _, active := m.active[ruleName]; active {
 		m.mu.Unlock()
-		return fmt.Errorf("forward %q is already active", ruleName)
+		return &core.AlreadyActiveError{Name: ruleName}
 	}
+
+	m.active[ruleName] = &activeForward{starting: true}
 	m.mu.Unlock()
 
-	// SSH 接続を確認（必要に応じてコールバック付きで接続）
+	cleanup := func() {
+		m.mu.Lock()
+		if af, ok := m.active[ruleName]; ok && af.starting {
+			delete(m.active, ruleName)
+		}
+		m.mu.Unlock()
+	}
+
 	if !m.sshManager.IsConnected(rule.Host) {
 		if err := m.sshManager.ConnectWithCallback(rule.Host, cb); err != nil {
+			cleanup()
 			return fmt.Errorf("failed to connect to host %s: %w", rule.Host, err)
 		}
 	}
 
 	sshConn, err := m.sshManager.GetSSHConnection(rule.Host)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("failed to get SSH connection: %w", err)
 	}
 
 	sshClient, err := m.sshManager.GetConnection(rule.Host)
 	if err != nil {
+		cleanup()
 		return fmt.Errorf("failed to get SSH client: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.ctx)
 
-	var listener net.Listener
-	switch rule.Type {
-	case core.Local:
-		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
-		listener, err = sshConn.LocalForward(ctx, rule.LocalPort, remoteAddr)
-	case core.Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
-		listener, err = sshConn.RemoteForward(ctx, rule.RemotePort, localAddr)
-	case core.Dynamic:
-		listener, err = sshConn.DynamicForward(ctx, rule.LocalPort)
-	default:
-		cancel()
-		return fmt.Errorf("unsupported forward type: %v", rule.Type)
-	}
+	listener, err := openListener(ctx, sshConn, rule)
 
 	if err != nil {
 		cancel()
+		cleanup()
 		return fmt.Errorf("failed to create listener: %w", err)
 	}
 
@@ -81,7 +80,6 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	m.active[ruleName] = af
 	m.mu.Unlock()
 
-	// accept ループを開始
 	go m.acceptLoop(af, rule, sshClient)
 
 	m.emit(core.ForwardEvent{
@@ -134,6 +132,12 @@ func (m *forwardManager) StopAllForwards() error {
 func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession {
 	af, exists := m.active[ruleName]
 	if !exists {
+		return nil
+	}
+
+	// 起動中プレースホルダーの場合はエントリを削除するのみ
+	if af.starting {
+		delete(m.active, ruleName)
 		return nil
 	}
 

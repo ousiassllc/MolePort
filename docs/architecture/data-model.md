@@ -106,6 +106,20 @@ forwards:
     type: "dynamic"
     local_port: 1080
     auto_connect: false
+
+# 言語設定（"en" | "ja"）
+language: "ja"
+
+# アップデートチェック設定
+update_check:
+  enabled: true            # 自動アップデートチェックの有効/無効
+  interval: "24h"          # チェック間隔（最小: 1h）
+
+# TUI 設定
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
 ```
 
 ### Go 型定義
@@ -118,6 +132,23 @@ type Config struct {
     Session       SessionConfig             `yaml:"session"`
     Log           LogConfig                 `yaml:"log"`
     Forwards      []ForwardRule             `yaml:"forwards"`
+    Language      string                    `yaml:"language"`
+    UpdateCheck   UpdateCheckConfig         `yaml:"update_check"`
+    TUI           TUIConfig                 `yaml:"tui"`
+}
+
+type UpdateCheckConfig struct {
+    Enabled  bool     `yaml:"enabled"`   // デフォルト: true
+    Interval Duration `yaml:"interval"`  // デフォルト: 24h、最小: 1h
+}
+
+type TUIConfig struct {
+    Theme ThemeConfig `yaml:"theme"`
+}
+
+type ThemeConfig struct {
+    Base   string `yaml:"base"`   // "dark" | "light"
+    Accent string `yaml:"accent"` // "violet" | "blue" | "green" | "cyan" | "orange"
 }
 
 type ReconnectConfig struct {
@@ -332,6 +363,16 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 | ReconnectCount | int | 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント） |
 | LastError | string | 最後のエラーメッセージ |
 
+### VersionCheckResult
+
+デーモンがメモリにキャッシュする最新バージョンチェック結果。ディスクには永続化しない。
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| LatestVersion | string | 最新リリースのバージョン（例: `"v0.2.0"`） |
+| ReleaseURL | string | GitHub リリースページの URL |
+| CheckedAt | time.Time | チェック実行日時 |
+
 > **Note**: デーモンの状態情報は core パッケージの内部データモデルではなく、IPC プロトコル層の `DaemonStatusResult`（「デーモン管理」セクション参照）として定義されている。
 
 ### 内部データモデルの Go 型定義
@@ -393,6 +434,21 @@ type ForwardSession struct {
     BytesReceived  int64         // 受信バイト数
     ReconnectCount int           // 再接続回数（SSH 再接続によるフォワード復元成功のたびにインクリメント）
     LastError      string        // 最後のエラーメッセージ
+}
+
+// フォワード復元結果
+type ForwardRestoreResult struct {
+    RuleName string // ルール名
+    OK       bool   // 復元成功フラグ
+    Error    string // エラーメッセージ（失敗時）
+}
+
+// バージョンチェック結果（デーモンがメモリにキャッシュ）
+type VersionCheckResult struct {
+    LatestVersion   string    // 最新リリースのバージョン（例: "v0.2.0"）
+    ReleaseURL      string    // GitHub リリースページの URL
+    CheckedAt       time.Time // チェック実行日時
+    UpdateAvailable bool      // アップデートが利用可能か
 }
 
 ```
@@ -586,6 +642,11 @@ type ForwardStopResult struct {
     Name   string `json:"name"`
     Status string `json:"status"` // "stopped"
 }
+
+// forward.stopAll
+type ForwardStopAllResult struct {
+    Stopped int `json:"stopped"`
+}
 ```
 
 ### セッション情報
@@ -630,6 +691,20 @@ type ConfigGetResult struct {
     Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
     Session       SessionCfgInfo            `json:"session"`
     Log           LogInfo                   `json:"log"`
+    Language      string                    `json:"language"`
+    UpdateCheck   UpdateCheckInfo           `json:"update_check"`
+    TUI           TUIInfo                   `json:"tui"`
+}
+type UpdateCheckInfo struct {
+    Enabled  bool   `json:"enabled"`
+    Interval string `json:"interval"`
+}
+type TUIInfo struct {
+    Theme ThemeInfo `json:"theme"`
+}
+type ThemeInfo struct {
+    Base   string `json:"base"`
+    Accent string `json:"accent"`
 }
 type HostConfigInfo struct {
     Reconnect *ReconnectOverrideInfo `json:"reconnect,omitempty"`
@@ -662,6 +737,24 @@ type ConfigUpdateParams struct {
     Hosts         map[string]*HostConfigUpdateInfo  `json:"hosts,omitempty"`
     Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
     Log           *LogUpdateInfo                   `json:"log,omitempty"`
+    Language      *string                          `json:"language,omitempty"`
+    UpdateCheck   *UpdateCheckUpdateInfo           `json:"update_check,omitempty"`
+    TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
+}
+
+// アップデートチェック設定の部分更新パラメータ
+type UpdateCheckUpdateInfo struct {
+    Enabled  *bool   `json:"enabled,omitempty"`
+    Interval *string `json:"interval,omitempty"`
+}
+
+// TUI 設定の部分更新パラメータ
+type TUIUpdateInfo struct {
+    Theme *ThemeUpdateInfo `json:"theme,omitempty"`
+}
+type ThemeUpdateInfo struct {
+    Base   *string `json:"base,omitempty"`
+    Accent *string `json:"accent,omitempty"`
 }
 type HostConfigUpdateInfo struct {
     Reconnect *ReconnectUpdateInfo `json:"reconnect,omitempty"`
@@ -697,18 +790,36 @@ type LogUpdateInfo struct {
 // daemon.status
 type DaemonStatusParams struct{}
 type DaemonStatusResult struct {
+    Version              string `json:"version"`    // ビルドバージョン（ldflags で埋め込み、例: "v0.2.0"、開発時は "dev"）
     PID                  int    `json:"pid"`
     StartedAt            string `json:"started_at"` // RFC3339
     Uptime               string `json:"uptime"`     // human-readable ("2h 30m")
     ConnectedClients     int    `json:"connected_clients"`
     ActiveSSHConnections int    `json:"active_ssh_connections"`
-    ActiveForwards       int    `json:"active_forwards"`
+    ActiveForwards       int      `json:"active_forwards"`
+    Warnings             []string `json:"warnings,omitempty"`
 }
 
 // daemon.shutdown
-type DaemonShutdownParams struct{}
+type DaemonShutdownParams struct {
+    Purge bool `json:"purge,omitempty"` // true の場合、停止時に状態ファイル（state.yaml）を削除する
+}
 type DaemonShutdownResult struct {
     OK bool `json:"ok"`
+}
+```
+
+### バージョンチェック
+
+```go
+// version.check
+type VersionCheckParams struct{}
+type VersionCheckResult struct {
+    CurrentVersion  string `json:"current_version"`            // 現在のバージョン（デーモンのビルドバージョン）
+    LatestVersion   string `json:"latest_version,omitempty"`   // 最新リリースバージョン
+    UpdateAvailable bool   `json:"update_available"`           // 更新があるか
+    ReleaseURL      string `json:"release_url,omitempty"`      // GitHub リリースページ URL
+    CheckedAt       string `json:"checked_at,omitempty"`       // チェック日時（RFC3339）
 }
 ```
 
@@ -766,26 +877,17 @@ type SessionMetrics struct {
 ### クレデンシャル要求/応答
 
 ```go
-// CredentialType はクレデンシャル要求の種別を表す。
-type CredentialType string
-
-const (
-    CredentialPassword            CredentialType = "password"              // パスワード認証
-    CredentialPassphrase          CredentialType = "passphrase"            // パスフレーズ付き秘密鍵
-    CredentialKeyboardInteractive CredentialType = "keyboard-interactive"  // keyboard-interactive 認証
-)
-
 // credential.request（デーモン → クライアント通知）
 // ssh.connect の処理中にクレデンシャルが必要になった場合に送信される。
 type CredentialRequestNotification struct {
-    RequestID string         `json:"request_id"`             // リクエスト一意 ID（レスポンスとの紐付け用）
-    Type      CredentialType `json:"type"`                   // 認証種別
-    Host      string         `json:"host"`                   // 対象ホスト名
-    Prompt    string         `json:"prompt,omitempty"`       // password/passphrase 用の表示プロンプト
-    Prompts   []PromptInfo   `json:"prompts,omitempty"`      // keyboard-interactive 用（複数プロンプト対応）
+    RequestID string       `json:"request_id"`             // リクエスト一意 ID（レスポンスとの紐付け用）
+    Type      string       `json:"type"`                   // "password" | "passphrase" | "keyboard-interactive"
+    Host      string       `json:"host"`                   // 対象ホスト名
+    Prompt    string       `json:"prompt,omitempty"`       // password/passphrase 用の表示プロンプト
+    Prompts   []PromptData `json:"prompts,omitempty"`      // keyboard-interactive 用（複数プロンプト対応）
 }
 
-type PromptInfo struct {
+type PromptData struct {
     Prompt string `json:"prompt"`    // プロンプト文字列（例: "Password:", "OTP Code:"）
     Echo   bool   `json:"echo"`      // true の場合は入力をエコー表示する（OTP 等）
 }
@@ -832,4 +934,8 @@ type CredentialResponseResult struct {
 | 2.2 | 2026-02-26 | SSHHost に ProxyCommand・StrictHostKeyChecking フィールドを追加 | #23 StrictHostKeyChecking 対応 |
 | 2.3 | 2026-02-27 | ForwardRule.Type を ForwardType に修正、DaemonState を削除し IPC プロトコル型への参照に変更 | #25 ドキュメント乖離修正 |
 | 2.4 | 2026-02-27 | ReconnectConfig に KeepAliveInterval 追加、HostConfig/ReconnectOverride 型追加、ForwardEventNotification に reconnecting/restored 追加、状態遷移に Reconnecting→PendingAuth パス追加、IPC 型に hosts セクション追加 | #27 自動再接続機能の改善・拡張 |
-| 3.0 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
+| 2.5 | 2026-03-01 | config.yaml に `tui.theme` セクション追加、Config に TUIConfig/ThemeConfig 型追加、IPC 型に TUIInfo/ThemeInfo/TUIUpdateInfo/ThemeUpdateInfo 追加 | #34 TUI カラーテーマ機能 |
+| 2.6 | 2026-03-01 | DaemonStatusResult に Version フィールドを追加 | #36 バージョン不一致検出 |
+| 2.7 | 2026-03-01 | Config/ConfigGetResult/ConfigUpdateParams に Language フィールド追加、DaemonShutdownParams に Purge フィールド追加、PromptInfo→PromptData 型名統一、CredentialRequestNotification.Type を string 型に修正、forward.stopAll 型定義追加 | ドキュメント乖離修正 (#40) |
+| 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |
+| 3.1 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |

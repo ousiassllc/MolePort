@@ -30,6 +30,9 @@ func TestConfigUpdateParams_PointerFields(t *testing.T) {
 	if strings.Contains(string(data), `"log"`) {
 		t.Errorf("ConfigUpdateParams JSON should omit nil log, got: %s", data)
 	}
+	if strings.Contains(string(data), `"update_check"`) {
+		t.Errorf("ConfigUpdateParams JSON should omit nil update_check, got: %s", data)
+	}
 
 	var got ConfigUpdateParams
 	if err := json.Unmarshal(data, &got); err != nil {
@@ -82,31 +85,6 @@ func TestConfigUpdateParams_AllFields(t *testing.T) {
 	}
 	if got.Log == nil || got.Log.Level == nil || *got.Log.Level != "debug" {
 		t.Errorf("Log.Level = %v, want debug", got.Log)
-	}
-}
-
-func TestDaemonStatusResult_JSONRoundtrip(t *testing.T) {
-	original := DaemonStatusResult{
-		PID:                  12345,
-		StartedAt:            "2026-02-11T10:00:00Z",
-		Uptime:               "2h 30m",
-		ConnectedClients:     2,
-		ActiveSSHConnections: 3,
-		ActiveForwards:       5,
-	}
-
-	data, err := json.Marshal(original)
-	if err != nil {
-		t.Fatalf("Marshal DaemonStatusResult: %v", err)
-	}
-
-	var got DaemonStatusResult
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("Unmarshal DaemonStatusResult: %v", err)
-	}
-
-	if got != original {
-		t.Errorf("DaemonStatusResult roundtrip: got %+v, want %+v", got, original)
 	}
 }
 
@@ -204,5 +182,73 @@ func TestMetricsEventNotification_JSONRoundtrip(t *testing.T) {
 	}
 	if got.Sessions[1] != original.Sessions[1] {
 		t.Errorf("Sessions[1] = %+v, want %+v", got.Sessions[1], original.Sessions[1])
+	}
+}
+
+func TestVersionCheckResult_JSONRoundtrip(t *testing.T) {
+	original := VersionCheckResult{
+		CurrentVersion:  "v0.3.0",
+		LatestVersion:   "v0.4.0",
+		UpdateAvailable: true,
+		ReleaseURL:      "https://github.com/ousiassllc/moleport/releases/tag/v0.4.0",
+		CheckedAt:       "2026-03-04T10:00:00Z",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal VersionCheckResult: %v", err)
+	}
+
+	var got VersionCheckResult
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal VersionCheckResult: %v", err)
+	}
+
+	if got != original {
+		t.Errorf("VersionCheckResult roundtrip: got %+v, want %+v", got, original)
+	}
+}
+
+func TestVersionCheckResult_OmitsEmptyFields(t *testing.T) {
+	result := VersionCheckResult{
+		CurrentVersion:  "v0.3.0",
+		UpdateAvailable: false,
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal VersionCheckResult: %v", err)
+	}
+
+	s := string(data)
+	if strings.Contains(s, `"latest_version"`) {
+		t.Errorf("VersionCheckResult JSON should omit empty latest_version, got: %s", s)
+	}
+	if strings.Contains(s, `"release_url"`) {
+		t.Errorf("VersionCheckResult JSON should omit empty release_url, got: %s", s)
+	}
+	if strings.Contains(s, `"checked_at"`) {
+		t.Errorf("VersionCheckResult JSON should omit empty checked_at, got: %s", s)
+	}
+}
+
+func TestUpdateCheckInfo_JSONRoundtrip(t *testing.T) {
+	original := UpdateCheckInfo{
+		Enabled:  true,
+		Interval: "24h0m0s",
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal UpdateCheckInfo: %v", err)
+	}
+
+	var got UpdateCheckInfo
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal UpdateCheckInfo: %v", err)
+	}
+
+	if got != original {
+		t.Errorf("UpdateCheckInfo roundtrip: got %+v, want %+v", got, original)
 	}
 }

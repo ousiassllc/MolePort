@@ -4,17 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
 func TestForwardManager_StartForward_RuleNotFound(t *testing.T) {
-	sm := newMockSSHManager()
-	fm := NewForwardManager(sm)
-
-	err := fm.StartForward("nonexistent", nil)
-	if err == nil {
+	if err := NewForwardManager(context.Background(), newMockSSHManager()).StartForward("nonexistent", nil); err == nil {
 		t.Fatal("StartForward() should return error for nonexistent rule")
 	}
 }
@@ -22,31 +19,21 @@ func TestForwardManager_StartForward_RuleNotFound(t *testing.T) {
 func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	sm := newMockSSHManager()
 	sm.connectErr = fmt.Errorf("connection refused")
-	fm := NewForwardManager(sm)
-
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
-	err := fm.StartForward("web", nil)
-	if err == nil {
+	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error when SSH connect fails")
 	}
 }
 
-// TestForwardManager_StartForward_UsesCallbackForConnect は、
-// StartForward にコールバックを渡した場合、未接続ホストへの接続に
-// ConnectWithCallback（コールバック付き）が使用されることを検証する。
-// これは Issue #20 の回帰テスト: 以前は Connect（コールバックなし）が使用され、
-// パスワード認証が必要なホストへの接続が失敗していた。
+// TestForwardManager_StartForward_UsesCallbackForConnect は Issue #20 の回帰テスト:
+// コールバック付き StartForward が ConnectWithCallback を使用することを検証する。
 func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 	sm := newMockSSHManager()
-	mockConn := newMockLocalDefaultConn()
-
-	// Connect（コールバックなし）は認証エラーを返す
+	mockConn := newMockConn(true, false)
 	sm.connectErr = fmt.Errorf("authentication required: no authentication methods available")
-
-	// ConnectWithCallback はコールバック付きなら成功する
 	var receivedCb core.CredentialCallback
 	sm.connectWithCbFn = func(hostName string, cb core.CredentialCallback) error {
 		receivedCb = cb
@@ -56,44 +43,33 @@ func TestForwardManager_StartForward_UsesCallbackForConnect(t *testing.T) {
 		sm.mu.Unlock()
 		return nil
 	}
-
-	fm := NewForwardManager(sm)
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
-	// コールバック付きで StartForward を呼び出す
-	cb := func(req core.CredentialRequest) (core.CredentialResponse, error) {
+	cb := func(_ core.CredentialRequest) (core.CredentialResponse, error) {
 		return core.CredentialResponse{Value: "password123"}, nil
 	}
-	err := fm.StartForward("web", cb)
-	if err != nil {
+	if err := fm.StartForward("web", cb); err != nil {
 		t.Fatalf("StartForward() with callback should succeed, got error: %v", err)
 	}
-
-	// ConnectWithCallback にコールバックが渡されたことを確認
 	if receivedCb == nil {
 		t.Fatal("ConnectWithCallback should have received a non-nil callback")
 	}
-
 	fm.Close()
 }
 
 func TestForwardManager_StartForward_Local(t *testing.T) {
 	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockLocalDefaultConn())
-	fm := NewForwardManager(sm)
-
+	sm.setConnected("server1", newMockConn(true, false))
+	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
-
 	events := fm.Subscribe()
-
 	if err := fm.StartForward("web", nil); err != nil {
 		t.Fatalf("StartForward() error = %v", err)
 	}
-
 	ev := drainEvent(t, events)
 	if ev.Type != core.ForwardEventStarted {
 		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStarted)
@@ -108,7 +84,6 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		t.Errorf("session status = %v, want %v", ev.Session.Status, core.Active)
 	}
 	assertSessionStatus(t, fm, "web", core.Active)
-
 	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error for already active forward")
 	}
@@ -120,6 +95,44 @@ func TestForwardManager_StartForward_Local(t *testing.T) {
 		t.Errorf("event type = %v, want %v", ev.Type, core.ForwardEventStopped)
 	}
 	assertSessionStatus(t, fm, "web", core.Stopped)
+}
+
+// TestForwardManager_StartForward_ConcurrentSameRule は並行呼び出しで重複リスナーが作成されないことを検証する。
+func TestForwardManager_StartForward_ConcurrentSameRule(t *testing.T) {
+	sm := newMockSSHManager()
+	sm.connectWithCbFn = func(hostName string, _ core.CredentialCallback) error {
+		sm.mu.Lock()
+		sm.connected[hostName] = true
+		sm.sshConns[hostName] = newMockConn(true, false)
+		sm.mu.Unlock()
+		return nil
+	}
+	fm := NewForwardManager(context.Background(), sm)
+	_, _ = fm.AddRule(core.ForwardRule{
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+	})
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	errs := make([]error, goroutines)
+	for i := range goroutines {
+		go func() {
+			defer wg.Done()
+			errs[i] = fm.StartForward("web", nil)
+		}()
+	}
+	wg.Wait()
+	var successCount int
+	for _, err := range errs {
+		if err == nil {
+			successCount++
+		}
+	}
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 success, got %d", successCount)
+	}
+	fm.Close()
 }
 
 func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
@@ -141,14 +154,14 @@ func TestForwardManager_StartForward_RemoteAndDynamic(t *testing.T) {
 		{
 			name:     "Dynamic",
 			rule:     core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080},
-			mockConn: newMockDynamicDefaultConn(),
+			mockConn: newMockConn(false, true),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sm := newMockSSHManager()
 			sm.setConnected("server1", tt.mockConn)
-			fm := NewForwardManager(sm)
+			fm := NewForwardManager(context.Background(), sm)
 			_, _ = fm.AddRule(tt.rule)
 			if err := fm.StartForward(tt.rule.Name, nil); err != nil {
 				t.Fatalf("StartForward() error = %v", err)

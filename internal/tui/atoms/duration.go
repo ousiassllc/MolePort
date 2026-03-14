@@ -26,5 +26,5 @@ func RenderDuration(d time.Duration) string {
 	default:
 		text = fmt.Sprintf("%ds", int(d.Seconds()))
 	}
-	return tui.MutedStyle.Render(text)
+	return tui.MutedStyle().Render(text)
 }

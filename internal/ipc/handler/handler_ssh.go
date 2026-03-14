@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -12,6 +13,9 @@ import (
 func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.SSHConnectParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"host", p.Host}); err != nil {
 		return nil, err
 	}
 
@@ -24,13 +28,14 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 
 	return protocol.SSHConnectResult{
 		Host:   p.Host,
-		Status: "connected",
+		Status: protocol.StateConnected,
 	}, nil
 }
 
 // buildCredentialCallback はクライアントへの通知とレスポンス待機を行うコールバックを構築する。
 func (h *Handler) buildCredentialCallback(clientID string, _ string) core.CredentialCallback {
 	if h.sender == nil {
+		slog.Warn("credential callback skipped: notification sender not set")
 		return nil
 	}
 	return func(req core.CredentialRequest) (core.CredentialResponse, error) {
@@ -79,7 +84,7 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 		select {
 		case resp := <-ch:
 			if resp.Cancelled {
-				return core.CredentialResponse{}, fmt.Errorf("credential cancelled")
+				return core.CredentialResponse{}, core.ErrCredentialCancelled
 			}
 			return core.CredentialResponse{
 				RequestID: resp.RequestID,
@@ -87,7 +92,7 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 				Answers:   resp.Answers,
 			}, nil
 		case <-time.After(credentialTimeout):
-			return core.CredentialResponse{}, fmt.Errorf("credential timeout")
+			return core.CredentialResponse{}, core.ErrCredentialTimeout
 		}
 	}
 }
@@ -96,6 +101,9 @@ func (h *Handler) buildCredentialCallback(clientID string, _ string) core.Creden
 func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.CredentialResponseParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"request_id", p.RequestID}); err != nil {
 		return nil, err
 	}
 
@@ -111,6 +119,10 @@ func (h *Handler) credentialResponse(params json.RawMessage) (any, *protocol.RPC
 	select {
 	case ch <- p:
 	default:
+		return nil, &protocol.RPCError{
+			Code:    protocol.InternalError,
+			Message: "credential response channel is full for id: " + p.RequestID,
+		}
 	}
 
 	return protocol.CredentialResponseResult{OK: true}, nil
@@ -121,6 +133,9 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if err := validateRequired(requiredField{"host", p.Host}); err != nil {
+		return nil, err
+	}
 
 	if err := h.sshMgr.Disconnect(p.Host); err != nil {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
@@ -128,6 +143,6 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 
 	return protocol.SSHDisconnectResult{
 		Host:   p.Host,
-		Status: "disconnected",
+		Status: protocol.StateDisconnected,
 	}, nil
 }

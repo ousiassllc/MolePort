@@ -11,5 +11,5 @@ func RenderDivider(width int) string {
 	if width <= 0 {
 		return ""
 	}
-	return tui.DividerStyle.Render(strings.Repeat("─", width))
+	return tui.DividerStyle().Render(strings.Repeat("─", width))
 }
