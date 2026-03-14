@@ -190,7 +190,7 @@ func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
 		return false
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
 	hc := &hostConnection{
 		conn:   conn,
 		client: client,
