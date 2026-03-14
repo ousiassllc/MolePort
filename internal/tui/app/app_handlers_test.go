@@ -17,12 +17,12 @@ func updModel(m MainModel, msg tea.Msg) MainModel {
 func keyMsg(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 
 func TestHandleKeyMsg_Help(t *testing.T) {
-	if !updModel(newTestModel("1.0.0"), keyMsg('?')).showHelpModal {
+	if !updModel(newTestModel("1.0.0"), keyMsg('?')).dialog.showHelpModal {
 		t.Error("showHelpModal should be true")
 	}
 	m := newTestModel("1.0.0")
-	m.showHelpModal = true
-	if updModel(m, keyMsg('a')).showHelpModal {
+	m.dialog.showHelpModal = true
+	if updModel(m, keyMsg('a')).dialog.showHelpModal {
 		t.Error("showHelpModal should be false after any key")
 	}
 }
@@ -36,10 +36,10 @@ func TestHandleKeyMsg_Version(t *testing.T) {
 func TestHandleKeyMsg_ThemeAndLang(t *testing.T) {
 	cleanupTheme(t)
 	cleanupLang(t)
-	if updModel(newTestModel("1.0.0"), keyMsg('t')).currentPage != pageTheme {
+	if updModel(newTestModel("1.0.0"), keyMsg('t')).page.currentPage != pageTheme {
 		t.Error("'t' should open theme page")
 	}
-	if updModel(newTestModel("1.0.0"), keyMsg('l')).currentPage != pageLang {
+	if updModel(newTestModel("1.0.0"), keyMsg('l')).page.currentPage != pageLang {
 		t.Error("'l' should open lang page")
 	}
 }
@@ -86,7 +86,7 @@ func TestHandleForwardMsg_LogOutput(t *testing.T) {
 		t.Errorf("LogLineCount() = %d, want 1", got)
 	}
 	m := newTestModel("1.0.0")
-	m.restarting = true
+	m.dialog.restarting = true
 	if got := updModel(m, tui.LogOutputMsg{Text: "x"}).dashboard.LogLineCount(); got != 0 {
 		t.Errorf("restarting: LogLineCount() = %d, want 0", got)
 	}
@@ -102,7 +102,7 @@ func TestWindowSizeMsg(t *testing.T) {
 func TestView_HelpModal(t *testing.T) {
 	m := newTestModel("1.0.0")
 	m.width, m.height = 80, 24
-	m.showHelpModal = true
+	m.dialog.showHelpModal = true
 	if m.View() == "" {
 		t.Error("should render help overlay")
 	}

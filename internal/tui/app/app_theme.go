@@ -18,7 +18,7 @@ const (
 // handleConfigLoaded は設定読み込み完了メッセージを処理する。
 func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.Cmd) {
 	if msg.Err != nil {
-		if !m.restarting {
+		if !m.dialog.restarting {
 			m.dashboard.AppendLog(i18n.T("tui.log.config_load_error", map[string]any{"Error": msg.Err}), tui.LogError)
 		}
 		return m, nil
@@ -26,27 +26,27 @@ func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.C
 
 	// 言語が未設定 → 初回起動: 言語選択ページから開始
 	if msg.Language == "" {
-		m.isFirstLaunch = true
+		m.page.isFirstLaunch = true
 		m.openLangPage()
 		return m, nil
 	}
 
 	// 言語が設定済み → 適用
 	_ = i18n.SetLang(i18n.Lang(msg.Language))
-	m.currentLang = msg.Language
+	m.page.currentLang = msg.Language
 
 	// テーマが未設定 → テーマ選択ページへ
 	if msg.ThemeBase == "" || msg.ThemeAccent == "" {
-		m.isFirstLaunch = true
-		m.currentPresetID = theme.DefaultPresetID()
-		m.previousPresetID = m.currentPresetID
-		m.themePage = pages.NewThemePage(m.currentPresetID)
-		m.themePage.SetSize(m.width, m.height)
-		m.currentPage = pageTheme
+		m.page.isFirstLaunch = true
+		m.page.currentPresetID = theme.DefaultPresetID()
+		m.page.previousPresetID = m.page.currentPresetID
+		m.page.themePage = pages.NewThemePage(m.page.currentPresetID)
+		m.page.themePage.SetSize(m.width, m.height)
+		m.page.currentPage = pageTheme
 	} else {
 		presetID := theme.PresetIDFromConfig(msg.ThemeBase, msg.ThemeAccent)
 		theme.Apply(presetID)
-		m.currentPresetID = presetID
+		m.page.currentPresetID = presetID
 	}
 	return m, nil
 }
@@ -54,31 +54,31 @@ func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.C
 // handleThemeSelected はテーマ選択メッセージを処理する。
 func (m MainModel) handleThemeSelected(msg tui.ThemeSelectedMsg) (MainModel, tea.Cmd) {
 	theme.Apply(msg.PresetID)
-	m.currentPresetID = msg.PresetID
-	m.currentPage = pageDashboard
-	m.isFirstLaunch = false
+	m.page.currentPresetID = msg.PresetID
+	m.page.currentPage = pageDashboard
+	m.page.isFirstLaunch = false
 	return m, m.saveTheme(msg.PresetID)
 }
 
 // handleThemeCancelled はテーマキャンセルメッセージを処理する。
 func (m MainModel) handleThemeCancelled() (MainModel, tea.Cmd) {
-	if m.isFirstLaunch {
+	if m.page.isFirstLaunch {
 		defaultID := theme.DefaultPresetID()
 		theme.Apply(defaultID)
-		m.currentPresetID = defaultID
-		m.currentPage = pageDashboard
-		m.isFirstLaunch = false
+		m.page.currentPresetID = defaultID
+		m.page.currentPage = pageDashboard
+		m.page.isFirstLaunch = false
 		return m, m.saveTheme(defaultID)
 	}
-	theme.Apply(m.previousPresetID)
-	m.currentPresetID = m.previousPresetID
-	m.currentPage = pageDashboard
+	theme.Apply(m.page.previousPresetID)
+	m.page.currentPresetID = m.page.previousPresetID
+	m.page.currentPage = pageDashboard
 	return m, nil
 }
 
 // handleThemeSaved はテーマ保存完了メッセージを処理する。
 func (m MainModel) handleThemeSaved(msg tui.ThemeSavedMsg) (MainModel, tea.Cmd) {
-	if msg.Err != nil && !m.restarting {
+	if msg.Err != nil && !m.dialog.restarting {
 		m.dashboard.AppendLog(i18n.T("tui.log.theme_save_error", map[string]any{"Error": msg.Err}), tui.LogError)
 	}
 	return m, nil
@@ -86,8 +86,8 @@ func (m MainModel) handleThemeSaved(msg tui.ThemeSavedMsg) (MainModel, tea.Cmd) 
 
 // openThemePage はテーマ選択ページを開く。
 func (m *MainModel) openThemePage() {
-	m.previousPresetID = m.currentPresetID
-	m.themePage = pages.NewThemePage(m.currentPresetID)
-	m.themePage.SetSize(m.width, m.height)
-	m.currentPage = pageTheme
+	m.page.previousPresetID = m.page.currentPresetID
+	m.page.themePage = pages.NewThemePage(m.page.currentPresetID)
+	m.page.themePage.SetSize(m.width, m.height)
+	m.page.currentPage = pageTheme
 }

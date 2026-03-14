@@ -18,8 +18,8 @@ func (m MainModel) handleSystemMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.dashboard.SetSize(msg.Width, msg.Height)
-		m.themePage.SetSize(msg.Width, msg.Height)
-		m.langPage.SetSize(msg.Width, msg.Height)
+		m.page.themePage.SetSize(msg.Width, msg.Height)
+		m.page.langPage.SetSize(msg.Width, msg.Height)
 		var cmd tea.Cmd
 		m.dashboard, cmd = m.dashboard.Update(msg)
 		return m, cmd, true
@@ -38,33 +38,33 @@ func (m MainModel) handleKeyMsg(msg tea.KeyMsg) (MainModel, tea.Cmd, bool) {
 		return m, m.shutdown(), true
 	}
 	// ヘルプモーダル表示中は任意のキーで閉じる
-	if m.showHelpModal {
-		m.showHelpModal = false
+	if m.dialog.showHelpModal {
+		m.dialog.showHelpModal = false
 		return m, nil, true
 	}
 	// アップデート通知ダイアログ表示中は ForceQuit 以外はダイアログに転送
 	// showUpdateNotify と showVersionConfirm は相互排他（handleUpdateCheckDone でバッファリング）
-	if m.showUpdateNotify {
+	if m.dialog.showUpdateNotify {
 		var cmd tea.Cmd
-		m.updateNotifyDialog, cmd = m.updateNotifyDialog.Update(msg)
+		m.dialog.updateNotifyDialog, cmd = m.dialog.updateNotifyDialog.Update(msg)
 		return m, cmd, true
 	}
 	// バージョン確認ダイアログ表示中は ForceQuit 以外はダイアログに転送
-	if m.showVersionConfirm {
+	if m.dialog.showVersionConfirm {
 		var cmd tea.Cmd
-		m.versionConfirm, cmd = m.versionConfirm.Update(msg)
+		m.dialog.versionConfirm, cmd = m.dialog.versionConfirm.Update(msg)
 		return m, cmd, true
 	}
 	// テーマページ表示中は ForceQuit 以外は themePage に転送
-	if m.currentPage == pageTheme {
+	if m.page.currentPage == pageTheme {
 		var cmd tea.Cmd
-		m.themePage, cmd = m.themePage.Update(msg)
+		m.page.themePage, cmd = m.page.themePage.Update(msg)
 		return m, cmd, true
 	}
 	// 言語ページ表示中は ForceQuit 以外は langPage に転送
-	if m.currentPage == pageLang {
+	if m.page.currentPage == pageLang {
 		var cmd tea.Cmd
-		m.langPage, cmd = m.langPage.Update(msg)
+		m.page.langPage, cmd = m.page.langPage.Update(msg)
 		return m, cmd, true
 	}
 	// テキスト入力中は q/?/t/l をグローバル処理しない
@@ -73,7 +73,7 @@ func (m MainModel) handleKeyMsg(msg tea.KeyMsg) (MainModel, tea.Cmd, bool) {
 		case key.Matches(msg, m.keys.Quit):
 			return m, m.shutdown(), true
 		case key.Matches(msg, m.keys.Help):
-			m.showHelpModal = true
+			m.dialog.showHelpModal = true
 			return m, nil, true
 		case key.Matches(msg, m.keys.Theme):
 			m.openThemePage()
@@ -95,7 +95,7 @@ func (m MainModel) handleIPCMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tui.HostsLoadedMsg:
 		if msg.Err != nil {
-			if !m.restarting {
+			if !m.dialog.restarting {
 				m.dashboard.AppendLog(i18n.T("tui.log.hosts_load_error", map[string]any{"Error": msg.Err}), tui.LogError)
 			}
 		} else {
@@ -134,7 +134,7 @@ func (m MainModel) handleIPCMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 		return m, m.listenIPCEvents(), true
 
 	case tui.IPCDisconnectedMsg:
-		if m.restarting {
+		if m.dialog.restarting {
 			return m, nil, true
 		}
 		m.dashboard.AppendLog(i18n.T("tui.log.daemon_disconnected"), tui.LogError)
@@ -142,7 +142,7 @@ func (m MainModel) handleIPCMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 
 	case tui.MetricsTickMsg:
 		var cmds []tea.Cmd
-		if !m.restarting {
+		if !m.dialog.restarting {
 			cmds = append(cmds, m.loadSessions())
 		}
 		cmds = append(cmds, m.metricsTick())
@@ -169,7 +169,7 @@ func (m MainModel) handleForwardMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 		return m, m.deleteForwardRule(msg.RuleName), true
 
 	case tui.LogOutputMsg:
-		if !m.restarting {
+		if !m.dialog.restarting {
 			m.dashboard.AppendLog(msg.Text, msg.Level)
 		}
 		return m, nil, true
@@ -190,14 +190,14 @@ func (m MainModel) handleUIMsg(msg tea.Msg) (MainModel, tea.Cmd, bool) {
 		return model, cmd, true
 
 	case molecules.InfoDismissedMsg:
-		if m.showUpdateNotify {
+		if m.dialog.showUpdateNotify {
 			model, cmd := m.handleUpdateNotifyDismissed()
 			return model, cmd, true
 		}
 		return m, nil, true
 
 	case molecules.ConfirmResultMsg:
-		if m.showVersionConfirm {
+		if m.dialog.showVersionConfirm {
 			model, cmd := m.handleVersionConfirmResult(msg.Confirmed)
 			return model, cmd, true
 		}

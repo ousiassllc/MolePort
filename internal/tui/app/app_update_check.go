@@ -38,8 +38,8 @@ func (m MainModel) handleUpdateCheckDone(msg tui.UpdateCheckDoneMsg) (MainModel,
 	if msg.Err != nil || !msg.UpdateAvailable {
 		return m, nil
 	}
-	if m.showVersionConfirm {
-		m.pendingUpdateCheck = &msg
+	if m.dialog.showVersionConfirm {
+		m.dialog.pendingUpdateCheck = &msg
 		return m, nil
 	}
 	return m.showUpdateNotifyDialog(msg), nil
@@ -53,19 +53,19 @@ func (m MainModel) showUpdateNotifyDialog(msg tui.UpdateCheckDoneMsg) MainModel 
 	if msg.ReleaseURL != "" {
 		message += "\n" + msg.ReleaseURL
 	}
-	m.updateNotifyDialog = molecules.NewInfoDialog(message)
-	m.showUpdateNotify = true
+	m.dialog.updateNotifyDialog = molecules.NewInfoDialog(message)
+	m.dialog.showUpdateNotify = true
 	return m
 }
 
 // handleUpdateNotifyDismissed はアップデート通知ダイアログの閉じ処理を行う。
 func (m MainModel) handleUpdateNotifyDismissed() (MainModel, tea.Cmd) {
-	m.showUpdateNotify = false
+	m.dialog.showUpdateNotify = false
 	return m, nil
 }
 
 // renderUpdateNotifyOverlay はアップデート通知ダイアログのオーバーレイを描画する。
 func (m MainModel) renderUpdateNotifyOverlay() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
-		m.updateNotifyDialog.View())
+		m.dialog.updateNotifyDialog.View())
 }

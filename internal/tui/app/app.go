@@ -20,6 +20,30 @@ type DaemonManager interface {
 	EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*client.IPCClient, error)
 }
 
+// dialogState はダイアログ関連の状態をグループ化する。
+type dialogState struct {
+	versionConfirm     molecules.ConfirmDialog
+	showVersionConfirm bool
+	restarting         bool
+
+	updateNotifyDialog molecules.InfoDialog
+	showUpdateNotify   bool
+	pendingUpdateCheck *tui.UpdateCheckDoneMsg
+
+	showHelpModal bool
+}
+
+// pageState はページ遷移関連の状態をグループ化する。
+type pageState struct {
+	currentPage      string // "dashboard" | "theme" | "lang"
+	themePage        pages.ThemePage
+	langPage         pages.LangPage
+	currentPresetID  string
+	previousPresetID string
+	currentLang      string
+	isFirstLaunch    bool
+}
+
 // MainModel はアプリケーションのルート Bubble Tea モデル。
 type MainModel struct {
 	dashboard      pages.DashboardPage
@@ -37,40 +61,22 @@ type MainModel struct {
 	credRequest    *protocol.CredentialRequestNotification
 	credResponseCh chan<- *protocol.CredentialResponseParams
 
-	// バージョン確認ダイアログ
-	versionConfirm     molecules.ConfirmDialog
-	showVersionConfirm bool
-	restarting         bool // デーモン再起動中フラグ
+	dialog dialogState
+	page   pageState
 
-	// アップデート通知ダイアログ
-	updateNotifyDialog molecules.InfoDialog
-	showUpdateNotify   bool
-	pendingUpdateCheck *tui.UpdateCheckDoneMsg
-
-	// ヘルプモーダル
-	showHelpModal bool
-
-	// ページ遷移
-	currentPage      string // "dashboard" | "theme" | "lang"
-	themePage        pages.ThemePage
-	langPage         pages.LangPage
-	currentPresetID  string
-	previousPresetID string
-	currentLang      string
-	isFirstLaunch    bool
-	width            int
-	height           int
+	width  int
+	height int
 }
 
 // NewMainModel は新しい MainModel を生成する。
 func NewMainModel(client *client.IPCClient, version string, configDir string) MainModel {
 	return MainModel{
-		dashboard:   pages.NewDashboardPage(version),
-		client:      client,
-		version:     version,
-		configDir:   configDir,
-		keys:        tui.DefaultKeyMap(),
-		currentPage: pageDashboard,
+		dashboard: pages.NewDashboardPage(version),
+		client:    client,
+		version:   version,
+		configDir: configDir,
+		keys:      tui.DefaultKeyMap(),
+		page:      pageState{currentPage: pageDashboard},
 	}
 }
 
@@ -128,20 +134,20 @@ func (m MainModel) View() string {
 	if m.quitting {
 		return i18n.T("tui.log.quitting") + "\n"
 	}
-	if m.showHelpModal {
+	if m.dialog.showHelpModal {
 		return m.renderHelpOverlay()
 	}
-	if m.showVersionConfirm {
+	if m.dialog.showVersionConfirm {
 		return m.renderVersionConfirmOverlay()
 	}
-	if m.showUpdateNotify {
+	if m.dialog.showUpdateNotify {
 		return m.renderUpdateNotifyOverlay()
 	}
-	if m.currentPage == pageTheme {
-		return m.themePage.View()
+	if m.page.currentPage == pageTheme {
+		return m.page.themePage.View()
 	}
-	if m.currentPage == pageLang {
-		return m.langPage.View()
+	if m.page.currentPage == pageLang {
+		return m.page.langPage.View()
 	}
 	return m.dashboard.View()
 }
