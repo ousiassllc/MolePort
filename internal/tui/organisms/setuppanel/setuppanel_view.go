@@ -1,4 +1,4 @@
-package organisms
+package setuppanel
 
 import (
 	"fmt"
@@ -11,8 +11,16 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
 
+// panelInnerSize はパネルの外枠サイズから内部描画領域のサイズを計算する。
+// ボーダー分（幅: 左右各2, 高さ: 上下各1）を差し引き、最小値でクランプする。
+func panelInnerSize(width, height int) (innerWidth, innerHeight int) {
+	innerWidth = max(width-4, 10)
+	innerHeight = max(height-2, 1)
+	return
+}
+
 // View はパネルを描画する。
-func (p SetupPanel) View() string {
+func (p Panel) View() string {
 	innerWidth, innerHeight := panelInnerSize(p.width, p.height)
 
 	var title string
@@ -51,7 +59,7 @@ func (p SetupPanel) View() string {
 	return tui.RenderWithBorderTitle(border, innerWidth, innerHeight, title, content)
 }
 
-func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
+func (p Panel) viewHostList(innerWidth, innerHeight int) []string {
 	var rows []string
 
 	if len(p.hosts) == 0 {
@@ -89,7 +97,7 @@ func (p SetupPanel) viewHostList(innerWidth, innerHeight int) []string {
 	return rows
 }
 
-func (p SetupPanel) wizardTitleText() string {
+func (p Panel) wizardTitleText() string {
 	title := i18n.T("tui.setup_panel.wizard_title") + " > " + p.selectedHost
 	if p.step > StepSelectType {
 		title += " > " + p.selectedType.String()
@@ -97,7 +105,7 @@ func (p SetupPanel) wizardTitleText() string {
 	return title
 }
 
-func (p SetupPanel) viewSelectType() []string {
+func (p Panel) viewSelectType() []string {
 	var rows []string
 	rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.setup_panel.select_type")))
 
@@ -114,7 +122,7 @@ func (p SetupPanel) viewSelectType() []string {
 	return rows
 }
 
-func (p SetupPanel) viewTextInput(label string, input *textinput.Model) []string {
+func (p Panel) viewTextInput(label string, input *textinput.Model) []string {
 	stepNum, totalSteps := p.stepProgress()
 
 	var rows []string
@@ -125,7 +133,7 @@ func (p SetupPanel) viewTextInput(label string, input *textinput.Model) []string
 	return rows
 }
 
-func (p SetupPanel) viewConfirm() []string {
+func (p Panel) viewConfirm() []string {
 	var rows []string
 	rows = append(rows, "")
 

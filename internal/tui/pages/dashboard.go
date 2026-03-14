@@ -8,6 +8,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 	"github.com/ousiassllc/moleport/internal/tui/organisms"
+	"github.com/ousiassllc/moleport/internal/tui/organisms/setuppanel"
 )
 
 // DashboardPage は3パネル + ステータスバーで構成されるレイアウト。
@@ -16,7 +17,7 @@ import (
 // Bottom: LogPanel (ログ出力) + StatusBar
 type DashboardPage struct {
 	forward       organisms.ForwardPanel
-	setup         organisms.SetupPanel
+	setup         setuppanel.Panel
 	log           organisms.LogPanel
 	statusBar     organisms.StatusBar
 	passwordInput molecules.PasswordInput
@@ -31,7 +32,7 @@ type DashboardPage struct {
 func NewDashboardPage(version string) DashboardPage {
 	d := DashboardPage{
 		forward:       organisms.NewForwardPanel(),
-		setup:         organisms.NewSetupPanel(),
+		setup:         setuppanel.New(),
 		log:           organisms.NewLogPanel(),
 		statusBar:     organisms.NewStatusBar(),
 		passwordInput: molecules.NewPasswordInput(),

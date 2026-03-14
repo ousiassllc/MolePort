@@ -1,4 +1,4 @@
-package organisms
+package setuppanel
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/tui"
 )
 
-func (p SetupPanel) updateTextInputs(msg tea.Msg) (SetupPanel, tea.Cmd) {
+func (p Panel) updateTextInputs(msg tea.Msg) (Panel, tea.Cmd) {
 	switch p.step {
 	case StepLocalPort, StepRemotePort:
 		var cmd tea.Cmd
@@ -29,7 +29,7 @@ func (p SetupPanel) updateTextInputs(msg tea.Msg) (SetupPanel, tea.Cmd) {
 	return p, nil
 }
 
-func (p SetupPanel) updateIdle(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupPanel, tea.Cmd) {
+func (p Panel) updateIdle(keyMsg tea.KeyMsg, keys tui.KeyMap) (Panel, tea.Cmd) {
 	prevCursor := p.hostCursor
 
 	switch {
@@ -63,7 +63,7 @@ func (p SetupPanel) updateIdle(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupPanel, 
 	return p, nil
 }
 
-func (p SetupPanel) updateSelectType(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupPanel, tea.Cmd) {
+func (p Panel) updateSelectType(keyMsg tea.KeyMsg, keys tui.KeyMap) (Panel, tea.Cmd) {
 	switch {
 	case key.Matches(keyMsg, keys.Up):
 		if p.typeCursor > 0 {
@@ -91,7 +91,7 @@ func (p SetupPanel) updateSelectType(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupP
 	return p, nil
 }
 
-func (p SetupPanel) updateTextInput(msg tea.Msg) (SetupPanel, tea.Cmd) {
+func (p Panel) updateTextInput(msg tea.Msg) (Panel, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if ok && keyMsg.Type == tea.KeyEnter {
 		var value string
@@ -109,9 +109,12 @@ func (p SetupPanel) updateTextInput(msg tea.Msg) (SetupPanel, tea.Cmd) {
 	return p.updateTextInputs(msg)
 }
 
-func (p SetupPanel) advanceFromTextStep(value string) (SetupPanel, tea.Cmd) {
+func (p Panel) advanceFromTextStep(value string) (Panel, tea.Cmd) {
 	switch p.step {
 	case StepLocalPort:
+		if value == "" {
+			value = p.portInput.Placeholder
+		}
 		if err := validatePortStr(value); err != nil {
 			return p, nil // 無効な値は無視
 		}
@@ -135,16 +138,19 @@ func (p SetupPanel) advanceFromTextStep(value string) (SetupPanel, tea.Cmd) {
 
 	case StepRemoteHost:
 		if value == "" {
-			value = "localhost"
+			value = p.hostInput.Placeholder
 		}
 		p.remoteHost = value
 		p.step = StepRemotePort
 		p.portInput.Reset()
-		p.portInput.Placeholder = "80"
+		p.portInput.Placeholder = p.localPort
 		p.portInput.Focus()
 		return p, textinput.Blink
 
 	case StepRemotePort:
+		if value == "" {
+			value = p.portInput.Placeholder
+		}
 		if err := validatePortStr(value); err != nil {
 			return p, nil
 		}
@@ -173,7 +179,7 @@ func (p SetupPanel) advanceFromTextStep(value string) (SetupPanel, tea.Cmd) {
 	return p, nil
 }
 
-func (p SetupPanel) updateConfirm(keyMsg tea.KeyMsg, keys tui.KeyMap) (SetupPanel, tea.Cmd) {
+func (p Panel) updateConfirm(keyMsg tea.KeyMsg, keys tui.KeyMap) (Panel, tea.Cmd) {
 	if key.Matches(keyMsg, keys.Enter) {
 		localPort, _ := strconv.Atoi(p.localPort)
 		remotePort, _ := strconv.Atoi(p.remotePort)

@@ -1,4 +1,4 @@
-package organisms
+package setuppanel
 
 import (
 	"errors"
@@ -25,8 +25,8 @@ const (
 	StepConfirm                      // 確認
 )
 
-// SetupPanel はホスト選択 + フォワード追加ウィザードを提供するパネル。
-type SetupPanel struct {
+// Panel はホスト選択 + フォワード追加ウィザードを提供するパネル。
+type Panel struct {
 	hosts       []core.SSHHost
 	hostCursor  int
 	step        WizardStep
@@ -51,8 +51,8 @@ type SetupPanel struct {
 	height  int
 }
 
-// NewSetupPanel は新しい SetupPanel を生成する。
-func NewSetupPanel() SetupPanel {
+// New は新しい Panel を生成する。
+func New() Panel {
 	portIn := textinput.New()
 	portIn.Placeholder = "8080"
 	portIn.CharLimit = 5
@@ -65,7 +65,7 @@ func NewSetupPanel() SetupPanel {
 	nameIn.Placeholder = i18n.T("tui.setup_panel.rule_name_placeholder")
 	nameIn.CharLimit = 64
 
-	return SetupPanel{
+	return Panel{
 		typeOptions: []string{"Local (-L)", "Remote (-R)", "Dynamic (-D)"},
 		keys:        tui.DefaultKeyMap(),
 		portInput:   portIn,
@@ -75,12 +75,12 @@ func NewSetupPanel() SetupPanel {
 }
 
 // SetFocused はフォーカス状態を設定する。
-func (p *SetupPanel) SetFocused(focused bool) {
+func (p *Panel) SetFocused(focused bool) {
 	p.focused = focused
 }
 
 // SetHosts はホスト一覧を設定する。
-func (p *SetupPanel) SetHosts(hosts []core.SSHHost) {
+func (p *Panel) SetHosts(hosts []core.SSHHost) {
 	p.hosts = hosts
 	if p.hostCursor >= len(hosts) {
 		if len(hosts) > 0 {
@@ -92,18 +92,18 @@ func (p *SetupPanel) SetHosts(hosts []core.SSHHost) {
 }
 
 // SetSize はパネルのサイズを設定する。
-func (p *SetupPanel) SetSize(width, height int) {
+func (p *Panel) SetSize(width, height int) {
 	p.width = width
 	p.height = height
 }
 
 // Hosts は現在のホスト一覧を返す。
-func (p SetupPanel) Hosts() []core.SSHHost {
+func (p Panel) Hosts() []core.SSHHost {
 	return p.hosts
 }
 
 // IsInputActive はテキスト入力中かどうかを返す。
-func (p SetupPanel) IsInputActive() bool {
+func (p Panel) IsInputActive() bool {
 	switch p.step {
 	case StepLocalPort, StepRemoteHost, StepRemotePort, StepRuleName:
 		return true
@@ -112,7 +112,7 @@ func (p SetupPanel) IsInputActive() bool {
 }
 
 // UpdateHostState は指定ホストの状態を更新する。
-func (p *SetupPanel) UpdateHostState(hostName string, state core.ConnectionState) {
+func (p *Panel) UpdateHostState(hostName string, state core.ConnectionState) {
 	for i := range p.hosts {
 		if p.hosts[i].Name == hostName {
 			p.hosts[i].State = state
@@ -122,7 +122,7 @@ func (p *SetupPanel) UpdateHostState(hostName string, state core.ConnectionState
 }
 
 // Update はキー入力を処理する。
-func (p SetupPanel) Update(msg tea.Msg) (SetupPanel, tea.Cmd) {
+func (p Panel) Update(msg tea.Msg) (Panel, tea.Cmd) {
 	if !p.focused {
 		return p, nil
 	}
@@ -153,7 +153,7 @@ func (p SetupPanel) Update(msg tea.Msg) (SetupPanel, tea.Cmd) {
 	return p, nil
 }
 
-func (p *SetupPanel) resetWizard() {
+func (p *Panel) resetWizard() {
 	p.step = StepIdle
 	p.typeCursor = 0
 	p.selectedHost = ""
@@ -172,7 +172,7 @@ var wizardSteps = map[bool][]WizardStep{
 	false: {StepSelectType, StepLocalPort, StepRemoteHost, StepRemotePort, StepRuleName, StepConfirm}, // Local/Remote
 }
 
-func (p SetupPanel) stepProgress() (current int, total int) {
+func (p Panel) stepProgress() (current int, total int) {
 	steps := wizardSteps[p.selectedType == core.Dynamic]
 	total = len(steps)
 	for i, s := range steps {
