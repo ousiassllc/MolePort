@@ -75,9 +75,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 		handshakeTimeout = defaultHandshakeTimeout
 	}
 
-	// ProxyJump が設定されていても現在は未対応のため警告を出力
+	// ProxyJump が設定されていても現在は未対応のため警告を出力し、代替手段を案内
 	if len(host.ProxyJump) > 0 {
-		slog.Warn("ProxyJump is not supported, ignoring",
+		slog.Warn("ProxyJump is not supported; use ProxyCommand instead (e.g. ProxyCommand ssh -W %h:%p <jumphost>)",
 			"host", host.Name, "proxy_jump", host.ProxyJump)
 	}
 
