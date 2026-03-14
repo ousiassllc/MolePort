@@ -14,7 +14,7 @@ import (
 
 // handleLangSelected は言語選択メッセージを処理する。
 func (m MainModel) handleLangSelected(msg tui.LangSelectedMsg) (MainModel, tea.Cmd) {
-	_ = i18n.SetLang(i18n.Lang(msg.Lang))
+	_ = i18n.SetLang(i18n.Lang(msg.Lang)) // ベストエフォート: 未知の言語でもフォールバックされる
 	m.page.currentLang = msg.Lang
 
 	if m.page.isFirstLaunch {
@@ -37,7 +37,7 @@ func (m MainModel) handleLangCancelled() (MainModel, tea.Cmd) {
 	if m.page.isFirstLaunch {
 		// 初回起動: デフォルト言語でテーマ選択へ遷移
 		defaultLang := string(i18n.DefaultLang())
-		_ = i18n.SetLang(i18n.DefaultLang())
+		_ = i18n.SetLang(i18n.DefaultLang()) // ベストエフォート: デフォルト言語は常に成功する
 		m.page.currentLang = defaultLang
 		m.page.currentPresetID = theme.DefaultPresetID()
 		m.page.previousPresetID = m.page.currentPresetID

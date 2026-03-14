@@ -25,7 +25,7 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 	status := parseSessionStatus(info.Status)
 	var connectedAt time.Time
 	if info.ConnectedAt != "" {
-		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt)
+		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt) // パース失敗時はゼロ値（表示上は空欄）
 	}
 	return core.ForwardSession{
 		ID: info.ID,

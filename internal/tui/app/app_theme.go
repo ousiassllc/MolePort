@@ -32,7 +32,7 @@ func (m MainModel) handleConfigLoaded(msg tui.ConfigLoadedMsg) (MainModel, tea.C
 	}
 
 	// 言語が設定済み → 適用
-	_ = i18n.SetLang(i18n.Lang(msg.Language))
+	_ = i18n.SetLang(i18n.Lang(msg.Language)) // ベストエフォート: 未知の言語でもフォールバックされる
 	m.page.currentLang = msg.Language
 
 	// テーマが未設定 → テーマ選択ページへ
