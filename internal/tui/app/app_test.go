@@ -103,8 +103,8 @@ func TestParseSessionStatus(t *testing.T) {
 		{"stopped", core.Stopped}, {"unknown", core.Stopped}, {"", core.Stopped},
 	}
 	for _, tt := range tests {
-		if got := parseSessionStatus(tt.input); got != tt.want {
-			t.Errorf("parseSessionStatus(%q) = %v, want %v", tt.input, got, tt.want)
+		if got := protocol.ParseSessionStatus(tt.input); got != tt.want {
+			t.Errorf("ParseSessionStatus(%q) = %v, want %v", tt.input, got, tt.want)
 		}
 	}
 }
