@@ -68,7 +68,7 @@ func RunAdd(configDir string, args []string) {
 
 	var result protocol.ForwardAddResult
 	if err := client.Call(ctx, "forward.add", params, &result); err != nil {
-		ExitError("%v", err)
+		ExitError("add rule failed: %v", err)
 	}
 
 	fmt.Println(i18n.T("cli.add.success", map[string]any{"Name": result.Name}))

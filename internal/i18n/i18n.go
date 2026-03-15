@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"text/template"
@@ -121,6 +122,7 @@ func T(key string, data ...any) string {
 		var err error
 		tmpl, err = template.New(key).Parse(msg)
 		if err != nil {
+			slog.Debug("i18n: template parse failed", "key", key, "error", err)
 			return msg
 		}
 		global.mu.Lock()
@@ -130,6 +132,7 @@ func T(key string, data ...any) string {
 
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data[0]); err != nil {
+		slog.Debug("i18n: template execute failed", "key", key, "error", err)
 		return msg
 	}
 	return buf.String()

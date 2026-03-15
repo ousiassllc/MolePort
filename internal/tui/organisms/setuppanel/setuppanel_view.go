@@ -9,19 +9,12 @@ import (
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
+	"github.com/ousiassllc/moleport/internal/tui/organisms"
 )
-
-// panelInnerSize はパネルの外枠サイズから内部描画領域のサイズを計算する。
-// ボーダー分（幅: 左右各2, 高さ: 上下各1）を差し引き、最小値でクランプする。
-func panelInnerSize(width, height int) (innerWidth, innerHeight int) {
-	innerWidth = max(width-4, 10)
-	innerHeight = max(height-2, 1)
-	return
-}
 
 // View はパネルを描画する。
 func (p Panel) View() string {
-	innerWidth, innerHeight := panelInnerSize(p.width, p.height)
+	innerWidth, innerHeight := organisms.PanelInnerSize(p.width, p.height)
 
 	var title string
 	var rows []string

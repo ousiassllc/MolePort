@@ -82,7 +82,7 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 
 	go m.acceptLoop(af, rule, sshClient)
 
-	m.emit(core.ForwardEvent{
+	m.events.Emit(core.ForwardEvent{
 		Type:     core.ForwardEventStarted,
 		RuleName: ruleName,
 		Session:  &af.session,
@@ -99,7 +99,7 @@ func (m *forwardManager) StopForward(ruleName string) error {
 	m.mu.Unlock()
 
 	if session != nil {
-		m.emit(core.ForwardEvent{
+		m.events.Emit(core.ForwardEvent{
 			Type:     core.ForwardEventStopped,
 			RuleName: ruleName,
 			Session:  session,
@@ -159,8 +159,5 @@ func (m *forwardManager) Close() {
 	defer m.mu.Unlock()
 
 	m.closed = true
-	for _, ch := range m.subscribers {
-		close(ch)
-	}
-	m.subscribers = nil
+	m.events.CloseSubscribers()
 }

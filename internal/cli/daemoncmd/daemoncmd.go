@@ -69,7 +69,7 @@ func runDaemonStop(configDir string, args []string) {
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx, cancel := cli.CallCtx()
 	defer cancel()
@@ -119,7 +119,7 @@ func runDaemonStatus(configDir string) {
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	ctx, cancel := cli.CallCtx()
 	defer cancel()

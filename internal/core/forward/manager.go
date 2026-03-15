@@ -3,16 +3,12 @@ package forward
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ousiassllc/moleport/internal/core"
 )
-
-// eventChannelBuffer はイベントチャネルのバッファサイズ。
-const eventChannelBuffer = 16
 
 // activeForward は実行中のフォワーディングセッションを保持する。
 // starting が true の場合、起動処理中のプレースホルダーを表す。
@@ -27,25 +23,27 @@ type activeForward struct {
 }
 
 type forwardManager struct {
-	mu          sync.RWMutex
-	ctx         context.Context
-	sshManager  core.SSHManager
-	rules       map[string]core.ForwardRule
-	ruleOrder   []string // 追加順序を保持
-	active      map[string]*activeForward
-	subscribers []chan core.ForwardEvent
-	closed      bool
-	nextID      int
+	mu         sync.RWMutex
+	ctx        context.Context
+	sshManager core.SSHManager
+	rules      map[string]core.ForwardRule
+	ruleOrder  []string // 追加順序を保持
+	active     map[string]*activeForward
+	events     core.EventEmitter[core.ForwardEvent]
+	closed     bool
+	nextID     int
 }
 
 // NewForwardManager は ForwardManager の実装を返す。
 func NewForwardManager(ctx context.Context, sshManager core.SSHManager) core.ForwardManager {
-	return &forwardManager{
+	m := &forwardManager{
 		ctx:        ctx,
 		sshManager: sshManager,
 		rules:      make(map[string]core.ForwardRule),
 		active:     make(map[string]*activeForward),
 	}
+	m.events = core.NewEventEmitter[core.ForwardEvent](&m.mu)
+	return m
 }
 
 // AddRule はフォワーディングルールを追加する。
@@ -106,7 +104,7 @@ func (m *forwardManager) DeleteRule(name string) error {
 	m.mu.Unlock()
 
 	if session != nil {
-		m.emit(core.ForwardEvent{
+		m.events.Emit(core.ForwardEvent{
 			Type:     core.ForwardEventStopped,
 			RuleName: name,
 			Session:  session,
@@ -141,20 +139,6 @@ func (m *forwardManager) GetRulesByHost(hostName string) []core.ForwardRule {
 		}
 	}
 	return rules
-}
-
-// emit はイベントを全サブスクライバーに非ブロッキングで送信する。
-func (m *forwardManager) emit(event core.ForwardEvent) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, ch := range m.subscribers {
-		select {
-		case ch <- event:
-		default:
-			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
-		}
-	}
 }
 
 // GetSession はルール名からセッション情報を返す。
@@ -212,7 +196,5 @@ func (m *forwardManager) Subscribe() <-chan core.ForwardEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.ForwardEvent, eventChannelBuffer)
-	m.subscribers = append(m.subscribers, ch)
-	return ch
+	return m.events.Subscribe()
 }

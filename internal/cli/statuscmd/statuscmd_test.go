@@ -107,6 +107,9 @@ func stubConnectDaemon(t *testing.T) {
 	}
 }
 
+// mockResponseMap はメソッド名ごとのカスタムレスポンスを保持する。
+var mockResponseMap map[string]json.RawMessage
+
 func handleMockConn(conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 	scanner := bufio.NewScanner(conn)
@@ -117,14 +120,71 @@ func handleMockConn(conn net.Conn) {
 		if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
 			return
 		}
+		result := json.RawMessage(`{}`)
+		if mockResponseMap != nil {
+			if r, ok := mockResponseMap[req.Method]; ok {
+				result = r
+			}
+		}
 		if err := enc.Encode(protocol.Response{
 			JSONRPC: protocol.JSONRPCVersion,
 			ID:      req.ID,
-			Result:  json.RawMessage(`{}`),
+			Result:  result,
 		}); err != nil {
 			return
 		}
 	}
+}
+
+// stubMockResponses は mockResponseMap を設定し、t.Cleanup で復元する。
+func stubMockResponses(t *testing.T, m map[string]json.RawMessage) {
+	t.Helper()
+	orig := mockResponseMap
+	t.Cleanup(func() { mockResponseMap = orig })
+	mockResponseMap = m
+}
+
+// setupMockDaemonDir は configDir に PID ファイルとモックソケットを配置し、
+// daemon.EnsureDaemon が正常に接続できる環境を構築するヘルパー。
+func setupMockDaemonDir(t *testing.T) string {
+	t.Helper()
+	configDir := t.TempDir()
+
+	// PID ファイル（現在のプロセス PID を書き込んで IsRunning=true にする）
+	pidPath := filepath.Join(configDir, "moleport.pid")
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
+		t.Fatalf("write PID file: %v", err)
+	}
+
+	// モック Unix ソケットを moleport.sock パスに配置
+	sockPath := filepath.Join(configDir, "moleport.sock")
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go handleMockConn(conn)
+		}
+	}()
+
+	return configDir
+}
+
+// mustJSON は値を JSON にエンコードして json.RawMessage を返すヘルパー。
+func mustJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	return json.RawMessage(b)
 }
 
 func TestFormatBytes(t *testing.T) {

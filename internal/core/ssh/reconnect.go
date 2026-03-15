@@ -61,7 +61,7 @@ func (m *sshManager) handleDisconnect(hostName string) {
 		return
 	}
 
-	m.emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
 
 	if !ds.reconnectCfg.Enabled {
 		return
@@ -116,7 +116,7 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 
 	m.registerReconnectCancel(hostName, reconnectCancel)
 
-	m.emit(core.SSHEvent{Type: core.SSHEventReconnecting, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventReconnecting, HostName: hostName})
 	m.setHostState(hostName, core.Reconnecting)
 
 	delay := ds.reconnectCfg.InitialDelay.Duration
@@ -151,7 +151,7 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 	}
 	m.mu.Unlock()
 
-	m.emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName,
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName,
 		Error: fmt.Errorf("reconnect failed after %d attempts", ds.reconnectCfg.MaxRetries)})
 }
 
@@ -207,7 +207,7 @@ func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
 	}
 	m.mu.Unlock()
 
-	m.emit(core.SSHEvent{Type: core.SSHEventConnected, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventConnected, HostName: hostName})
 	slog.Info("SSH reconnected", "host", hostName)
 
 	go func() {

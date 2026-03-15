@@ -185,17 +185,17 @@ func sshEventTypeToString(t core.SSHEventType) string {
 func forwardEventTypeToString(t core.ForwardEventType) string {
 	switch t {
 	case core.ForwardEventStarted:
-		return "started"
+		return protocol.ForwardEventTypeStarted
 	case core.ForwardEventStopped:
-		return "stopped"
+		return protocol.ForwardEventTypeStopped
 	case core.ForwardEventError:
-		return "error"
+		return protocol.ForwardEventTypeError
 	case core.ForwardEventMetricsUpdated:
-		return "metrics_updated"
+		return protocol.ForwardEventTypeMetricsUpdated
 	case core.ForwardEventReconnecting:
-		return "reconnecting"
+		return protocol.ForwardEventTypeReconnecting
 	case core.ForwardEventRestored:
-		return "restored"
+		return protocol.ForwardEventTypeRestored
 	default:
 		return "unknown"
 	}
