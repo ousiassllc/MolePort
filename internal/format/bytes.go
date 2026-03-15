@@ -3,6 +3,7 @@ package format
 import "fmt"
 
 // Bytes はバイト数を人間が読みやすい形式に変換する。
+// b は 0 以上を前提とする。負の値が渡された場合の出力は未定義。
 func Bytes(b int64) string {
 	const (
 		KB = 1024
