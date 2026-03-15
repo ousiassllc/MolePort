@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
@@ -18,39 +18,50 @@ func (m *MainModel) handleForwardAdd(msg tui.ForwardAddRequestMsg) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
 		defer cancel()
 		params := protocol.ForwardAddParams{
-			Name:        msg.Name,
-			Host:        msg.Host,
-			Type:        msg.Type.String(),
-			LocalPort:   msg.LocalPort,
-			RemoteHost:  msg.RemoteHost,
-			RemotePort:  msg.RemotePort,
-			AutoConnect: msg.AutoConnect,
+			Name:           msg.Name,
+			Host:           msg.Host,
+			Type:           msg.Type.String(),
+			LocalPort:      msg.LocalPort,
+			RemoteHost:     msg.RemoteHost,
+			RemotePort:     msg.RemotePort,
+			RemoteBindAddr: msg.RemoteBindAddr,
+			AutoConnect:    msg.AutoConnect,
 		}
 		var result protocol.ForwardAddResult
 		if err := m.client.Call(ctx, "forward.add", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール追加エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_add_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 
 		// AutoConnect が設定されている場合はフォワードも開始
 		if msg.AutoConnect {
-			startParams := protocol.ForwardStartParams(result)
-			var startResult protocol.ForwardStartResult
-			if err := m.client.Call(ctx, "forward.start", startParams, &startResult); err != nil {
-				// 開始に失敗したルールを削除（ロールバック）
-				delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
-				defer delCancel()
-				delParams := protocol.ForwardDeleteParams(result)
-				var delResult protocol.ForwardDeleteResult
-				if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
-					return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' の開始に失敗: %s（ルール削除にも失敗: %s）", result.Name, err, delErr)}
-				}
-				return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' の開始に失敗: %s", result.Name, err)}
+			if errMsg := m.startAndRollback(result); errMsg != nil {
+				return *errMsg
 			}
-			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加し、開始しました", result.Name)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added_started", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 		}
 
-		return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を追加しました", result.Name)}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_added", map[string]any{"Name": result.Name}), Level: tui.LogSuccess}
 	}
+}
+
+// startAndRollback はフォワードの開始を試み、失敗時にルールを削除してロールバックする。
+// 成功時は nil を返す。
+func (m *MainModel) startAndRollback(result protocol.ForwardAddResult) *tui.LogOutputMsg {
+	startCtx, startCancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
+	defer startCancel()
+	startParams := protocol.ForwardStartParams(result)
+	var startResult protocol.ForwardStartResult
+	if err := m.client.Call(startCtx, "forward.start", startParams, &startResult); err != nil {
+		delCtx, delCancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		defer delCancel()
+		delParams := protocol.ForwardDeleteParams(result)
+		var delResult protocol.ForwardDeleteResult
+		if delErr := m.client.Call(delCtx, "forward.delete", delParams, &delResult); delErr != nil {
+			return &tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_rollback_error", map[string]any{"Name": result.Name, "Error": err, "DeleteError": delErr}), Level: tui.LogError}
+		}
+		return &tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": result.Name, "Error": err}), Level: tui.LogError}
+	}
+	return nil
 }
 
 func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
@@ -60,9 +71,9 @@ func (m *MainModel) deleteForwardRule(ruleName string) tea.Cmd {
 		params := protocol.ForwardDeleteParams{Name: ruleName}
 		var result protocol.ForwardDeleteResult
 		if err := m.client.Call(ctx, "forward.delete", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("ルール削除エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_delete_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: fmt.Sprintf("ルール '%s' を削除しました", ruleName)}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_deleted", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -81,14 +92,14 @@ func (m *MainModel) toggleForward(ruleName string) tea.Cmd {
 
 func (m *MainModel) startForward(ruleName string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), ipcCredentialTimeout)
 		defer cancel()
 		params := protocol.ForwardStartParams{Name: ruleName}
 		var result protocol.ForwardStartResult
 		if err := m.client.Call(ctx, "forward.start", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード開始エラー (%s): %s", ruleName, err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_start_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード '%s' を開始しました", ruleName)}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_started", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -99,9 +110,9 @@ func (m *MainModel) stopForward(ruleName string) tea.Cmd {
 		params := protocol.ForwardStopParams{Name: ruleName}
 		var result protocol.ForwardStopResult
 		if err := m.client.Call(ctx, "forward.stop", params, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード停止エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stop_error", map[string]any{"Name": ruleName, "Error": err}), Level: tui.LogError}
 		}
-		return tui.LogOutputMsg{Text: fmt.Sprintf("フォワード '%s' を停止しました", ruleName)}
+		return tui.LogOutputMsg{Text: i18n.T("tui.log.forward_stopped", map[string]any{"Name": ruleName}), Level: tui.LogSuccess}
 	}
 }
 
@@ -128,19 +139,19 @@ func (m MainModel) handleCredentialRequest(msg tui.CredentialRequestMsg) (tea.Mo
 	var prompt string
 	switch msg.Request.Type {
 	case "passphrase":
-		prompt = fmt.Sprintf("%s の鍵パスフレーズを入力:", msg.Request.Host)
+		prompt = i18n.T("tui.log.credential_passphrase_prompt", map[string]any{"Host": msg.Request.Host})
 	case "keyboard-interactive":
 		if len(msg.Request.Prompts) > 0 {
 			prompt = msg.Request.Prompts[0].Prompt
 		} else {
-			prompt = fmt.Sprintf("%s の認証コードを入力:", msg.Request.Host)
+			prompt = i18n.T("tui.log.credential_code_prompt", map[string]any{"Host": msg.Request.Host})
 		}
 	default:
-		prompt = fmt.Sprintf("%s のパスワードを入力:", msg.Request.Host)
+		prompt = i18n.T("tui.log.credential_password_prompt", map[string]any{"Host": msg.Request.Host})
 	}
 
 	cmd := m.dashboard.ShowPasswordInput(prompt)
-	m.dashboard.AppendLog(fmt.Sprintf("認証が必要です: %s (%s)", msg.Request.Host, msg.Request.Type))
+	m.dashboard.AppendLog(i18n.T("tui.log.credential_required", map[string]any{"Host": msg.Request.Host, "Type": msg.Request.Type}), tui.LogInfo)
 	return m, cmd
 }
 
@@ -151,7 +162,7 @@ func (m MainModel) handleCredentialSubmit(msg tui.CredentialSubmitMsg) (tea.Mode
 
 	if msg.Cancelled {
 		m.credResponseCh <- nil
-		m.dashboard.AppendLog("認証がキャンセルされました")
+		m.dashboard.AppendLog(i18n.T("tui.log.credential_cancelled"), tui.LogInfo)
 	} else {
 		resp := &protocol.CredentialResponseParams{
 			Value: msg.Value,

@@ -2,31 +2,67 @@ package forward
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
-// doSOCKS5Connect はSOCKS5グリーティング・リクエストを送信し、接続先アドレスを返す。
+type halfCloseConn struct {
+	net.Conn
+	closeWriteCalled atomic.Bool
+}
+
+func (c *halfCloseConn) CloseWrite() error { c.closeWriteCalled.Store(true); return nil }
+
+type plainConn struct {
+	net.Conn
+	mu          sync.Mutex
+	closeCalled int
+}
+
+func (c *plainConn) Close() error {
+	c.mu.Lock()
+	c.closeCalled++
+	c.mu.Unlock()
+	return c.Conn.Close()
+}
+
+func newSOCKS5TestPair(t *testing.T) (client, server net.Conn, fm *forwardManager) {
+	t.Helper()
+	c, s := net.Pipe()
+	t.Cleanup(func() { _ = c.Close(); _ = s.Close() })
+	return c, s, NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).(*forwardManager)
+}
+
+func newTestDialer(ch chan<- string) *forwardtest.MockSOCKS5Dialer {
+	return &forwardtest.MockSOCKS5Dialer{DialF: func(_, addr string) (net.Conn, error) {
+		ch <- addr
+		rc, _ := net.Pipe()
+		return rc, nil
+	}}
+}
+
+func runCopyBidirectional(t *testing.T, a, b net.Conn) <-chan struct{} {
+	t.Helper()
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).(*forwardManager)
+	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: t.Name()}}}
+	done := make(chan struct{})
+	go func() { defer close(done); fm.copyBidirectional(af, a, b) }()
+	return done
+}
+
 func doSOCKS5Connect(t *testing.T, request []byte) string {
 	t.Helper()
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
-
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
 	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{
-		dialF: func(_, addr string) (net.Conn, error) {
-			dialedAddr <- addr
-			rc, _ := net.Pipe()
-			return rc, nil
-		},
-	}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
-	go fm.handleSOCKS5(&activeForward{}, serverConn, dialer)
+	go fm.handleSOCKS5(&activeForward{}, serverConn, newTestDialer(dialedAddr))
 
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x00})
 	resp := make([]byte, 2)
@@ -54,13 +90,10 @@ func doSOCKS5Connect(t *testing.T, request []byte) string {
 }
 
 func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
-	// Domain type: example.com:80
 	domainReq := []byte{0x05, 0x01, 0x00, 0x03, byte(len("example.com"))} //nolint:gosec // domain length is always < 256
 	domainReq = append(domainReq, []byte("example.com")...)
 	domainReq = append(domainReq, 0x00, 0x50)
-	// IPv4 type: 192.168.1.1:8080
 	ipv4Req := []byte{0x05, 0x01, 0x00, 0x01, 192, 168, 1, 1, 0x1F, 0x90}
-	// IPv6 type: [::1]:443
 	ipv6Req := []byte{0x05, 0x01, 0x00, 0x04}
 	ipv6Req = append(ipv6Req, net.ParseIP("::1").To16()...)
 	ipv6Req = append(ipv6Req, 0x01, 0xBB)
@@ -76,8 +109,7 @@ func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := doSOCKS5Connect(t, tt.request)
-			if got != tt.want {
+			if got := doSOCKS5Connect(t, tt.request); got != tt.want {
 				t.Errorf("dialed addr = %q, want %q", got, tt.want)
 			}
 		})
@@ -85,17 +117,12 @@ func TestHandleSOCKS5_ConnectVariants(t *testing.T) {
 }
 
 func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
-
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		fm.handleSOCKS5(&activeForward{}, serverConn, &mockSOCKS5Dialer{})
+		fm.handleSOCKS5(&activeForward{}, serverConn, &forwardtest.MockSOCKS5Dialer{})
 	}()
-
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x02}) // username/password only
 	resp := make([]byte, 2)
 	if _, err := io.ReadFull(clientConn, resp); err != nil {
@@ -112,21 +139,10 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 }
 
 func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
-	clientConn, serverConn := net.Pipe()
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = serverConn.Close() }()
-
+	clientConn, serverConn, fm := newSOCKS5TestPair(t)
 	dialedAddr := make(chan string, 1)
-	dialer := &mockSOCKS5Dialer{
-		dialF: func(_, addr string) (net.Conn, error) {
-			dialedAddr <- addr
-			rc, _ := net.Pipe()
-			return rc, nil
-		},
-	}
-	fm := NewForwardManager(newMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: "test"}}}
-	go fm.handleSOCKS5(af, serverConn, dialer)
+	go fm.handleSOCKS5(af, serverConn, newTestDialer(dialedAddr))
 
 	for _, b := range []byte{0x05, 0x01, 0x00} {
 		_, _ = clientConn.Write([]byte{b})
@@ -153,5 +169,62 @@ func TestHandleSOCKS5_FragmentedWrites(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for dial")
+	}
+}
+
+func TestCopyBidirectional_HalfClose(t *testing.T) {
+	aClient, aServer := net.Pipe()
+	bClient, bServer := net.Pipe()
+	t.Cleanup(func() { _ = aClient.Close(); _ = bClient.Close() })
+	hcA := &halfCloseConn{Conn: aServer}
+	hcB := &halfCloseConn{Conn: bServer}
+	done := runCopyBidirectional(t, hcA, hcB)
+
+	_, _ = aClient.Write([]byte("hello"))
+	_ = aClient.Close()
+	buf := make([]byte, 5)
+	if _, err := io.ReadFull(bClient, buf); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	_ = bClient.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+	if !hcB.closeWriteCalled.Load() {
+		t.Error("CloseWrite not called on b")
+	}
+	if !hcA.closeWriteCalled.Load() {
+		t.Error("CloseWrite not called on a")
+	}
+}
+
+func TestCopyBidirectional_FallbackClose(t *testing.T) {
+	aClient, aServer := net.Pipe()
+	bClient, bServer := net.Pipe()
+	t.Cleanup(func() { _ = aClient.Close(); _ = bClient.Close() })
+	pcA := &plainConn{Conn: aServer}
+	pcB := &plainConn{Conn: bServer}
+	done := runCopyBidirectional(t, pcA, pcB)
+
+	_ = aClient.Close()
+	_ = bClient.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout")
+	}
+	pcA.mu.Lock()
+	ac := pcA.closeCalled
+	pcA.mu.Unlock()
+	pcB.mu.Lock()
+	bc := pcB.closeCalled
+	pcB.mu.Unlock()
+	if ac < 1 {
+		t.Error("Close not called on a")
+	}
+	if bc < 1 {
+		t.Error("Close not called on b")
 	}
 }

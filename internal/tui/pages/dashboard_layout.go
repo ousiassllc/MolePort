@@ -27,28 +27,30 @@ func (d *DashboardPage) updateSizes() {
 		return
 	}
 
-	// レイアウト:
-	//   Header:    1 line
-	//   Forward:   ~40% of remaining (ボーダー含む)
-	//   Setup:     残り全部 (ボーダー含む)
-	//   Log:       5 lines (3 content + 2 border)
-	//   StatusBar: 1 line
+	const (
+		headerHeight         = 1
+		logHeight            = 5 // 3 content + 2 border
+		statusBarHeight      = 1
+		forwardHeightPercent = 40 // remaining の何%をフォワードパネルに割り当てるか
+		minForwardHeight     = 3
+		minSetupHeight       = 5
+		minTotalHeight       = 8
+	)
 
-	const logHeight = 5
-	fixedLines := 1 + logHeight + 1 // header + log + statusbar
+	fixedLines := headerHeight + logHeight + statusBarHeight
 	remaining := d.height - fixedLines
-	if remaining < 8 {
-		remaining = 8
+	if remaining < minTotalHeight {
+		remaining = minTotalHeight
 	}
 
-	forwardHeight := remaining * 40 / 100
-	if forwardHeight < 3 {
-		forwardHeight = 3
+	forwardHeight := remaining * forwardHeightPercent / 100
+	if forwardHeight < minForwardHeight {
+		forwardHeight = minForwardHeight
 	}
 
 	setupHeight := remaining - forwardHeight
-	if setupHeight < 5 {
-		setupHeight = 5
+	if setupHeight < minSetupHeight {
+		setupHeight = minSetupHeight
 	}
 
 	d.forward.SetSize(d.width, forwardHeight)

@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
 // connectCallTimeout は ssh.connect 呼び出しのタイムアウト。
-// クレデンシャル入力を待つため、通常の callCtx より長くする。
+// クレデンシャル入力を待つため、通常の CallCtx より長くする。
 const connectCallTimeout = 60 * time.Second
 
 // RunConnect は connect サブコマンドを実行する。
 func RunConnect(configDir string, args []string) {
 	if len(args) == 0 {
-		exitError("ホスト名を指定してください: moleport connect <host>")
+		ExitError("%s", i18n.T("cli.connect.host_required"))
 	}
 
 	host := args[0]
-	client := connectDaemon(configDir)
-	defer client.Close()
+	client := ConnectDaemon(configDir)
+	defer func() { _ = client.Close() }()
 
 	// クレデンシャルハンドラーを設定
 	client.SetCredentialHandler(newCLICredentialHandler())
@@ -31,8 +32,8 @@ func RunConnect(configDir string, args []string) {
 	params := protocol.SSHConnectParams{Host: host}
 	var result protocol.SSHConnectResult
 	if err := client.Call(ctx, "ssh.connect", params, &result); err != nil {
-		exitError("%v", err)
+		ExitError("connect failed: %v", err)
 	}
 
-	fmt.Printf("%s に接続しました\n", result.Host)
+	fmt.Println(i18n.T("cli.connect.success", map[string]any{"Host": result.Host}))
 }

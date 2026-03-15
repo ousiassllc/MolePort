@@ -1,12 +1,12 @@
 package organisms
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/tui"
 	"github.com/ousiassllc/moleport/internal/tui/molecules"
 )
@@ -16,6 +16,7 @@ import (
 type ForwardPanel struct {
 	sessions []core.ForwardSession
 	cursor   int
+	keys     tui.KeyMap
 	focused  bool
 	width    int
 	height   int
@@ -23,7 +24,9 @@ type ForwardPanel struct {
 
 // NewForwardPanel は新しい ForwardPanel を生成する。
 func NewForwardPanel() ForwardPanel {
-	return ForwardPanel{}
+	return ForwardPanel{
+		keys: tui.DefaultKeyMap(),
+	}
 }
 
 // SetFocused はフォーカス状態を設定する。
@@ -60,30 +63,28 @@ func (p ForwardPanel) Update(msg tea.Msg) (ForwardPanel, tea.Cmd) {
 		return p, nil
 	}
 
-	keys := tui.DefaultKeyMap()
-
 	switch {
-	case key.Matches(keyMsg, keys.Up):
+	case key.Matches(keyMsg, p.keys.Up):
 		if p.cursor > 0 {
 			p.cursor--
 		}
-	case key.Matches(keyMsg, keys.Down):
+	case key.Matches(keyMsg, p.keys.Down):
 		if p.cursor < len(p.sessions)-1 {
 			p.cursor++
 		}
-	case key.Matches(keyMsg, keys.Enter):
+	case key.Matches(keyMsg, p.keys.Enter):
 		if s := p.selectedSession(); s != nil {
 			return p, func() tea.Msg {
 				return tui.ForwardToggleMsg{RuleName: s.Rule.Name}
 			}
 		}
-	case key.Matches(keyMsg, keys.Disconnect):
+	case key.Matches(keyMsg, p.keys.Disconnect):
 		if s := p.selectedSession(); s != nil && s.Status == core.Active {
 			return p, func() tea.Msg {
 				return tui.ForwardToggleMsg{RuleName: s.Rule.Name}
 			}
 		}
-	case key.Matches(keyMsg, keys.Delete):
+	case key.Matches(keyMsg, p.keys.Delete):
 		if s := p.selectedSession(); s != nil {
 			return p, func() tea.Msg {
 				return tui.ForwardDeleteRequestMsg{RuleName: s.Rule.Name}
@@ -104,24 +105,14 @@ func (p ForwardPanel) selectedSession() *core.ForwardSession {
 
 // View はパネルを描画する。
 func (p ForwardPanel) View() string {
-	// innerWidth = p.width - 4 (2 border + 2 padding)
-	innerWidth := p.width - 4
-	if innerWidth < 10 {
-		innerWidth = 10
-	}
-	// innerHeight = p.height - 2 (top + bottom border)
-	innerHeight := p.height - 2
-	if innerHeight < 1 {
-		innerHeight = 1
-	}
+	innerWidth, innerHeight := PanelInnerSize(p.width, p.height)
 
-	// ボーダータイトル
-	title := fmt.Sprintf("Active Forwards (%d)", len(p.sessions))
+	title := i18n.T("tui.forward.title", map[string]any{"Count": len(p.sessions)})
 
 	var rows []string
 
 	if len(p.sessions) == 0 {
-		rows = append(rows, tui.MutedStyle.Render("フォワーディングルールがありません"))
+		rows = append(rows, tui.MutedStyle().Render(i18n.T("tui.forward.empty")))
 	} else {
 		maxRows := innerHeight
 		if maxRows < 1 {
@@ -147,15 +138,15 @@ func (p ForwardPanel) View() string {
 			}
 			var prefix string
 			if i == p.cursor {
-				prefix = tui.ActiveStyle.Render("> ")
+				prefix = tui.ActiveStyle().Render("> ")
 			}
 			rows = append(rows, prefix+row.View())
 		}
 	}
 
-	border := tui.UnfocusedBorder
+	border := tui.UnfocusedBorder()
 	if p.focused {
-		border = tui.FocusedBorder
+		border = tui.FocusedBorder()
 	}
 
 	content := strings.Join(rows, "\n")

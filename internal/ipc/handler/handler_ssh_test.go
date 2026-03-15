@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +57,7 @@ func TestHandler_SSHConnect_Success(t *testing.T) {
 func TestHandler_SSHConnect_Error(t *testing.T) {
 	h, sshMgr, _, _ := newTestHandler()
 	sshMgr.connectFn = func(hostName string) error {
-		return fmt.Errorf("host %q not found", hostName)
+		return &core.NotFoundError{Resource: "host", Name: hostName}
 	}
 
 	params := mustMarshal(t, protocol.SSHConnectParams{Host: "nonexistent"})
@@ -92,7 +91,7 @@ func TestHandler_SSHDisconnect_Success(t *testing.T) {
 func TestHandler_SSHDisconnect_NotConnected(t *testing.T) {
 	h, sshMgr, _, _ := newTestHandler()
 	sshMgr.disconnFn = func(hostName string) error {
-		return fmt.Errorf("host %q not connected", hostName)
+		return &core.NotConnectedError{HostName: hostName}
 	}
 
 	params := mustMarshal(t, protocol.SSHDisconnectParams{Host: "prod"})
@@ -230,6 +229,42 @@ func TestHandler_BuildCredentialCallback_SendsNotification(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for callback to complete")
+	}
+}
+
+func TestHandler_SSHConnect_EmptyHost(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.SSHConnectParams{Host: ""})
+	_, rpcErr := h.Handle("client-1", "ssh.connect", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty host")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	}
+}
+
+func TestHandler_SSHDisconnect_EmptyHost(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.SSHDisconnectParams{Host: ""})
+	_, rpcErr := h.Handle("client-1", "ssh.disconnect", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty host")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
+	}
+}
+
+func TestHandler_CredentialResponse_EmptyRequestID(t *testing.T) {
+	h, _, _, _ := newTestHandler()
+	params := mustMarshal(t, protocol.CredentialResponseParams{RequestID: ""})
+	_, rpcErr := h.Handle("client-1", "credential.response", params)
+	if rpcErr == nil {
+		t.Fatal("expected RPC error for empty request_id")
+	}
+	if rpcErr.Code != protocol.InvalidParams {
+		t.Errorf("error code = %d, want %d (InvalidParams)", rpcErr.Code, protocol.InvalidParams)
 	}
 }
 

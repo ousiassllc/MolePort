@@ -542,10 +542,43 @@ SSH config を再読み込みし、ホスト一覧を更新する。
     "log": {
       "level": "info",
       "file": "~/.config/moleport/moleport.log"
+    },
+    "language": "ja",
+    "update_check": {
+      "enabled": true,
+      "interval": "24h"
+    },
+    "tui": {
+      "theme": {
+        "base": "dark",
+        "accent": "violet"
+      }
     }
   }
 }
 ```
+
+**`update_check` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `enabled` | boolean | アップデートチェックの有効/無効（デフォルト: `true`） |
+| `interval` | string | チェック間隔（デフォルト: `"24h"`、最小: `"1h"`） |
+
+**`language` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `language` | string | UI 言語設定: `"en"` \| `"ja"` |
+
+**`tui.theme` フィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `base` | string | ベーステーマ: `"dark"` \| `"light"` |
+| `accent` | string | アクセントカラー: `"violet"` \| `"blue"` \| `"green"` \| `"cyan"` \| `"orange"` |
+
+> **Note**: `tui.theme` が未設定（ゼロ値）の場合、TUI は初回起動時にテーマ選択画面を表示する。
 
 ---
 
@@ -570,6 +603,40 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "reconnect": {
           "enabled": false
         }
+      }
+    },
+    "language": "en"
+  }
+}
+```
+
+**アップデートチェック設定の更新例**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "config.update",
+  "params": {
+    "update_check": {
+      "enabled": false
+    }
+  }
+}
+```
+
+**テーマ更新の例**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "config.update",
+  "params": {
+    "tui": {
+      "theme": {
+        "base": "light",
+        "accent": "blue"
       }
     }
   }
@@ -612,15 +679,32 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
+    "version": "v0.2.0",
     "pid": 12345,
     "started_at": "2026-02-11T09:00:00+09:00",
     "uptime": "3h 30m",
     "connected_clients": 1,
     "active_ssh_connections": 2,
-    "active_forwards": 3
+    "active_forwards": 3,
+    "warnings": ["バージョン不一致の可能性があります"]
   }
 }
 ```
+
+**レスポンスフィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `pid` | int | デーモンのプロセス ID |
+| `version` | string | デーモンのビルドバージョン（例: `"v0.2.0"`、開発時は `"dev"`） |
+| `started_at` | string | 起動時刻（RFC3339） |
+| `uptime` | string | 稼働時間（human-readable） |
+| `connected_clients` | int | 接続中のクライアント数 |
+| `active_ssh_connections` | int | アクティブな SSH 接続数 |
+| `active_forwards` | int | アクティブなポートフォワーディング数 |
+| `warnings` | string[] | 警告メッセージのリスト（省略可能） |
+
+> **Note**: TUI は起動時に `version` フィールドを自身のバージョンと比較し、不一致の場合はデーモン再起動を提案する（UC-17 参照）。`version` が `"dev"` の場合はチェックをスキップする。
 
 ---
 
@@ -659,6 +743,80 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ---
 
+### version.check
+
+最新バージョン情報を取得する。デーモンがキャッシュしている結果を返す。キャッシュがない場合は即座に GitHub Releases API にチェックを実行する。
+
+**リクエスト**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "version.check",
+  "params": {}
+}
+```
+
+**レスポンス（更新あり）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "v0.1.0",
+    "latest_version": "v0.2.0",
+    "update_available": true,
+    "release_url": "https://github.com/ousiassllc/moleport/releases/tag/v0.2.0",
+    "checked_at": "2026-03-04T10:00:00+09:00"
+  }
+}
+```
+
+**レスポンス（最新）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "v0.2.0",
+    "latest_version": "v0.2.0",
+    "update_available": false,
+    "release_url": "https://github.com/ousiassllc/moleport/releases/tag/v0.2.0",
+    "checked_at": "2026-03-04T10:00:00+09:00"
+  }
+}
+```
+
+**レスポンス（チェック無効 / dev ビルド）**:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "current_version": "dev",
+    "update_available": false
+  }
+}
+```
+
+**レスポンスフィールド**:
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `current_version` | string | デーモンのビルドバージョン |
+| `latest_version` | string | 最新リリースバージョン（チェック無効/未実行時は空） |
+| `update_available` | boolean | 更新が利用可能か |
+| `release_url` | string | GitHub リリースページ URL（チェック無効/未実行時は空） |
+| `checked_at` | string | チェック日時（RFC3339、チェック無効/未実行時は空） |
+
+> **Note**: `update_check.enabled` が `false` の場合、または現在のバージョンが `"dev"` の場合、`update_available` は常に `false` を返し、`latest_version`・`release_url`・`checked_at` は空になる。
+
+---
+
 ### events.subscribe
 
 イベントストリームを開始する。サブスクライブ後、デーモンから通知が非同期に送信される。
@@ -694,7 +852,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 |-------|------|
 | `ssh` | SSH 接続状態の変化（接続/切断/再接続/エラー） |
 | `forward` | ポートフォワーディングの状態変化（開始/停止/再接続中/復元/エラー） |
-| `metrics` | メトリクスの定期更新（1秒間隔） |
+| `metrics` | メトリクスの定期更新（1秒間隔）**※未実装。TUI は `session.list` を2秒間隔でポーリングすることで代替** |
 
 ---
 
@@ -942,6 +1100,8 @@ SSH 接続状態の変化。
 
 ### event.metrics
 
+> **Note**: 未実装。TUI は `session.list` を2秒間隔でポーリングすることで代替している。
+
 メトリクスの定期更新（1秒間隔）。
 
 ```json
@@ -996,3 +1156,8 @@ SSH 接続状態の変化。
 | 1.1 | 2026-02-11 | credential.request/response 仕様追加、エラーコード 1008/1009 追加、event.ssh に pending_auth 追加 | #11 クレデンシャル入力機能追加 |
 | 1.2 | 2026-02-24 | forward.start の説明にクレデンシャルコールバック対応を追記 | #16 フォワード開始失敗時の修正 |
 | 1.3 | 2026-02-27 | config.get/update に keepalive_interval と hosts セクション追加、event.forward に reconnecting/restored タイプ追加 | #27 自動再接続機能の改善・拡張 |
+| 1.4 | 2026-03-01 | config.get レスポンスに `tui.theme` セクション追加、config.update にテーマ更新例追加 | #34 TUI カラーテーマ機能 |
+| 1.5 | 2026-03-01 | daemon.status レスポンスに `version` フィールド追加、レスポンスフィールド表を追加 | #36 バージョン不一致検出 |
+| 1.6 | 2026-03-01 | config.get/update に `language` フィールド追加、event.metrics に未実装注記追加 | ドキュメント乖離修正 (#40) |
+| 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |
+| 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |

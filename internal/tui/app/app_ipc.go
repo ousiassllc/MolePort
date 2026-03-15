@@ -4,13 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 	"github.com/ousiassllc/moleport/internal/tui"
+	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
+
+const (
+	// metricsInterval はメトリクス更新の間隔。
+	metricsInterval = 2 * time.Second
+	// ipcReadTimeout は IPC 読み取り系操作のタイムアウト。
+	ipcReadTimeout = 5 * time.Second
+	// ipcWriteTimeout は IPC 書き込み系操作のタイムアウト。
+	ipcWriteTimeout = 10 * time.Second
+	// ipcCredentialTimeout はクレデンシャル待ちを含む操作のタイムアウト。
+	// サーバー側の core.CredentialTimeout に IPC オーバーヘッド分のバッファを加算。
+	ipcCredentialTimeout = core.CredentialTimeout + 10*time.Second
+	// ipcShutdownTimeout はシャットダウン操作のタイムアウト。
+	ipcShutdownTimeout = 2 * time.Second
+)
+
+// --- 内部メッセージ型 ---
+
+type sessionsLoadedMsg struct {
+	Sessions []core.ForwardSession
+}
+
+type subscriptionStartedMsg struct {
+	SubscriptionID string
+}
 
 // --- IPC 操作 ---
 
@@ -38,7 +65,7 @@ func (m *MainModel) loadSessions() tea.Cmd {
 		defer cancel()
 		var result protocol.SessionListResult
 		if err := m.client.Call(ctx, "session.list", nil, &result); err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("セッション取得エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.session_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 		sessions := make([]core.ForwardSession, len(result.Sessions))
 		for i, s := range result.Sessions {
@@ -55,7 +82,7 @@ func (m *MainModel) subscribeEvents() tea.Cmd {
 		defer cancel()
 		subID, err := m.client.Subscribe(ctx, []string{"ssh", "forward"})
 		if err != nil {
-			return tui.LogOutputMsg{Text: fmt.Sprintf("イベント購読エラー: %s", err)}
+			return tui.LogOutputMsg{Text: i18n.T("tui.log.subscribe_error", map[string]any{"Error": err}), Level: tui.LogError}
 		}
 		return subscriptionStartedMsg{SubscriptionID: subID}
 	}
@@ -79,26 +106,72 @@ func (m *MainModel) metricsTick() tea.Cmd {
 	})
 }
 
+// loadConfig は config.get を呼んでテーマ設定を取得する。
+func (m *MainModel) loadConfig() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), ipcReadTimeout)
+		defer cancel()
+		var result protocol.ConfigGetResult
+		if err := m.client.Call(ctx, "config.get", nil, &result); err != nil {
+			return tui.ConfigLoadedMsg{Err: err}
+		}
+		return tui.ConfigLoadedMsg{
+			ThemeBase:   result.TUI.Theme.Base,
+			ThemeAccent: result.TUI.Theme.Accent,
+			Language:    result.Language,
+		}
+	}
+}
+
+// saveTheme は config.update でテーマ設定を保存する。
+func (m *MainModel) saveTheme(presetID string) tea.Cmd {
+	return func() tea.Msg {
+		p, ok := theme.FindPreset(presetID)
+		if !ok {
+			return tui.ThemeSavedMsg{Err: fmt.Errorf("unknown preset: %s", presetID)}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), ipcWriteTimeout)
+		defer cancel()
+		base := p.Base
+		accent := p.Accent
+		params := protocol.ConfigUpdateParams{
+			TUI: &protocol.TUIUpdateInfo{
+				Theme: &protocol.ThemeUpdateInfo{
+					Base:   &base,
+					Accent: &accent,
+				},
+			},
+		}
+		var result protocol.ConfigUpdateResult
+		if err := m.client.Call(ctx, "config.update", params, &result); err != nil {
+			return tui.ThemeSavedMsg{Err: err}
+		}
+		return tui.ThemeSavedMsg{}
+	}
+}
+
 // --- IPC 通知ハンドリング ---
 
 func (m *MainModel) handleIPCNotification(notif *protocol.Notification) {
 	switch notif.Method {
-	case "event.ssh":
+	case protocol.EventSSH:
 		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
-		state := parseConnectionState(evt.Type)
+		state := protocol.ParseConnectionState(evt.Type)
 		m.dashboard.UpdateHostState(evt.Host, state)
 		if evt.Error != "" {
-			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error))
+			m.dashboard.AppendLog(fmt.Sprintf("SSH [%s] %s: %s", evt.Host, evt.Type, evt.Error), tui.LogInfo)
 		}
-	case "event.forward":
+	case protocol.EventForward:
 		var evt protocol.ForwardEventNotification
 		if err := json.Unmarshal(notif.Params, &evt); err != nil {
+			slog.Warn("failed to unmarshal notification", "method", notif.Method, "error", err)
 			return
 		}
-		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type))
+		m.dashboard.AppendLog(fmt.Sprintf("Forward [%s] %s", evt.Name, evt.Type), tui.LogInfo)
 		// セッション一覧は次の metricsTick で再読み込みされる
 	}
 }

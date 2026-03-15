@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
@@ -36,33 +37,56 @@ func ResolveConfigDir(flagValue string) string {
 	return filepath.Join(home, ".config", "moleport")
 }
 
-// connectDaemon はデーモンに接続し、IPCClient を返す。
+// ConnectDaemon はデーモンに接続し、IPCClient を返す。
 // 接続に失敗した場合はエラーメッセージを表示して終了する。
-func connectDaemon(configDir string) *client.IPCClient {
-	client, err := daemon.EnsureDaemon(configDir)
+// テスト時に差し替え可能にするため変数として定義する（ExitFunc と同パターン）。
+// NOTE: stubConnectDaemon を使用するテストは t.Parallel() と併用不可。
+var ConnectDaemon = defaultConnectDaemon
+
+func defaultConnectDaemon(configDir string) *client.IPCClient {
+	c, err := daemon.EnsureDaemon(configDir)
 	if err != nil {
-		exitError("デーモンが稼働していません。moleport daemon start で起動してください。")
+		ExitError("%s", i18n.T("cli.error.daemon_not_running"))
 	}
-	return client
+	return c
 }
 
-// callCtx は RPC 呼び出し用のコンテキストを生成する（10秒タイムアウト）。
-func callCtx() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 10*time.Second)
+// defaultCallTimeout は RPC 呼び出しのデフォルトタイムアウト。
+const defaultCallTimeout = 10 * time.Second
+
+// CallCtx は RPC 呼び出し用のコンテキストを生成する。
+func CallCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), defaultCallTimeout)
 }
 
-// exitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
-func exitError(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "エラー: "+format+"\n", args...)
-	os.Exit(1)
+// DaemonCall はデーモンに接続し、RPC 呼び出し用のコンテキストとクリーンアップ関数を返す。
+func DaemonCall(configDir string) (cl *client.IPCClient, ctx context.Context, cleanup func()) {
+	cl = ConnectDaemon(configDir)
+	ctx, cancel := CallCtx()
+	cleanup = func() {
+		cancel()
+		_ = cl.Close()
+	}
+	return
 }
 
-// printJSON は値を整形された JSON として stdout に出力する。
-func printJSON(v any) {
+// ExitFunc はプロセス終了関数。テスト時に差し替えて os.Exit を回避可能にする。
+// NOTE: stubExit/captureExit を使用するテストは t.Parallel() と併用不可。
+var ExitFunc = os.Exit
+
+// ExitError はエラーメッセージを stderr に出力し、終了コード 1 で終了する。
+func ExitError(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintf(os.Stderr, "%s: %s\n", i18n.T("cli.error.prefix"), msg)
+	ExitFunc(1)
+}
+
+// PrintJSON は値を整形された JSON として stdout に出力する。
+func PrintJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {
-		exitError("JSON 出力に失敗しました: %v", err)
+		ExitError("%s", i18n.T("cli.error.json_output_failed", map[string]any{"Error": err}))
 	}
 }
 
@@ -76,8 +100,8 @@ func ParseGlobalFlags() (configDir string, args []string) {
 			i++ // skip next arg (value)
 			continue
 		}
-		if strings.HasPrefix(rawArgs[i], "--config-dir=") {
-			configDir = strings.TrimPrefix(rawArgs[i], "--config-dir=")
+		if v, ok := strings.CutPrefix(rawArgs[i], "--config-dir="); ok {
+			configDir = v
 			continue
 		}
 		args = append(args, rawArgs[i])

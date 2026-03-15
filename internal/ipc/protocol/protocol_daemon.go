@@ -7,12 +7,14 @@ type DaemonStatusParams struct{}
 
 // DaemonStatusResult は daemon.status リクエストの結果。
 type DaemonStatusResult struct {
-	PID                  int    `json:"pid"`
-	StartedAt            string `json:"started_at"`
-	Uptime               string `json:"uptime"`
-	ConnectedClients     int    `json:"connected_clients"`
-	ActiveSSHConnections int    `json:"active_ssh_connections"`
-	ActiveForwards       int    `json:"active_forwards"`
+	Version              string   `json:"version"`
+	PID                  int      `json:"pid"`
+	StartedAt            string   `json:"started_at"`
+	Uptime               string   `json:"uptime"`
+	ConnectedClients     int      `json:"connected_clients"`
+	ActiveSSHConnections int      `json:"active_ssh_connections"`
+	ActiveForwards       int      `json:"active_forwards"`
+	Warnings             []string `json:"warnings,omitempty"`
 }
 
 // DaemonShutdownParams は daemon.shutdown リクエストのパラメータ。

@@ -14,24 +14,26 @@ type ForwardListResult struct {
 
 // ForwardInfo はポートフォワーディングルールの情報を表す。
 type ForwardInfo struct {
-	Name        string `json:"name"`
-	Host        string `json:"host"`
-	Type        string `json:"type"`
-	LocalPort   int    `json:"local_port"`
-	RemoteHost  string `json:"remote_host,omitempty"`
-	RemotePort  int    `json:"remote_port,omitempty"`
-	AutoConnect bool   `json:"auto_connect"`
+	Name           string `json:"name"`
+	Host           string `json:"host"`
+	Type           string `json:"type"`
+	LocalPort      int    `json:"local_port"`
+	RemoteHost     string `json:"remote_host,omitempty"`
+	RemotePort     int    `json:"remote_port,omitempty"`
+	RemoteBindAddr string `json:"remote_bind_addr,omitempty"`
+	AutoConnect    bool   `json:"auto_connect"`
 }
 
 // ForwardAddParams は forward.add リクエストのパラメータ。
 type ForwardAddParams struct {
-	Name        string `json:"name,omitempty"`
-	Host        string `json:"host"`
-	Type        string `json:"type"`
-	LocalPort   int    `json:"local_port"`
-	RemoteHost  string `json:"remote_host,omitempty"`
-	RemotePort  int    `json:"remote_port,omitempty"`
-	AutoConnect bool   `json:"auto_connect"`
+	Name           string `json:"name,omitempty"`
+	Host           string `json:"host"`
+	Type           string `json:"type"`
+	LocalPort      int    `json:"local_port"`
+	RemoteHost     string `json:"remote_host,omitempty"`
+	RemotePort     int    `json:"remote_port,omitempty"`
+	RemoteBindAddr string `json:"remote_bind_addr,omitempty"`
+	AutoConnect    bool   `json:"auto_connect"`
 }
 
 // ForwardAddResult は forward.add リクエストの結果。

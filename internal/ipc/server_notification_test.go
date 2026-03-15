@@ -49,7 +49,7 @@ func TestServerClient_Notification(t *testing.T) {
 	})
 	notif := protocol.Notification{
 		JSONRPC: protocol.JSONRPCVersion,
-		Method:  "event.ssh",
+		Method:  protocol.EventSSH,
 		Params:  notifParams,
 	}
 
@@ -59,8 +59,8 @@ func TestServerClient_Notification(t *testing.T) {
 
 	select {
 	case got := <-client.Events():
-		if got.Method != "event.ssh" {
-			t.Errorf("notification method = %q, want %q", got.Method, "event.ssh")
+		if got.Method != protocol.EventSSH {
+			t.Errorf("notification method = %q, want %q", got.Method, protocol.EventSSH)
 		}
 		var evt protocol.SSHEventNotification
 		if err := json.Unmarshal(got.Params, &evt); err != nil {

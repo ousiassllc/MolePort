@@ -39,7 +39,7 @@ type mockSSHConnection struct {
 	keepAliveF func(ctx context.Context, interval time.Duration)
 
 	localForwardF   func(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error)
-	remoteForwardF  func(ctx context.Context, remotePort int, localAddr string) (net.Listener, error)
+	remoteForwardF  func(ctx context.Context, remotePort int, localAddr string, remoteBindAddr string) (net.Listener, error)
 	dynamicForwardF func(ctx context.Context, localPort int) (net.Listener, error)
 }
 
@@ -64,9 +64,9 @@ func (m *mockSSHConnection) LocalForward(ctx context.Context, localPort int, rem
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockSSHConnection) RemoteForward(ctx context.Context, remotePort int, localAddr string) (net.Listener, error) {
+func (m *mockSSHConnection) RemoteForward(ctx context.Context, remotePort int, localAddr string, remoteBindAddr string) (net.Listener, error) {
 	if m.remoteForwardF != nil {
-		return m.remoteForwardF(ctx, remotePort, localAddr)
+		return m.remoteForwardF(ctx, remotePort, localAddr, remoteBindAddr)
 	}
 	return nil, fmt.Errorf("not implemented")
 }
@@ -106,7 +106,7 @@ func testHosts() []core.SSHHost {
 
 func newTestSSHManager(hosts []core.SSHHost, connFactory func() core.SSHConnection) core.SSHManager {
 	parser := &mockSSHConfigParser{hosts: hosts}
-	return NewSSHManager(parser, connFactory, "/fake/ssh/config", core.ReconnectConfig{
+	return NewSSHManager(context.Background(), parser, connFactory, "/fake/ssh/config", core.ReconnectConfig{
 		Enabled:      false,
 		MaxRetries:   3,
 		InitialDelay: core.Duration{Duration: 10 * time.Millisecond},

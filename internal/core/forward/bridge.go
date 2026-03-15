@@ -9,7 +9,24 @@ import (
 	"sync"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/socks5"
 )
+
+// halfCloser は TCP half-close をサポートする接続を表す。
+// net.TCPConn はこのインターフェースを満たすが、SSH チャネル経由の接続は
+// 満たさない場合がある。
+type halfCloser interface {
+	CloseWrite() error
+}
+
+// bufPool は io.CopyBuffer で使用するバッファの再利用プール。
+// バッファサイズは io.Copy のデフォルト (32KB) と同じ。
+var bufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 32*1024)
+		return &buf
+	},
+}
 
 // acceptLoop はリスナーで接続を受け付け、ブリッジを作成する。
 func (m *forwardManager) acceptLoop(af *activeForward, rule core.ForwardRule, sshClient interface {
@@ -40,7 +57,7 @@ func (m *forwardManager) dialRemote(rule core.ForwardRule, sshClient interface {
 		remoteAddr := fmt.Sprintf("%s:%d", rule.RemoteHost, rule.RemotePort)
 		return sshClient.Dial("tcp", remoteAddr)
 	case core.Remote:
-		localAddr := fmt.Sprintf("127.0.0.1:%d", rule.LocalPort)
+		localAddr := net.JoinHostPort(core.LocalhostAddr, fmt.Sprintf("%d", rule.LocalPort))
 		return net.Dial("tcp", localAddr)
 	default:
 		return nil, fmt.Errorf("unsupported forward type for bridge: %v", rule.Type)
@@ -72,12 +89,12 @@ func (m *forwardManager) bridge(af *activeForward, rule core.ForwardRule, conn n
 func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
 	Dial(n, addr string) (net.Conn, error)
 }) {
-	if err := core.Socks5Negotiate(conn); err != nil {
+	if err := socks5.Negotiate(conn); err != nil {
 		slog.Debug("socks5 negotiate failed", "rule", af.session.Rule.Name, "error", err)
 		return
 	}
 
-	targetAddr, err := core.Socks5ParseRequest(conn)
+	targetAddr, err := socks5.ParseRequest(conn)
 	if err != nil {
 		slog.Debug("socks5 parse request failed", "rule", af.session.Rule.Name, "error", err)
 		return
@@ -86,13 +103,13 @@ func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClien
 	remote, err := sshClient.Dial("tcp", targetAddr)
 	if err != nil {
 		// Connection refused
-		_, _ = conn.Write([]byte{core.Socks5Version, core.Socks5ReplyConnectionRefused, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{socks5.Version, socks5.ReplyConnectionRefused, 0x00, socks5.AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	defer func() { _ = remote.Close() }()
 
 	// Success response
-	if _, err := conn.Write([]byte{core.Socks5Version, core.Socks5ReplySuccess, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
+	if _, err := conn.Write([]byte{socks5.Version, socks5.ReplySuccess, 0x00, socks5.AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
 		return
 	}
 
@@ -100,27 +117,45 @@ func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClien
 }
 
 // copyBidirectional は二つの接続間でデータを双方向にコピーする。
+// コピー完了後、half-close (CloseWrite) で EOF を相手側に伝播する。
 func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		n, err := io.Copy(b, a)
+		bufp := bufPool.Get().(*[]byte) // safe: Pool.New always returns *[]byte
+		defer bufPool.Put(bufp)
+		n, err := io.CopyBuffer(b, a, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
 		}
 		af.sent.Add(n)
+		closeWrite(b)
 	}()
 
 	go func() {
 		defer wg.Done()
-		n, err := io.Copy(a, b)
+		bufp := bufPool.Get().(*[]byte) // safe: Pool.New always returns *[]byte
+		defer bufPool.Put(bufp)
+		n, err := io.CopyBuffer(a, b, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Debug("copy error", "rule", af.session.Rule.Name, "error", err)
 		}
 		af.received.Add(n)
+		closeWrite(a)
 	}()
 
 	wg.Wait()
+}
+
+// closeWrite は接続の書き込み側を閉じる。
+// halfCloser をサポートする場合は CloseWrite で half-close を行い、
+// サポートしない場合は Close でフォールバックする。
+func closeWrite(c net.Conn) {
+	if hc, ok := c.(halfCloser); ok {
+		_ = hc.CloseWrite()
+	} else {
+		_ = c.Close()
+	}
 }

@@ -2,11 +2,11 @@
 
 APP_NAME := moleport
 BUILD_DIR := bin
-VERSION := 0.2.0
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
 
-.PHONY: help build run clean test test-race vet fmt lint linterly install setup-tools
+.PHONY: help build run clean test test-race vet fmt lint linterly install update setup-tools
 
 help: ## ヘルプを表示
 	@echo ""
@@ -48,6 +48,9 @@ setup-tools: ## 開発ツールをインストール
 
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)
+
+update: ## 最新版にアップデート (go install)
+	go install github.com/ousiassllc/moleport/cmd/moleport@latest
 
 install: ## $GOPATH/bin にインストール
 	go install $(GOFLAGS) -ldflags "$(LDFLAGS)" ./cmd/moleport

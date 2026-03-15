@@ -13,10 +13,15 @@ import (
 var _ core.ForwardManager = (*mockForwardManagerForState)(nil)
 
 type mockForwardManagerForState struct {
-	mu             sync.Mutex
-	sessions       map[string]*core.ForwardSession
-	startCalls     []string
-	startForwardFn func(string, core.CredentialCallback) error
+	mu                    sync.Mutex
+	sessions              map[string]*core.ForwardSession
+	startCalls            []string
+	startForwardFn        func(string, core.CredentialCallback) error
+	getAllSessionsFn      func() []core.ForwardSession
+	markReconnectingCalls []string
+	restoreForwardsFn     func(string) []core.ForwardRestoreResult
+	failReconnectingCalls []string
+	subscribeCh           chan core.ForwardEvent
 }
 
 func (m *mockForwardManagerForState) AddRule(rule core.ForwardRule) (string, error) {
@@ -48,20 +53,39 @@ func (m *mockForwardManagerForState) GetSession(ruleName string) (*core.ForwardS
 	if s, ok := m.sessions[ruleName]; ok {
 		return s, nil
 	}
-	return nil, fmt.Errorf("rule %q not found", ruleName)
+	return nil, &core.NotFoundError{Resource: "rule", Name: ruleName}
 }
 
-func (m *mockForwardManagerForState) GetAllSessions() []core.ForwardSession { return nil }
-
-func (m *mockForwardManagerForState) MarkReconnecting(string) {}
-
-func (m *mockForwardManagerForState) RestoreForwards(string) []core.ForwardRestoreResult {
+func (m *mockForwardManagerForState) GetAllSessions() []core.ForwardSession {
+	if m.getAllSessionsFn != nil {
+		return m.getAllSessionsFn()
+	}
 	return nil
 }
 
-func (m *mockForwardManagerForState) FailReconnecting(string) {}
+func (m *mockForwardManagerForState) MarkReconnecting(host string) {
+	m.mu.Lock()
+	m.markReconnectingCalls = append(m.markReconnectingCalls, host)
+	m.mu.Unlock()
+}
+
+func (m *mockForwardManagerForState) RestoreForwards(host string) []core.ForwardRestoreResult {
+	if m.restoreForwardsFn != nil {
+		return m.restoreForwardsFn(host)
+	}
+	return nil
+}
+
+func (m *mockForwardManagerForState) FailReconnecting(host string) {
+	m.mu.Lock()
+	m.failReconnectingCalls = append(m.failReconnectingCalls, host)
+	m.mu.Unlock()
+}
 
 func (m *mockForwardManagerForState) Subscribe() <-chan core.ForwardEvent {
+	if m.subscribeCh != nil {
+		return m.subscribeCh
+	}
 	return make(chan core.ForwardEvent, 1)
 }
 
@@ -72,7 +96,9 @@ func (m *mockForwardManagerForState) Close() {}
 var _ core.ConfigManager = (*mockConfigManagerForState)(nil)
 
 type mockConfigManagerForState struct {
-	config *core.Config
+	config      *core.Config
+	loadStateFn func() (*core.State, error)
+	saveStateFn func(*core.State) error
 }
 
 func (m *mockConfigManagerForState) GetConfig() *core.Config { return m.config }
@@ -84,10 +110,18 @@ func (m *mockConfigManagerForState) SaveConfig(*core.Config) error { return nil 
 func (m *mockConfigManagerForState) UpdateConfig(func(*core.Config)) error { return nil }
 
 func (m *mockConfigManagerForState) LoadState() (*core.State, error) {
+	if m.loadStateFn != nil {
+		return m.loadStateFn()
+	}
 	return nil, fmt.Errorf("no state")
 }
 
-func (m *mockConfigManagerForState) SaveState(*core.State) error { return nil }
+func (m *mockConfigManagerForState) SaveState(s *core.State) error {
+	if m.saveStateFn != nil {
+		return m.saveStateFn(s)
+	}
+	return nil
+}
 
 func (m *mockConfigManagerForState) DeleteState() error { return nil }
 
@@ -100,6 +134,10 @@ func newDaemonForStateTest(cfg *core.Config, fwdMgr core.ForwardManager) *Daemon
 		cfgMgr: &mockConfigManagerForState{config: cfg},
 		fwdMgr: fwdMgr,
 	}
+}
+
+func newDaemonForStateTestFull(cfgMgr core.ConfigManager, fwdMgr core.ForwardManager) *Daemon {
+	return &Daemon{cfgMgr: cfgMgr, fwdMgr: fwdMgr}
 }
 
 // --- Tests ---

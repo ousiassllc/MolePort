@@ -103,11 +103,11 @@ func TestBuildAuthMethods_WithNilCallback(t *testing.T) {
 	}
 
 	host := core.SSHHost{
-		Name:         "test-host",
-		HostName:     "example.com",
-		Port:         22,
-		User:         "user",
-		IdentityFile: keyPath,
+		Name:          "test-host",
+		HostName:      "example.com",
+		Port:          22,
+		User:          "user",
+		IdentityFiles: []string{keyPath},
 	}
 
 	methods, closer := buildAuthMethods(host, nil)
@@ -235,11 +235,11 @@ func TestBuildAuthMethods_WithCallbackAndKeyFile(t *testing.T) {
 	}
 
 	host := core.SSHHost{
-		Name:         "test-host",
-		HostName:     "example.com",
-		Port:         22,
-		User:         "user",
-		IdentityFile: keyPath,
+		Name:          "test-host",
+		HostName:      "example.com",
+		Port:          22,
+		User:          "user",
+		IdentityFiles: []string{keyPath},
 	}
 
 	cb := func(req core.CredentialRequest) (core.CredentialResponse, error) {
@@ -256,5 +256,42 @@ func TestBuildAuthMethods_WithCallbackAndKeyFile(t *testing.T) {
 	// 鍵ファイル + パスワード + keyboard-interactive の少なくとも 3 つ
 	if len(methods) < 3 {
 		t.Fatalf("expected at least 3 auth methods (key + password + keyboard-interactive), got %d", len(methods))
+	}
+}
+
+func TestBuildAuthMethods_MultipleIdentityFiles(t *testing.T) {
+	// SSH_AUTH_SOCK を無効化してエージェント認証を除外
+	t.Setenv("SSH_AUTH_SOCK", "")
+
+	key1, _ := generateTestKey(t)
+	key2, _ := generateTestKey(t)
+	tmpDir := t.TempDir()
+	keyPath1 := filepath.Join(tmpDir, "id_test1")
+	keyPath2 := filepath.Join(tmpDir, "id_test2")
+	if err := os.WriteFile(keyPath1, key1, 0600); err != nil {
+		t.Fatalf("failed to write key file 1: %v", err)
+	}
+	if err := os.WriteFile(keyPath2, key2, 0600); err != nil {
+		t.Fatalf("failed to write key file 2: %v", err)
+	}
+
+	host := core.SSHHost{
+		Name:          "test-host",
+		HostName:      "example.com",
+		Port:          22,
+		User:          "user",
+		IdentityFiles: []string{keyPath1, keyPath2},
+	}
+
+	methods, closer := buildAuthMethods(host, nil)
+	if closer != nil {
+		if err := closer.Close(); err != nil {
+			t.Errorf("failed to close agent connection: %v", err)
+		}
+	}
+
+	// 2 つの鍵ファイルから少なくとも 2 つの認証メソッドが生成されるはず
+	if len(methods) < 2 {
+		t.Fatalf("expected at least 2 auth methods for 2 identity files, got %d", len(methods))
 	}
 }

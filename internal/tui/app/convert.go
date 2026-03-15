@@ -14,7 +14,7 @@ func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 		HostName:           info.HostName,
 		Port:               info.Port,
 		User:               info.User,
-		State:              parseConnectionState(info.State),
+		State:              protocol.ParseConnectionState(info.State),
 		ActiveForwardCount: info.ActiveForwardCount,
 	}
 }
@@ -22,20 +22,21 @@ func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 // sessionInfoToForwardSession は IPC の SessionInfo を core.ForwardSession に変換する。
 func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession {
 	fwdType, _ := core.ParseForwardType(info.Type)
-	status := parseSessionStatus(info.Status)
+	status := protocol.ParseSessionStatus(info.Status)
 	var connectedAt time.Time
 	if info.ConnectedAt != "" {
-		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt)
+		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt) // パース失敗時はゼロ値（表示上は空欄）
 	}
 	return core.ForwardSession{
 		ID: info.ID,
 		Rule: core.ForwardRule{
-			Name:       info.Name,
-			Host:       info.Host,
-			Type:       fwdType,
-			LocalPort:  info.LocalPort,
-			RemoteHost: info.RemoteHost,
-			RemotePort: info.RemotePort,
+			Name:           info.Name,
+			Host:           info.Host,
+			Type:           fwdType,
+			LocalPort:      info.LocalPort,
+			RemoteHost:     info.RemoteHost,
+			RemotePort:     info.RemotePort,
+			RemoteBindAddr: info.RemoteBindAddr,
 		},
 		Status:         status,
 		ConnectedAt:    connectedAt,
@@ -43,37 +44,5 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 		BytesReceived:  info.BytesReceived,
 		ReconnectCount: info.ReconnectCount,
 		LastError:      info.LastError,
-	}
-}
-
-func parseConnectionState(s string) core.ConnectionState {
-	switch s {
-	case "connected":
-		return core.Connected
-	case "connecting":
-		return core.Connecting
-	case "reconnecting":
-		return core.Reconnecting
-	case "pending_auth":
-		return core.PendingAuth
-	case "error":
-		return core.ConnectionError
-	default:
-		return core.Disconnected
-	}
-}
-
-func parseSessionStatus(s string) core.SessionStatus {
-	switch s {
-	case "active":
-		return core.Active
-	case "starting":
-		return core.Starting
-	case "reconnecting":
-		return core.SessionReconnecting
-	case "error":
-		return core.SessionError
-	default:
-		return core.Stopped
 	}
 }

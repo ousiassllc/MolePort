@@ -4,80 +4,114 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ousiassllc/moleport/internal/tui/theme"
 )
 
-// カラーパレット（単一アクセントカラー: バイオレット + グレースケール）
-var (
-	Accent      = lipgloss.Color("#7C3AED") // バイオレット: フォーカス、選択、アクティブ
-	AccentDim   = lipgloss.Color("#6D28D9") // やや暗いアクセント: セカンダリ
-	Text        = lipgloss.Color("#E4E4E7") // 通常テキスト（薄灰）
-	Muted       = lipgloss.Color("#71717A") // 補助テキスト、ラベル
-	Dim         = lipgloss.Color("#3F3F46") // ボーダー、区切り線
-	Error       = lipgloss.Color("#EF4444") // エラー（唯一の例外色）
-	Warning     = lipgloss.Color("#F59E0B") // 再接続中
-	BgHighlight = lipgloss.Color("#27272A") // 選択行の背景
-)
+// カラーパレット（テーマから動的取得）
+
+// AccentColor はアクセントカラーを返す。
+func AccentColor() lipgloss.Color { return theme.Current().Accent }
+
+// TextColor はテキストカラーを返す。
+func TextColor() lipgloss.Color { return theme.Current().Text }
+
+// MutedColor はミュートカラーを返す。
+func MutedColor() lipgloss.Color { return theme.Current().Muted }
+
+// ErrorColor はエラーカラーを返す。
+func ErrorColor() lipgloss.Color { return theme.Current().Error }
+
+// WarningColor は警告カラーを返す。
+func WarningColor() lipgloss.Color { return theme.Current().Warning }
 
 // テキストスタイル
-var (
-	TitleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(Accent)
 
-	MutedStyle = lipgloss.NewStyle().
-			Foreground(Muted)
+// TitleStyle はタイトル用の太字アクセントスタイルを返す。
+func TitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
+}
 
-	SelectedStyle = lipgloss.NewStyle().
-			Background(BgHighlight).
-			Foreground(Accent).
-			Bold(true)
+// MutedStyle はミュート（低強調）テキスト用スタイルを返す。
+func MutedStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Muted)
+}
 
-	TextStyle = lipgloss.NewStyle().
-			Foreground(Text)
-)
+// SelectedStyle は選択中アイテムのハイライトスタイルを返す。
+func SelectedStyle() lipgloss.Style {
+	p := theme.Current()
+	return lipgloss.NewStyle().Background(p.BgHighlight).Foreground(p.Accent).Bold(true)
+}
+
+// TextStyle は標準テキスト用スタイルを返す。
+func TextStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Text)
+}
 
 // ステータスカラースタイル
-var (
-	ActiveStyle       = lipgloss.NewStyle().Foreground(Accent)
-	StoppedStyle      = lipgloss.NewStyle().Foreground(Muted)
-	ErrorStyle        = lipgloss.NewStyle().Foreground(Error)
-	ReconnectingStyle = lipgloss.NewStyle().Foreground(Warning)
-)
+
+// ActiveStyle はアクティブ状態のスタイルを返す。
+func ActiveStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Accent) }
+
+// StoppedStyle は停止状態のスタイルを返す。
+func StoppedStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Muted) }
+
+// ErrorStyle はエラー状態のスタイルを返す。
+func ErrorStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Error) }
+
+// ReconnectingStyle は再接続中のスタイルを返す。
+func ReconnectingStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Warning)
+}
+
+// WarningStyle は警告メッセージのスタイルを返す。
+func WarningStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Warning).Bold(true)
+}
 
 // キーヒントスタイル
-var (
-	KeyStyle  = lipgloss.NewStyle().Foreground(Accent).Bold(true)
-	DescStyle = lipgloss.NewStyle().Foreground(Muted)
-)
+
+// KeyStyle はキーバインド表示用のスタイルを返す。
+func KeyStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(theme.Current().Accent).Bold(true)
+}
+
+// DescStyle はキーバインド説明文のスタイルを返す。
+func DescStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Muted) }
 
 // 区切り線スタイル
-var DividerStyle = lipgloss.NewStyle().Foreground(Dim)
+
+// DividerStyle は区切り線のスタイルを返す。
+func DividerStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(theme.Current().Dim) }
 
 // ヘッダースタイル
-var HeaderStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(Accent)
 
-// セクションタイトルスタイル
-var SectionTitleStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(Accent)
+// HeaderStyle はヘッダー用の太字アクセントスタイルを返す。
+func HeaderStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(theme.Current().Accent)
+}
 
 // パネルボーダースタイル
-var (
-	FocusedBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(Accent).
-			Padding(0, 1)
 
-	UnfocusedBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(Dim).
-			Padding(0, 1)
+// FocusedBorder はフォーカス中のパネルボーダースタイルを返す。
+func FocusedBorder() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Current().Accent).
+		Padding(0, 1)
+}
 
-	StatusBarStyle = lipgloss.NewStyle().
-			Padding(0, 1)
-)
+// UnfocusedBorder は非フォーカスのパネルボーダースタイルを返す。
+func UnfocusedBorder() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Current().Dim).
+		Padding(0, 1)
+}
+
+// StatusBarStyle はステータスバーのスタイルを返す。
+func StatusBarStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Padding(0, 1)
+}
 
 // RenderWithBorderTitle はボーダー付きでコンテンツを描画し、上辺にインラインタイトルを埋め込む。
 func RenderWithBorderTitle(style lipgloss.Style, width, height int, title, content string) string {
@@ -103,10 +137,7 @@ func RenderWithBorderTitle(style lipgloss.Style, width, height int, title, conte
 
 	suffix := borderColor.Render(b.TopRight)
 	suffixWidth := lipgloss.Width(suffix)
-	fillCount := topWidth - prefixWidth - suffixWidth
-	if fillCount < 0 {
-		fillCount = 0
-	}
+	fillCount := max(topWidth-prefixWidth-suffixWidth, 0)
 
 	lines[0] = prefix + borderColor.Render(strings.Repeat(b.Top, fillCount)+b.TopRight)
 	return strings.Join(lines, "\n")

@@ -1,0 +1,271 @@
+cli:
+  help:
+    text: |
+      MolePort - SSH Port Forwarding Manager
+
+      Usage:
+        moleport <command> [arguments]
+
+      Commands:
+        daemon start       Start daemon in background
+        daemon stop [--purge]  Stop daemon (--purge: clear state)
+        daemon status      Show daemon status
+        daemon kill        Force kill daemon (when unresponsive)
+        connect <host>     Connect to SSH host
+        disconnect <host>  Disconnect SSH host
+        add [flags]        Add forwarding rule
+        delete <name>      Delete forwarding rule
+        start <name>       Start forwarding
+        stop <name> / --all  Stop forwarding (--all: stop all)
+        list [--json]      List hosts and forwarding rules
+        status [name]      Show connection status summary
+        config [--json]    Show configuration
+        reload             Reload SSH config
+        tui                Launch TUI dashboard
+        update [--check]   Auto-update to latest version
+        help               Show this help
+        version            Show version
+
+      Global Flags:
+        --config-dir <path>  Config directory path
+  daemon:
+    subcommand_required: "Subcommand required: start, stop, status, kill"
+    unknown_subcommand: "Unknown subcommand: daemon {{.Sub}}"
+    started: "Daemon started (PID: {{.PID}})"
+    already_running: "Daemon is already running (PID: {{.PID}})"
+    start_failed: "Failed to start daemon: {{.Error}}"
+    stopped: "Daemon stopped"
+    stopped_purge: "Daemon stopped (state cleared)"
+    stop_failed: "Failed to stop daemon: {{.Error}}"
+    connect_failed: "Failed to connect to daemon: {{.Error}}"
+    not_running: "Daemon is not running"
+    killed: "Daemon force killed (PID: {{.PID}})"
+    kill_failed: "Failed to force kill daemon: {{.Error}}"
+    status_failed: "Failed to get status: {{.Error}}"
+    status_header: "MolePort Daemon:"
+    status_version: "  Version:    {{.Version}}"
+    status_pid: "  PID:        {{.PID}}"
+    status_uptime: "  Uptime:     {{.Uptime}}"
+    status_clients: "  Clients:    {{.Count}} connected"
+    status_ssh: "  SSH:        {{.Count}} connections"
+    status_forwards: "  Forwards:   {{.Count}} active"
+  connect:
+    success: "Connected to {{.Host}}"
+    host_required: "Host name required: moleport connect <host>"
+  disconnect:
+    success: "Disconnected from {{.Host}}"
+    host_required: "Host name required: moleport disconnect <host>"
+  add:
+    success: "Rule '{{.Name}}' added"
+    host_required: "--host flag is required"
+    local_port_required: "--local-port flag is required"
+    port_range: "Port number must be in range 1-65535"
+    type_invalid: "--type must be one of: local, remote, dynamic"
+    remote_port_required: "--remote-port flag is required for local/remote forwarding"
+  delete:
+    success: "Rule '{{.Name}}' deleted"
+    name_required: "Rule name required: moleport delete <name>"
+  start:
+    success: "{{.Name}} started"
+    name_required: "Rule name required: moleport start <name>"
+  stop:
+    success: "{{.Name}} stopped"
+    all_stopped: "All forwarding stopped ({{.Count}} rules)"
+    name_required: "Rule name required: moleport stop <name> / --all"
+  list:
+    no_rules: "(no forwarding rules)"
+    hosts_header: "SSH Hosts ({{.Total}} hosts, {{.Connected}} connected):"
+    get_hosts_failed: "Failed to get host list: {{.Error}}"
+    get_forwards_failed: "Failed to get forwarding rules: {{.Error}}"
+  status:
+    get_failed: "Failed to get status: {{.Error}}"
+    get_hosts_failed: "Failed to get host list: {{.Error}}"
+    get_sessions_failed: "Failed to get session list: {{.Error}}"
+    header: "MolePort Status:"
+    daemon_running: "  Daemon:    Running (PID: {{.PID}}, uptime: {{.Uptime}})"
+    hosts_summary: "  Hosts:     {{.Total}} total, {{.Connected}} connected"
+    hosts_summary_auth: "  Hosts:     {{.Total}} total, {{.Connected}} connected, {{.PendingAuth}} pending auth"
+    forwards_summary: "  Forwards:  {{.Total}} total, {{.Active}} active, {{.Stopped}} stopped"
+    traffic_summary: "  Traffic:   sent {{.Sent}}, recv {{.Received}}"
+    session_header: "Session: {{.Name}}"
+    session_host: "  Host:           {{.Host}}"
+    session_type: "  Type:           {{.Type}}"
+    session_local_port: "  Local Port:     {{.Port}}"
+    session_remote: "  Remote:         {{.Remote}}"
+    session_status: "  Status:         {{.Status}}"
+    session_connected_at: "  Connected At:   {{.Time}}"
+    session_bytes_sent: "  Bytes Sent:     {{.Bytes}}"
+    session_bytes_received: "  Bytes Received: {{.Bytes}}"
+    session_reconnects: "  Reconnects:     {{.Count}}"
+    session_last_error: "  Last Error:     {{.Error}}"
+  config:
+    get_failed: "Failed to get configuration: {{.Error}}"
+    header: "MolePort Config:"
+    ssh_config: "  SSH Config:     {{.Path}}"
+    reconnect_header: "  Reconnect:"
+    reconnect_enabled: "    Enabled:      {{.Value}}"
+    reconnect_max_retries: "    Max Retries:  {{.Value}}"
+    reconnect_initial_delay: "    Initial Delay: {{.Value}}"
+    reconnect_max_delay: "    Max Delay:    {{.Value}}"
+    session_header: "  Session:"
+    session_auto_restore: "    Auto Restore: {{.Value}}"
+    log_header: "  Log:"
+    log_level: "    Level:        {{.Value}}"
+    log_file: "    File:         {{.Value}}"
+  reload:
+    success: "SSH config reloaded"
+    hosts_count: "  {{.Total}} hosts loaded (new: {{.Added}}, removed: {{.Removed}})"
+    host_added: "  + {{.Name}} added"
+    host_removed: "  - {{.Name}} removed"
+    failed: "Failed to reload SSH config: {{.Error}}"
+  version:
+    update_available: "Update available: {{.Latest}} (current: {{.Current}})"
+    release_url: "Release: {{.URL}}"
+    check_failed: "Version check failed: {{.Error}}"
+  update:
+    checking: "Checking for latest version..."
+    available: "{{.Latest}} is available (current: {{.Current}})"
+    already_latest: "Current version ({{.Version}}) is up to date"
+    check_failed: "Failed to check version: {{.Error}}"
+    downloading: "Downloading: {{.Asset}}"
+    verifying: "Checksum verification: OK"
+    stopping_daemon: "Stopping daemon..."
+    replacing: "Updating binary..."
+    restarting_daemon: "Restarting daemon..."
+    success: "✓ MolePort updated to {{.Version}}"
+    failed: "Update failed: {{.Error}}"
+    dev_build: "Cannot update dev build (install a release build)"
+    restart_failed: "Failed to restart daemon. Run 'moleport daemon start' manually."
+  tui:
+    daemon_start_failed: "Failed to start daemon: {{.Error}}"
+    daemon_started: "Daemon started (PID: {{.PID}})"
+    daemon_connect_failed: "Failed to connect to daemon: {{.Error}}"
+    tui_error: "TUI error: {{.Error}}"
+  credential:
+    password_prompt: "Password for {{.Host}}: "
+    passphrase_prompt: "Key passphrase for {{.Host}}: "
+  error:
+    daemon_not_running: "Daemon is not running. Start with: moleport daemon start"
+    json_output_failed: "Failed to output JSON: {{.Error}}"
+    unknown_command: "Error: unknown command '{{.Command}}'"
+    prefix: "Error"
+
+tui:
+  setup:
+    lang_title: "Language / 言語"
+  forward:
+    empty: "No forwarding rules"
+    title: "Active Forwards ({{.Count}})"
+  setup_panel:
+    no_hosts: "No hosts found"
+    title: "SSH Hosts ({{.Count}})"
+    select_type: "Select type:"
+    enter_select: "[Enter] Select  [Esc] Cancel"
+    enter_next: "[Enter] Next  [Esc] Cancel"
+    enter_create: "[Enter] Create & Connect  [Esc] Cancel"
+    step_progress: "Step {{.Current}}/{{.Total}}"
+    wizard_title: "New Forward"
+    rule_name_placeholder: "Optional rule name"
+    port_required: "Port number is required"
+    port_not_number: "Must be a number"
+    port_out_of_range: "Port must be in range 1-65535"
+    label_local_port: "Local port"
+    label_remote_host: "Remote host"
+    label_remote_port: "Remote port"
+    label_rule_name: "Rule name"
+  keys:
+    switch_pane: "Switch"
+    help: "Help"
+    quit: "Quit"
+    search: "Search"
+    cancel: "Cancel"
+    force_quit: "Force quit"
+    up: "Up"
+    down: "Down"
+    execute: "Execute"
+    disconnect: "Disconnect"
+    delete: "Delete"
+    theme: "Theme"
+    version: "Version"
+    lang: "Language"
+    toggle: "Toggle"
+    select: "Select"
+  help:
+    title: "Key Bindings"
+    tab: "Switch pane (Forwards ↔ Setup)"
+    slash: "Focus setup panel"
+    arrows: "Cursor move"
+    enter: "Select / Toggle connection"
+    d: "Disconnect"
+    x: "Delete rule"
+    esc: "Cancel wizard"
+    t: "Theme select"
+    l: "Language switch"
+    v: "Show version"
+    question: "Help"
+    q: "Quit"
+    any_key_close: "Press any key to close"
+  statusbar:
+    hosts: "hosts"
+    connected: "connected"
+    forwards: "forwards"
+    active: "active"
+  confirm:
+    yes: "Yes"
+    no: "No"
+    switch_hint: "Switch"
+  password:
+    prompt: "Enter password for {{.Host}}:"
+    hint: "[Enter] Submit  [Esc] Cancel"
+  version:
+    check_error: "Version check error: {{.Error}}"
+    mismatch: "Daemon version ({{.DaemonVersion}}) does not match TUI version ({{.TUIVersion}}). Restart daemon?"
+    restarting: "Restarting daemon..."
+    restart_error: "Daemon restart error: {{.Error}}"
+    restarted: "Daemon restarted"
+    mismatch_continue: "Continuing with version mismatch"
+    mismatch_warning: "Version mismatch"
+  update:
+    available: "MolePort {{.Latest}} is available (current: {{.Current}})"
+    ok: "OK"
+  theme:
+    header: "Theme Select"
+    help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"
+  lang:
+    help: "[↑↓] Select  [Enter] Apply  [Esc] Cancel/Skip"
+  log:
+    title: "Log"
+    hosts_loaded: "{{.Count}} hosts loaded"
+    hosts_reloaded: "{{.Count}} hosts reloaded"
+    hosts_load_error: "Host load error: {{.Error}}"
+    hosts_reload_error: "Host reload error: {{.Error}}"
+    session_error: "Session fetch error: {{.Error}}"
+    subscribe_error: "Event subscription error: {{.Error}}"
+    daemon_disconnected: "Disconnected from daemon"
+    quitting: "Quitting..."
+    config_load_error: "Config load error: {{.Error}}"
+    theme_save_error: "Theme save error: {{.Error}}"
+    lang_save_error: "Language save error: {{.Error}}"
+    # add
+    forward_added: "Rule '{{.Name}}' added"
+    forward_added_started: "Rule '{{.Name}}' added and started"
+    forward_add_error: "Forward add error: {{.Error}}"
+    # start
+    forward_started: "Forward [{{.Name}}] started"
+    forward_start_error: "Rule '{{.Name}}' start error: {{.Error}}"
+    forward_start_rollback_error: "Rule '{{.Name}}' start error: {{.Error}} (rule delete also failed: {{.DeleteError}})"
+    # stop
+    forward_stopped: "Forward [{{.Name}}] stopped"
+    forward_stop_error: "Forward '{{.Name}}' stop error: {{.Error}}"
+    # delete
+    forward_deleted: "Rule '{{.Name}}' deleted"
+    forward_delete_error: "Rule '{{.Name}}' delete error: {{.Error}}"
+    credential_required: "Authentication required: {{.Host}} ({{.Type}})"
+    credential_cancelled: "Authentication cancelled"
+    credential_passphrase_prompt: "Enter key passphrase for {{.Host}}:"
+    credential_code_prompt: "Enter authentication code for {{.Host}}:"
+    credential_password_prompt: "Enter password for {{.Host}}:"
+    daemon_start_failed: "Failed to start new daemon"
+    daemon_connect_failed: "Failed to connect to new daemon"
+  prompt:
+    placeholder: "Enter command..."

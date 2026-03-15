@@ -12,6 +12,15 @@ type ConfigGetResult struct {
 	Hosts         map[string]HostConfigInfo `json:"hosts,omitempty"`
 	Session       SessionCfgInfo            `json:"session"`
 	Log           LogInfo                   `json:"log"`
+	Language      string                    `json:"language"`
+	UpdateCheck   UpdateCheckInfo           `json:"update_check"`
+	TUI           TUIInfo                   `json:"tui"`
+}
+
+// UpdateCheckInfo はアップデートチェック設定の情報を表す。
+type UpdateCheckInfo struct {
+	Enabled  bool   `json:"enabled"`
+	Interval string `json:"interval"`
 }
 
 // HostConfigInfo はホスト別設定の情報を表す。
@@ -47,6 +56,17 @@ type LogInfo struct {
 	File  string `json:"file"`
 }
 
+// TUIInfo は TUI 設定の情報を表す。
+type TUIInfo struct {
+	Theme ThemeInfo `json:"theme"`
+}
+
+// ThemeInfo はテーマ設定の情報を表す。
+type ThemeInfo struct {
+	Base   string `json:"base"`
+	Accent string `json:"accent"`
+}
+
 // ConfigUpdateParams は config.update リクエストのパラメータ（部分更新）。
 // 各フィールドはポインタ型で、nil なら変更なしを意味する。
 type ConfigUpdateParams struct {
@@ -55,6 +75,15 @@ type ConfigUpdateParams struct {
 	Hosts         map[string]*HostConfigUpdateInfo `json:"hosts,omitempty"`
 	Session       *SessionCfgUpdateInfo            `json:"session,omitempty"`
 	Log           *LogUpdateInfo                   `json:"log,omitempty"`
+	Language      *string                          `json:"language,omitempty"`
+	UpdateCheck   *UpdateCheckUpdateInfo           `json:"update_check,omitempty"`
+	TUI           *TUIUpdateInfo                   `json:"tui,omitempty"`
+}
+
+// UpdateCheckUpdateInfo はアップデートチェック設定の部分更新パラメータ。
+type UpdateCheckUpdateInfo struct {
+	Enabled  *bool   `json:"enabled,omitempty"`
+	Interval *string `json:"interval,omitempty"`
 }
 
 // HostConfigUpdateInfo はホスト別設定の部分更新パラメータ。
@@ -82,6 +111,17 @@ type SessionCfgUpdateInfo struct {
 type LogUpdateInfo struct {
 	Level *string `json:"level,omitempty"`
 	File  *string `json:"file,omitempty"`
+}
+
+// TUIUpdateInfo は TUI 設定の部分更新パラメータ。
+type TUIUpdateInfo struct {
+	Theme *ThemeUpdateInfo `json:"theme,omitempty"`
+}
+
+// ThemeUpdateInfo はテーマ設定の部分更新パラメータ。
+type ThemeUpdateInfo struct {
+	Base   *string `json:"base,omitempty"`
+	Accent *string `json:"accent,omitempty"`
 }
 
 // ConfigUpdateResult は config.update リクエストの結果。

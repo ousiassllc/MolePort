@@ -15,6 +15,7 @@ func TestSSHManager_KeepAliveInterval(t *testing.T) {
 	t.Run("uses configured interval", func(t *testing.T) {
 		intervalCh := make(chan time.Duration, 1)
 		sm := NewSSHManager(
+			context.Background(),
 			&mockSSHConfigParser{hosts: hosts},
 			func() core.SSHConnection {
 				mock := &mockSSHConnection{client: nil, isAlive: true}
@@ -50,6 +51,7 @@ func TestSSHManager_KeepAliveInterval(t *testing.T) {
 	t.Run("falls back to default", func(t *testing.T) {
 		intervalCh := make(chan time.Duration, 1)
 		sm := NewSSHManager(
+			context.Background(),
 			&mockSSHConfigParser{hosts: hosts},
 			func() core.SSHConnection {
 				mock := &mockSSHConnection{client: nil, isAlive: true}

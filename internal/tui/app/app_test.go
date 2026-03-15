@@ -10,109 +10,48 @@ import (
 )
 
 func TestHostInfoToSSHHost(t *testing.T) {
-	info := protocol.HostInfo{
-		Name:               "prod",
-		HostName:           "prod.example.com",
-		Port:               22,
-		User:               "deploy",
-		State:              "connected",
-		ActiveForwardCount: 3,
+	host := hostInfoToSSHHost(protocol.HostInfo{
+		Name: "prod", HostName: "prod.example.com", Port: 22,
+		User: "deploy", State: "connected", ActiveForwardCount: 3,
+	})
+	if host.Name != "prod" || host.HostName != "prod.example.com" || host.Port != 22 {
+		t.Errorf("basic fields: Name=%q HostName=%q Port=%d", host.Name, host.HostName, host.Port)
 	}
-
-	host := hostInfoToSSHHost(info)
-
-	if host.Name != "prod" {
-		t.Errorf("Name = %q, want %q", host.Name, "prod")
-	}
-	if host.HostName != "prod.example.com" {
-		t.Errorf("HostName = %q, want %q", host.HostName, "prod.example.com")
-	}
-	if host.Port != 22 {
-		t.Errorf("Port = %d, want %d", host.Port, 22)
-	}
-	if host.User != "deploy" {
-		t.Errorf("User = %q, want %q", host.User, "deploy")
-	}
-	if host.State != core.Connected {
-		t.Errorf("State = %v, want %v", host.State, core.Connected)
-	}
-	if host.ActiveForwardCount != 3 {
-		t.Errorf("ActiveForwardCount = %d, want %d", host.ActiveForwardCount, 3)
+	if host.User != "deploy" || host.State != core.Connected || host.ActiveForwardCount != 3 {
+		t.Errorf("user/state: User=%q State=%v Count=%d", host.User, host.State, host.ActiveForwardCount)
 	}
 }
 
 func TestSessionInfoToForwardSession(t *testing.T) {
-	info := protocol.SessionInfo{
-		ID:             "session-123",
-		Name:           "web",
-		Host:           "prod",
-		Type:           "local",
-		LocalPort:      8080,
-		RemoteHost:     "localhost",
-		RemotePort:     80,
-		Status:         "active",
-		ConnectedAt:    "2025-01-01T00:00:00Z",
-		BytesSent:      1024,
-		BytesReceived:  2048,
-		ReconnectCount: 1,
-		LastError:      "timeout",
+	session := sessionInfoToForwardSession(protocol.SessionInfo{
+		ID: "session-123", Name: "web", Host: "prod", Type: "local",
+		LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+		Status: "active", ConnectedAt: "2025-01-01T00:00:00Z",
+		BytesSent: 1024, BytesReceived: 2048, ReconnectCount: 1, LastError: "timeout",
+	})
+	wantTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	if session.ID != "session-123" || session.Rule.Name != "web" || session.Rule.Host != "prod" {
+		t.Errorf("basic fields: ID=%q Name=%q Host=%q", session.ID, session.Rule.Name, session.Rule.Host)
 	}
-
-	session := sessionInfoToForwardSession(info)
-
-	if session.ID != "session-123" {
-		t.Errorf("ID = %q, want %q", session.ID, "session-123")
+	if session.Rule.Type != core.Local || session.Rule.LocalPort != 8080 {
+		t.Errorf("type/port: Type=%v LocalPort=%d", session.Rule.Type, session.Rule.LocalPort)
 	}
-	if session.Rule.Name != "web" {
-		t.Errorf("Rule.Name = %q, want %q", session.Rule.Name, "web")
+	if session.Rule.RemoteHost != "localhost" || session.Rule.RemotePort != 80 {
+		t.Errorf("remote: Host=%q Port=%d", session.Rule.RemoteHost, session.Rule.RemotePort)
 	}
-	if session.Rule.Host != "prod" {
-		t.Errorf("Rule.Host = %q, want %q", session.Rule.Host, "prod")
+	if session.Status != core.Active || !session.ConnectedAt.Equal(wantTime) {
+		t.Errorf("status/time: Status=%v ConnectedAt=%v", session.Status, session.ConnectedAt)
 	}
-	if session.Rule.Type != core.Local {
-		t.Errorf("Rule.Type = %v, want %v", session.Rule.Type, core.Local)
-	}
-	if session.Rule.LocalPort != 8080 {
-		t.Errorf("Rule.LocalPort = %d, want %d", session.Rule.LocalPort, 8080)
-	}
-	if session.Rule.RemoteHost != "localhost" {
-		t.Errorf("Rule.RemoteHost = %q, want %q", session.Rule.RemoteHost, "localhost")
-	}
-	if session.Rule.RemotePort != 80 {
-		t.Errorf("Rule.RemotePort = %d, want %d", session.Rule.RemotePort, 80)
-	}
-	if session.Status != core.Active {
-		t.Errorf("Status = %v, want %v", session.Status, core.Active)
-	}
-	expectedTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	if !session.ConnectedAt.Equal(expectedTime) {
-		t.Errorf("ConnectedAt = %v, want %v", session.ConnectedAt, expectedTime)
-	}
-	if session.BytesSent != 1024 {
-		t.Errorf("BytesSent = %d, want %d", session.BytesSent, 1024)
-	}
-	if session.BytesReceived != 2048 {
-		t.Errorf("BytesReceived = %d, want %d", session.BytesReceived, 2048)
-	}
-	if session.ReconnectCount != 1 {
-		t.Errorf("ReconnectCount = %d, want %d", session.ReconnectCount, 1)
-	}
-	if session.LastError != "timeout" {
-		t.Errorf("LastError = %q, want %q", session.LastError, "timeout")
+	if session.BytesSent != 1024 || session.BytesReceived != 2048 || session.ReconnectCount != 1 || session.LastError != "timeout" {
+		t.Errorf("metrics: Sent=%d Recv=%d Recon=%d Err=%q",
+			session.BytesSent, session.BytesReceived, session.ReconnectCount, session.LastError)
 	}
 }
 
 func TestSessionInfoToForwardSession_EmptyConnectedAt(t *testing.T) {
-	info := protocol.SessionInfo{
-		ID:     "session-456",
-		Name:   "db",
-		Host:   "staging",
-		Type:   "local",
-		Status: "stopped",
-	}
-
-	session := sessionInfoToForwardSession(info)
-
+	session := sessionInfoToForwardSession(protocol.SessionInfo{
+		ID: "session-456", Name: "db", Host: "staging", Type: "local", Status: "stopped",
+	})
 	if !session.ConnectedAt.IsZero() {
 		t.Errorf("ConnectedAt should be zero, got %v", session.ConnectedAt)
 	}
@@ -122,16 +61,9 @@ func TestSessionInfoToForwardSession_EmptyConnectedAt(t *testing.T) {
 }
 
 func TestSessionInfoToForwardSession_DynamicType(t *testing.T) {
-	info := protocol.SessionInfo{
-		ID:     "session-789",
-		Name:   "socks",
-		Host:   "prod",
-		Type:   "dynamic",
-		Status: "active",
-	}
-
-	session := sessionInfoToForwardSession(info)
-
+	session := sessionInfoToForwardSession(protocol.SessionInfo{
+		ID: "session-789", Name: "socks", Host: "prod", Type: "dynamic", Status: "active",
+	})
 	if session.Rule.Type != core.Dynamic {
 		t.Errorf("Rule.Type = %v, want %v", session.Rule.Type, core.Dynamic)
 	}
@@ -142,33 +74,22 @@ func TestParseConnectionState(t *testing.T) {
 		input string
 		want  core.ConnectionState
 	}{
-		{"connected", core.Connected},
-		{"connecting", core.Connecting},
-		{"reconnecting", core.Reconnecting},
-		{"error", core.ConnectionError},
-		{"disconnected", core.Disconnected},
-		{"unknown", core.Disconnected},
-		{"", core.Disconnected},
+		{"connected", core.Connected}, {"connecting", core.Connecting},
+		{"reconnecting", core.Reconnecting}, {"error", core.ConnectionError},
+		{"disconnected", core.Disconnected}, {"unknown", core.Disconnected}, {"", core.Disconnected},
 	}
-
 	for _, tt := range tests {
-		got := parseConnectionState(tt.input)
-		if got != tt.want {
-			t.Errorf("parseConnectionState(%q) = %v, want %v", tt.input, got, tt.want)
+		if got := protocol.ParseConnectionState(tt.input); got != tt.want {
+			t.Errorf("protocol.ParseConnectionState(%q) = %v, want %v", tt.input, got, tt.want)
 		}
 	}
 }
 
 func TestLogOutputMsgNotDuplicated(t *testing.T) {
-	m := NewMainModel(nil, "test")
-	m.dashboard.SetSize(80, 24)
-
-	msg := tui.LogOutputMsg{Text: "テストメッセージ"}
-	result, _ := m.Update(msg)
-	updated := result.(MainModel)
-
-	if got := updated.dashboard.LogLineCount(); got != 1 {
-		t.Errorf("LogLineCount() = %d, want 1 (log message was duplicated)", got)
+	m := newTestModel("test")
+	result, _ := m.Update(tui.LogOutputMsg{Text: "テストメッセージ"})
+	if got := result.(MainModel).dashboard.LogLineCount(); got != 1 {
+		t.Errorf("LogLineCount() = %d, want 1", got)
 	}
 }
 
@@ -177,19 +98,13 @@ func TestParseSessionStatus(t *testing.T) {
 		input string
 		want  core.SessionStatus
 	}{
-		{"active", core.Active},
-		{"starting", core.Starting},
-		{"reconnecting", core.SessionReconnecting},
-		{"error", core.SessionError},
-		{"stopped", core.Stopped},
-		{"unknown", core.Stopped},
-		{"", core.Stopped},
+		{"active", core.Active}, {"starting", core.Starting},
+		{"reconnecting", core.SessionReconnecting}, {"error", core.SessionError},
+		{"stopped", core.Stopped}, {"unknown", core.Stopped}, {"", core.Stopped},
 	}
-
 	for _, tt := range tests {
-		got := parseSessionStatus(tt.input)
-		if got != tt.want {
-			t.Errorf("parseSessionStatus(%q) = %v, want %v", tt.input, got, tt.want)
+		if got := protocol.ParseSessionStatus(tt.input); got != tt.want {
+			t.Errorf("ParseSessionStatus(%q) = %v, want %v", tt.input, got, tt.want)
 		}
 	}
 }

@@ -5,7 +5,13 @@ import (
 	"os"
 
 	"github.com/ousiassllc/moleport/internal/cli"
+	"github.com/ousiassllc/moleport/internal/cli/daemoncmd"
+	"github.com/ousiassllc/moleport/internal/cli/statuscmd"
+	"github.com/ousiassllc/moleport/internal/cli/updatecmd"
+	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/i18n"
+	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 )
 
 func main() {
@@ -13,13 +19,14 @@ func main() {
 	if daemon.IsDaemonMode() {
 		flagConfigDir, _ := cli.ParseGlobalFlags()
 		configDir := cli.ResolveConfigDir(flagConfigDir)
-		cli.RunDaemonMode(configDir)
+		daemoncmd.RunDaemonMode(configDir)
 		return
 	}
 
 	// グローバルフラグを解析
 	flagConfigDir, args := cli.ParseGlobalFlags()
 	configDir := cli.ResolveConfigDir(flagConfigDir)
+	initI18n(configDir)
 
 	// サブコマンドなしの場合は TUI を起動
 	if len(args) == 0 {
@@ -33,7 +40,7 @@ func main() {
 
 	switch cmd {
 	case "daemon":
-		cli.RunDaemon(configDir, subArgs)
+		daemoncmd.RunDaemon(configDir, subArgs)
 	case "connect":
 		cli.RunConnect(configDir, subArgs)
 	case "disconnect":
@@ -49,7 +56,7 @@ func main() {
 	case "list":
 		cli.RunList(configDir, subArgs)
 	case "status":
-		cli.RunStatus(configDir, subArgs)
+		statuscmd.RunStatus(configDir, subArgs)
 	case "config":
 		cli.RunConfig(configDir, subArgs)
 	case "reload":
@@ -58,11 +65,27 @@ func main() {
 		cli.RunTUI(configDir, subArgs)
 	case "version":
 		cli.RunVersion(configDir, subArgs)
+	case "update":
+		updatecmd.RunUpdate(configDir, subArgs)
 	case "help", "--help", "-h":
 		cli.RunHelp(configDir, subArgs)
 	default:
-		fmt.Fprintf(os.Stderr, "エラー: 不明なコマンド '%s'\n\n", cmd)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.error.unknown_command", map[string]any{"Command": cmd}))
+		fmt.Fprintln(os.Stderr)
 		cli.RunHelp(configDir, nil)
 		os.Exit(1)
 	}
+}
+
+// initI18n は config.yaml の Language フィールドを読み取り、i18n を初期化する。
+// config の読み込みに失敗した場合は環境変数からフォールバックする。
+func initI18n(configDir string) {
+	var configLang string
+	store := yamlstore.NewYAMLStore()
+	cfgMgr := core.NewConfigManager(store, configDir)
+	if cfg, err := cfgMgr.LoadConfig(); err == nil {
+		configLang = cfg.Language
+	}
+	lang := i18n.Resolve(configLang)
+	_ = i18n.SetLang(lang)
 }

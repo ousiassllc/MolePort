@@ -10,9 +10,14 @@ moleport
 *.swo
 *~
 
+# Environment
+.env*
+!.env.example
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Test
 coverage.out
+coverage_review.out

@@ -45,11 +45,6 @@ type ForwardDeleteConfirmedMsg struct {
 	RuleName string
 }
 
-// ForwardUpdatedMsg はフォワーディングイベントの通知。
-type ForwardUpdatedMsg struct {
-	Event core.ForwardEvent
-}
-
 // SSHEventMsg は SSH イベントの通知。
 type SSHEventMsg struct {
 	Event core.SSHEvent
@@ -60,18 +55,29 @@ type MetricsTickMsg struct{}
 
 // ForwardAddRequestMsg はセットアップウィザード完了時に発行される。
 type ForwardAddRequestMsg struct {
-	Host        string
-	Type        core.ForwardType
-	LocalPort   int
-	RemoteHost  string
-	RemotePort  int
-	Name        string
-	AutoConnect bool
+	Host           string
+	Type           core.ForwardType
+	LocalPort      int
+	RemoteHost     string
+	RemotePort     int
+	RemoteBindAddr string
+	Name           string
+	AutoConnect    bool
 }
+
+// LogLevel はログ行の種類を表す。
+type LogLevel int
+
+const (
+	LogInfo LogLevel = iota
+	LogSuccess
+	LogError
+)
 
 // LogOutputMsg はログ出力テキスト。
 type LogOutputMsg struct {
-	Text string
+	Text  string
+	Level LogLevel
 }
 
 // QuitRequestMsg はアプリケーション終了を要求する。
@@ -96,4 +102,59 @@ type CredentialRequestMsg struct {
 type CredentialSubmitMsg struct {
 	Value     string
 	Cancelled bool
+}
+
+// --- テーマ関連メッセージ ---
+
+// ThemeSelectedMsg はテーマ選択ページで確定時に発行される。
+type ThemeSelectedMsg struct {
+	PresetID string
+}
+
+// ThemeCancelledMsg はテーマ選択ページでキャンセル時に発行される。
+type ThemeCancelledMsg struct{}
+
+// ConfigLoadedMsg は config.get IPC の結果。
+type ConfigLoadedMsg struct {
+	ThemeBase   string
+	ThemeAccent string
+	Language    string
+	Err         error
+}
+
+// ThemeSavedMsg はテーマ保存 IPC の完了通知。
+type ThemeSavedMsg struct {
+	Err error
+}
+
+// --- 言語関連メッセージ ---
+
+// LangSelectedMsg は言語選択ページで確定時に発行される。
+type LangSelectedMsg struct {
+	Lang string
+}
+
+// LangCancelledMsg は言語選択ページでキャンセル時に発行される。
+type LangCancelledMsg struct{}
+
+// LangSavedMsg は言語保存 IPC の完了通知。
+type LangSavedMsg struct {
+	Err error
+}
+
+// VersionCheckDoneMsg はバージョンチェック結果を通知するメッセージ。
+type VersionCheckDoneMsg struct {
+	Match         bool
+	DaemonVersion string
+	TUIVersion    string
+	Err           error
+}
+
+// UpdateCheckDoneMsg は最新バージョンチェック結果を通知するメッセージ。
+type UpdateCheckDoneMsg struct {
+	UpdateAvailable bool
+	CurrentVersion  string
+	LatestVersion   string
+	ReleaseURL      string
+	Err             error
 }

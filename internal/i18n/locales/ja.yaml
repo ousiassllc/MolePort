@@ -1,0 +1,271 @@
+cli:
+  help:
+    text: |
+      MolePort - SSH ポートフォワーディングマネージャ
+
+      Usage:
+        moleport <command> [arguments]
+
+      Commands:
+        daemon start       デーモンをバックグラウンドで起動
+        daemon stop [--purge]  デーモンを停止（--purge: 状態クリア）
+        daemon status      デーモンの稼働状態を表示
+        daemon kill        デーモンを強制終了（応答しない場合）
+        connect <host>     SSH ホストに接続
+        disconnect <host>  SSH ホストを切断
+        add [flags]        転送ルールを追加
+        delete <name>      転送ルールを削除
+        start <name>       フォワーディングを開始
+        stop <name> / --all  フォワーディングを停止（--all: 全停止）
+        list [--json]      ホスト・転送ルールの一覧
+        status [name]      接続状態のサマリー
+        config [--json]    設定を表示
+        reload             SSH config を再読み込み
+        tui                TUI ダッシュボードを起動
+        update [--check]   最新バージョンに自動アップデート
+        help               このヘルプを表示
+        version            バージョン情報を表示
+
+      Global Flags:
+        --config-dir <path>  設定ディレクトリのパス
+  daemon:
+    subcommand_required: "サブコマンドを指定してください: start, stop, status, kill"
+    unknown_subcommand: "不明なサブコマンド: daemon {{.Sub}}"
+    started: "デーモンを起動しました (PID: {{.PID}})"
+    already_running: "デーモンは既に稼働中です (PID: {{.PID}})"
+    start_failed: "デーモンの起動に失敗しました: {{.Error}}"
+    stopped: "デーモンを停止しました"
+    stopped_purge: "デーモンを停止しました（状態をクリア）"
+    stop_failed: "デーモンの停止に失敗しました: {{.Error}}"
+    connect_failed: "デーモンへの接続に失敗しました: {{.Error}}"
+    not_running: "デーモンは稼働していません"
+    killed: "デーモンを強制終了しました (PID: {{.PID}})"
+    kill_failed: "デーモンの強制終了に失敗しました: {{.Error}}"
+    status_failed: "ステータスの取得に失敗しました: {{.Error}}"
+    status_header: "MolePort デーモン:"
+    status_version: "  バージョン: {{.Version}}"
+    status_pid: "  PID:        {{.PID}}"
+    status_uptime: "  稼働時間:   {{.Uptime}}"
+    status_clients: "  クライアント: {{.Count}} 接続中"
+    status_ssh: "  SSH:        {{.Count}} 接続"
+    status_forwards: "  フォワード:  {{.Count}} アクティブ"
+  connect:
+    success: "{{.Host}} に接続しました"
+    host_required: "ホスト名を指定してください: moleport connect <host>"
+  disconnect:
+    success: "{{.Host}} を切断しました"
+    host_required: "ホスト名を指定してください: moleport disconnect <host>"
+  add:
+    success: "ルール '{{.Name}}' を追加しました"
+    host_required: "--host フラグは必須です"
+    local_port_required: "--local-port フラグは必須です"
+    port_range: "ポート番号は 1〜65535 の範囲で入力してください"
+    type_invalid: "--type は local, remote, dynamic のいずれかを指定してください"
+    remote_port_required: "--remote-port フラグは local/remote 転送で必須です"
+  delete:
+    success: "ルール '{{.Name}}' を削除しました"
+    name_required: "ルール名を指定してください: moleport delete <name>"
+  start:
+    success: "{{.Name}} を開始しました"
+    name_required: "ルール名を指定してください: moleport start <name>"
+  stop:
+    success: "{{.Name}} を停止しました"
+    all_stopped: "全フォワーディングを停止しました ({{.Count}} 件)"
+    name_required: "ルール名を指定してください: moleport stop <name> / --all"
+  list:
+    no_rules: "(転送ルールなし)"
+    hosts_header: "SSH ホスト ({{.Total}} 件, {{.Connected}} 件接続中):"
+    get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
+    get_forwards_failed: "転送ルール一覧の取得に失敗しました: {{.Error}}"
+  status:
+    get_failed: "ステータスの取得に失敗しました: {{.Error}}"
+    get_hosts_failed: "ホスト一覧の取得に失敗しました: {{.Error}}"
+    get_sessions_failed: "セッション一覧の取得に失敗しました: {{.Error}}"
+    header: "MolePort ステータス:"
+    daemon_running: "  デーモン:    稼働中 (PID: {{.PID}}, 稼働時間: {{.Uptime}})"
+    hosts_summary: "  ホスト:      {{.Total}} 件, {{.Connected}} 件接続中"
+    hosts_summary_auth: "  ホスト:      {{.Total}} 件, {{.Connected}} 件接続中, {{.PendingAuth}} 件認証待ち"
+    forwards_summary: "  フォワード:  {{.Total}} 件, {{.Active}} 件アクティブ, {{.Stopped}} 件停止"
+    traffic_summary: "  トラフィック: 送信 {{.Sent}}, 受信 {{.Received}}"
+    session_header: "セッション: {{.Name}}"
+    session_host: "  ホスト:          {{.Host}}"
+    session_type: "  タイプ:          {{.Type}}"
+    session_local_port: "  ローカルポート:  {{.Port}}"
+    session_remote: "  リモート:        {{.Remote}}"
+    session_status: "  ステータス:      {{.Status}}"
+    session_connected_at: "  接続日時:        {{.Time}}"
+    session_bytes_sent: "  送信バイト:      {{.Bytes}}"
+    session_bytes_received: "  受信バイト:      {{.Bytes}}"
+    session_reconnects: "  再接続回数:     {{.Count}}"
+    session_last_error: "  最終エラー:     {{.Error}}"
+  config:
+    get_failed: "設定の取得に失敗しました: {{.Error}}"
+    header: "MolePort 設定:"
+    ssh_config: "  SSH Config:     {{.Path}}"
+    reconnect_header: "  再接続:"
+    reconnect_enabled: "    有効:          {{.Value}}"
+    reconnect_max_retries: "    最大リトライ:  {{.Value}}"
+    reconnect_initial_delay: "    初期遅延:      {{.Value}}"
+    reconnect_max_delay: "    最大遅延:      {{.Value}}"
+    session_header: "  セッション:"
+    session_auto_restore: "    自動復元:      {{.Value}}"
+    log_header: "  ログ:"
+    log_level: "    レベル:        {{.Value}}"
+    log_file: "    ファイル:      {{.Value}}"
+  reload:
+    success: "SSH config を再読み込みしました"
+    hosts_count: "  {{.Total}} ホスト読み込み（新規: {{.Added}}, 削除: {{.Removed}}）"
+    host_added: "  + {{.Name}} が追加されました"
+    host_removed: "  - {{.Name}} が削除されました"
+    failed: "SSH config の再読み込みに失敗しました: {{.Error}}"
+  version:
+    update_available: "アップデートがあります: {{.Latest}} (現在: {{.Current}})"
+    release_url: "リリース: {{.URL}}"
+    check_failed: "バージョンチェックに失敗しました: {{.Error}}"
+  update:
+    checking: "最新バージョンを確認中..."
+    available: "{{.Latest}} が利用可能です（現在: {{.Current}}）"
+    already_latest: "現在のバージョン ({{.Version}}) は最新です"
+    check_failed: "バージョン情報の取得に失敗しました: {{.Error}}"
+    downloading: "ダウンロード中: {{.Asset}}"
+    verifying: "チェックサム検証: OK"
+    stopping_daemon: "デーモンを停止中..."
+    replacing: "バイナリを更新中..."
+    restarting_daemon: "デーモンを再起動中..."
+    success: "✓ MolePort を {{.Version}} に更新しました"
+    failed: "アップデートに失敗しました: {{.Error}}"
+    dev_build: "dev ビルドではアップデートできません（リリースビルドをインストールしてください）"
+    restart_failed: "デーモンの再起動に失敗しました。moleport daemon start で手動起動してください。"
+  tui:
+    daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
+    daemon_started: "デーモンを起動しました (PID: {{.PID}})"
+    daemon_connect_failed: "デーモンへの接続に失敗しました: {{.Error}}"
+    tui_error: "TUI エラー: {{.Error}}"
+  credential:
+    password_prompt: "{{.Host}} のパスワード: "
+    passphrase_prompt: "{{.Host}} の鍵パスフレーズ: "
+  error:
+    daemon_not_running: "デーモンが稼働していません。moleport daemon start で起動してください。"
+    json_output_failed: "JSON 出力に失敗しました: {{.Error}}"
+    unknown_command: "エラー: 不明なコマンド '{{.Command}}'"
+    prefix: "エラー"
+
+tui:
+  setup:
+    lang_title: "Language / 言語"
+  forward:
+    empty: "フォワーディングルールがありません"
+    title: "Active Forwards ({{.Count}})"
+  setup_panel:
+    no_hosts: "ホストが見つかりません"
+    title: "SSH Hosts ({{.Count}})"
+    select_type: "転送種別を選択:"
+    enter_select: "[Enter] 選択  [Esc] キャンセル"
+    enter_next: "[Enter] 次へ  [Esc] キャンセル"
+    enter_create: "[Enter] 作成 & 接続  [Esc] キャンセル"
+    step_progress: "ステップ {{.Current}}/{{.Total}}"
+    wizard_title: "新規フォワード"
+    rule_name_placeholder: "任意のルール名"
+    port_required: "ポート番号を入力してください"
+    port_not_number: "数値を入力してください"
+    port_out_of_range: "ポート番号は 1-65535 の範囲で指定してください"
+    label_local_port: "ローカルポート"
+    label_remote_host: "リモートホスト"
+    label_remote_port: "リモートポート"
+    label_rule_name: "ルール名"
+  keys:
+    switch_pane: "ペイン切替"
+    help: "ヘルプ"
+    quit: "終了"
+    search: "検索"
+    cancel: "キャンセル"
+    force_quit: "強制終了"
+    up: "上"
+    down: "下"
+    execute: "実行"
+    disconnect: "切断"
+    delete: "削除"
+    theme: "テーマ"
+    version: "バージョン"
+    lang: "言語"
+    toggle: "切替"
+    select: "選択"
+  help:
+    title: "キー操作"
+    tab: "ペイン切替 (Forwards ↔ Setup)"
+    slash: "セットアップパネルにフォーカス"
+    arrows: "カーソル移動"
+    enter: "選択 / 接続トグル"
+    d: "切断"
+    x: "ルール削除"
+    esc: "ウィザードキャンセル"
+    t: "テーマ選択"
+    l: "言語切替"
+    v: "バージョン表示"
+    question: "ヘルプ"
+    q: "終了"
+    any_key_close: "任意のキーで閉じる"
+  statusbar:
+    hosts: "hosts"
+    connected: "connected"
+    forwards: "forwards"
+    active: "active"
+  confirm:
+    yes: "はい"
+    no: "いいえ"
+    switch_hint: "切替"
+  password:
+    prompt: "{{.Host}} のパスワードを入力:"
+    hint: "[Enter] 送信  [Esc] キャンセル"
+  version:
+    check_error: "バージョンチェックエラー: {{.Error}}"
+    mismatch: "デーモンのバージョン ({{.DaemonVersion}}) が TUI のバージョン ({{.TUIVersion}}) と一致しません。デーモンを再起動しますか？"
+    restarting: "デーモンを再起動中..."
+    restart_error: "デーモン再起動エラー: {{.Error}}"
+    restarted: "デーモンを再起動しました"
+    mismatch_continue: "バージョン不一致のまま続行します"
+    mismatch_warning: "バージョン不一致"
+  update:
+    available: "MolePort {{.Latest}} が利用可能です（現在 {{.Current}}）"
+    ok: "OK"
+  theme:
+    header: "テーマ選択"
+    help: "[←→] Base  [↑↓] Accent  [Enter] Apply  [Esc] Cancel"
+  lang:
+    help: "[↑↓] Select  [Enter] Apply  [Esc] Cancel/Skip"
+  log:
+    title: "ログ"
+    hosts_loaded: "{{.Count}} 件のホストを読み込みました"
+    hosts_reloaded: "{{.Count}} 件のホストを再読み込みしました"
+    hosts_load_error: "ホスト読み込みエラー: {{.Error}}"
+    hosts_reload_error: "ホスト再読み込みエラー: {{.Error}}"
+    session_error: "セッション取得エラー: {{.Error}}"
+    subscribe_error: "イベント購読エラー: {{.Error}}"
+    daemon_disconnected: "デーモンとの接続が切断されました"
+    quitting: "終了中..."
+    config_load_error: "設定読み込みエラー: {{.Error}}"
+    theme_save_error: "テーマ保存エラー: {{.Error}}"
+    lang_save_error: "言語保存エラー: {{.Error}}"
+    # add
+    forward_added: "ルール '{{.Name}}' を追加しました"
+    forward_added_started: "ルール '{{.Name}}' を追加し、開始しました"
+    forward_add_error: "ルール追加エラー: {{.Error}}"
+    # start
+    forward_started: "フォワード [{{.Name}}] を開始しました"
+    forward_start_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}"
+    forward_start_rollback_error: "ルール '{{.Name}}' の開始に失敗: {{.Error}}（ルール削除にも失敗: {{.DeleteError}}）"
+    # stop
+    forward_stopped: "フォワード [{{.Name}}] を停止しました"
+    forward_stop_error: "フォワード '{{.Name}}' の停止に失敗: {{.Error}}"
+    # delete
+    forward_deleted: "ルール '{{.Name}}' を削除しました"
+    forward_delete_error: "ルール '{{.Name}}' の削除に失敗: {{.Error}}"
+    credential_required: "認証が必要です: {{.Host}} ({{.Type}})"
+    credential_cancelled: "認証がキャンセルされました"
+    credential_passphrase_prompt: "{{.Host}} の鍵パスフレーズを入力:"
+    credential_code_prompt: "{{.Host}} の認証コードを入力:"
+    credential_password_prompt: "{{.Host}} のパスワードを入力:"
+    daemon_start_failed: "新しいデーモンの起動に失敗"
+    daemon_connect_failed: "新しいデーモンへの接続に失敗"
+  prompt:
+    placeholder: "コマンドを入力..."

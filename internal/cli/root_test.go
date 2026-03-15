@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -122,5 +123,77 @@ func TestParseGlobalFlags_Empty(t *testing.T) {
 	}
 	if len(args) != 0 {
 		t.Errorf("args = %v, want empty", args)
+	}
+}
+
+func TestExitError_CallsExitFunc(t *testing.T) {
+	stubExit(t)
+
+	code, output := captureExit(t, func() {
+		ExitError("something went %s", "wrong")
+	})
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(output, "wrong") {
+		t.Errorf("stderr = %q, want to contain %q", output, "wrong")
+	}
+}
+
+func TestCallCtx_ReturnsContext(t *testing.T) {
+	ctx, cancel := CallCtx()
+	defer cancel()
+
+	if ctx == nil {
+		t.Error("CallCtx should return non-nil context")
+	}
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Error("CallCtx should set a deadline")
+	}
+	if deadline.IsZero() {
+		t.Error("deadline should be non-zero")
+	}
+}
+
+func TestPrintJSON_WritesToStdout(t *testing.T) {
+	data := map[string]string{"key": "value"}
+
+	output := captureStdout(t, func() {
+		PrintJSON(data)
+	})
+
+	if !strings.Contains(output, "key") || !strings.Contains(output, "value") {
+		t.Errorf("PrintJSON output = %q, want to contain key and value", output)
+	}
+}
+
+func TestPrintJSON_PrettyPrinted(t *testing.T) {
+	data := map[string]int{"a": 1}
+
+	output := captureStdout(t, func() {
+		PrintJSON(data)
+	})
+
+	if !strings.Contains(output, "  ") {
+		t.Errorf("PrintJSON should produce indented output, got %q", output)
+	}
+}
+
+func TestConnectDaemon_FailsWithoutDaemon(t *testing.T) {
+	stubExit(t)
+	configDir := t.TempDir()
+
+	code, stderr := captureExit(t, func() {
+		ConnectDaemon(configDir)
+	})
+
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if stderr == "" {
+		t.Error("stderr should contain an error message")
 	}
 }

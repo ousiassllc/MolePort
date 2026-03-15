@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -97,12 +99,16 @@ func (s *IPCServer) Stop() error {
 
 	s.mu.Lock()
 	for _, c := range s.clients {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			slog.Debug("failed to close client connection", "client", c.id, "error", err)
+		}
 	}
 	s.clients = make(map[string]*clientConn)
 	s.mu.Unlock()
 
-	os.Remove(s.socketPath)
+	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+		slog.Debug("failed to remove socket file", "path", s.socketPath, "error", err)
+	}
 	return firstErr
 }
 
@@ -125,6 +131,7 @@ func (s *IPCServer) SendNotification(clientID string, notification protocol.Noti
 }
 
 // BroadcastNotification は全クライアントに通知を送信する。
+// 主にテストで使用される。プロダクションコードでは EventBroker 経由で通知を配信する。
 func (s *IPCServer) BroadcastNotification(notification protocol.Notification) {
 	s.mu.RLock()
 	clients := make([]*clientConn, 0, len(s.clients))
@@ -135,7 +142,7 @@ func (s *IPCServer) BroadcastNotification(notification protocol.Notification) {
 
 	for _, c := range clients {
 		// 個々の送信エラーは無視する（切断中のクライアントなど）
-		c.send(notification)
+		_ = c.send(notification)
 	}
 }
 
@@ -148,6 +155,9 @@ func (s *IPCServer) acceptLoop() {
 			case <-s.ctx.Done():
 				return
 			default:
+				slog.Warn("accept error", "error", err)
+				const acceptBackoff = 100 * time.Millisecond
+				time.Sleep(acceptBackoff)
 				continue
 			}
 		}
@@ -176,7 +186,9 @@ func (s *IPCServer) acceptLoop() {
 
 func (s *IPCServer) readLoop(c *clientConn) {
 	defer func() {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			slog.Debug("failed to close client connection", "client", c.id, "error", err)
+		}
 
 		s.mu.Lock()
 		delete(s.clients, c.id)
@@ -192,7 +204,7 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 	scanner := bufio.NewScanner(c.conn)
 	// デフォルトの 64KB バッファで十分だが、大きなメッセージに備える
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, protocol.ScannerInitBuf), protocol.ScannerMaxBuf)
 
 	for scanner.Scan() {
 		select {

@@ -86,6 +86,7 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 | `moleport config [--json]` | Show configuration |
 | `moleport reload` | Reload SSH config |
 | `moleport tui` | Launch the TUI dashboard |
+| `moleport update [--check]` | Auto-update to latest version (`--check`: check only) |
 | `moleport version` | Show version information |
 | `moleport help` | Show help |
 
@@ -98,6 +99,9 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 | `Tab` | Switch pane |
 | `d` | Disconnect selected forwarding |
 | `x` | Delete selected forwarding |
+| `t` | Change theme |
+| `l` | Change language |
+| `v` | Show version info |
 | `/` | Focus command input |
 | `?` | Show help |
 | `Esc` | Cancel |
@@ -129,6 +133,7 @@ reconnect:
   max_retries: 10
   initial_delay: "1s"
   max_delay: "60s"
+  keepalive_interval: "30s"
 
 session:
   auto_restore: true
@@ -136,6 +141,17 @@ session:
 log:
   level: "info"
   file: "~/.config/moleport/moleport.log"
+
+language: "ja"
+
+tui:
+  theme:
+    base: "dark"           # "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+
+update_check:
+  enabled: true            # false to disable update checks
+  interval: "24h"          # check interval
 ```
 
 ## Host Key Verification
@@ -163,15 +179,17 @@ Host ts-host1 ts-host2 ts-host3
 ## Development
 
 ```bash
-make help       # Show available targets
-make build      # Build
-make run        # Build and run
-make test       # Run tests
-make test-race  # Run tests with race detector
-make vet        # Run go vet
-make fmt        # Run go fmt
-make lint       # Run golangci-lint
-make clean      # Remove build artifacts
+make help        # Show available targets
+make build       # Build
+make run         # Build and run
+make test        # Run tests
+make test-race   # Run tests with race detector
+make vet         # Run go vet
+make fmt         # Run go fmt
+make lint        # Run golangci-lint
+make linterly    # Run linterly (file line count check)
+make setup-tools # Install development tools (linterly, golangci-lint)
+make clean       # Remove build artifacts
 ```
 
 ### Git Hooks (lefthook)

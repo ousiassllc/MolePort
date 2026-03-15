@@ -51,8 +51,8 @@ Host myserver
 	if h.User != "deploy" {
 		t.Errorf("User = %q, want %q", h.User, "deploy")
 	}
-	if h.IdentityFile != "/home/user/.ssh/id_rsa" {
-		t.Errorf("IdentityFile = %q, want %q", h.IdentityFile, "/home/user/.ssh/id_rsa")
+	if len(h.IdentityFiles) != 1 || h.IdentityFiles[0] != "/home/user/.ssh/id_rsa" {
+		t.Errorf("IdentityFiles = %v, want [/home/user/.ssh/id_rsa]", h.IdentityFiles)
 	}
 	if h.State != core.Disconnected {
 		t.Errorf("State = %v, want Disconnected", h.State)
@@ -171,34 +171,6 @@ Host target
 	}
 	if h.ProxyJump[1] != "bastion2" {
 		t.Errorf("ProxyJump[1] = %q, want %q", h.ProxyJump[1], "bastion2")
-	}
-}
-
-func TestSSHConfigParser_TildeExpansion(t *testing.T) {
-	u, err := user.Current()
-	if err != nil {
-		t.Skip("cannot get current user")
-	}
-
-	path := writeSSHConfig(t, `
-Host tildehost
-    HostName example.com
-    IdentityFile ~/.ssh/id_ed25519
-`)
-
-	parser := NewSSHConfigParser()
-	hosts, err := parser.Parse(path)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	if len(hosts) != 1 {
-		t.Fatalf("len(hosts) = %d, want 1", len(hosts))
-	}
-
-	expected := filepath.Join(u.HomeDir, ".ssh/id_ed25519")
-	if hosts[0].IdentityFile != expected {
-		t.Errorf("IdentityFile = %q, want %q", hosts[0].IdentityFile, expected)
 	}
 }
 

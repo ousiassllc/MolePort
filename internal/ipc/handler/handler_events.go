@@ -18,6 +18,9 @@ func (h *Handler) eventsSubscribe(clientID string, params json.RawMessage) (any,
 	if err := parseParams(params, &p); err != nil {
 		return nil, err
 	}
+	if len(p.Types) == 0 {
+		return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: "types is required"}
+	}
 
 	for _, t := range p.Types {
 		if !validEventTypes[t] {
@@ -32,6 +35,9 @@ func (h *Handler) eventsSubscribe(clientID string, params json.RawMessage) (any,
 func (h *Handler) eventsUnsubscribe(params json.RawMessage) (any, *protocol.RPCError) {
 	var p protocol.EventsUnsubscribeParams
 	if err := parseParams(params, &p); err != nil {
+		return nil, err
+	}
+	if err := validateRequired(requiredField{"subscription_id", p.SubscriptionID}); err != nil {
 		return nil, err
 	}
 

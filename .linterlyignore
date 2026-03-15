@@ -3,6 +3,7 @@ docs/
 
 # テストカバレッジ出力
 coverage.out
+coverage_review.out
 
 # 自動生成ファイル
 *.pb.go

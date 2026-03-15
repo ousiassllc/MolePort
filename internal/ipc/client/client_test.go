@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -214,5 +215,38 @@ func TestIPCClient_CredentialHandler_NotForwardedToEventCh(t *testing.T) {
 		t.Errorf("credential.request should not be forwarded to eventCh, got method=%q", got.Method)
 	case <-time.After(100 * time.Millisecond):
 		// 期待通り: eventCh にはメッセージがない
+	}
+}
+
+func TestIPCClient_CredentialHandler_ConcurrentAccess(t *testing.T) {
+	c := &IPCClient{
+		pending: make(map[int]chan *protocol.Response),
+		eventCh: make(chan *protocol.Notification, 64),
+		done:    make(chan struct{}),
+	}
+
+	const goroutines = 100
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 2)
+
+	// 並行で SetCredentialHandler と CredentialHandler を呼び出す
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			c.SetCredentialHandler(func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
+				return nil, nil
+			})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = c.CredentialHandler()
+		}()
+	}
+
+	wg.Wait()
+
+	// 最終的にハンドラーが設定されていることを確認
+	if c.CredentialHandler() == nil {
+		t.Error("CredentialHandler() should not be nil after concurrent writes")
 	}
 }

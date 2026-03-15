@@ -20,15 +20,46 @@ func (h *Handler) hostList() (any, *protocol.RPCError) {
 }
 
 func (h *Handler) hostReload() (any, *protocol.RPCError) {
-	// TODO: ReloadHosts 前後の差分を計算して Added/Removed を返す
-	hosts, err := h.sshMgr.ReloadHosts()
+	before := h.sshMgr.GetHosts()
+	beforeSet := make(map[string]struct{}, len(before))
+	for _, host := range before {
+		beforeSet[host.Name] = struct{}{}
+	}
+
+	after, err := h.sshMgr.ReloadHosts()
 	if err != nil {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
+	afterSet := make(map[string]struct{}, len(after))
+	for _, host := range after {
+		afterSet[host.Name] = struct{}{}
+	}
+
+	var added []string
+	for _, host := range after {
+		if _, ok := beforeSet[host.Name]; !ok {
+			added = append(added, host.Name)
+		}
+	}
+
+	var removed []string
+	for _, host := range before {
+		if _, ok := afterSet[host.Name]; !ok {
+			removed = append(removed, host.Name)
+		}
+	}
+
+	if added == nil {
+		added = []string{}
+	}
+	if removed == nil {
+		removed = []string{}
+	}
+
 	return protocol.HostReloadResult{
-		Total:   len(hosts),
-		Added:   []string{},
-		Removed: []string{},
+		Total:   len(after),
+		Added:   added,
+		Removed: removed,
 	}, nil
 }
