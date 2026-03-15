@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/socks5"
 )
 
 // halfCloser は TCP half-close をサポートする接続を表す。
@@ -88,12 +89,12 @@ func (m *forwardManager) bridge(af *activeForward, rule core.ForwardRule, conn n
 func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClient interface {
 	Dial(n, addr string) (net.Conn, error)
 }) {
-	if err := core.Socks5Negotiate(conn); err != nil {
+	if err := socks5.Negotiate(conn); err != nil {
 		slog.Debug("socks5 negotiate failed", "rule", af.session.Rule.Name, "error", err)
 		return
 	}
 
-	targetAddr, err := core.Socks5ParseRequest(conn)
+	targetAddr, err := socks5.ParseRequest(conn)
 	if err != nil {
 		slog.Debug("socks5 parse request failed", "rule", af.session.Rule.Name, "error", err)
 		return
@@ -102,13 +103,13 @@ func (m *forwardManager) handleSOCKS5(af *activeForward, conn net.Conn, sshClien
 	remote, err := sshClient.Dial("tcp", targetAddr)
 	if err != nil {
 		// Connection refused
-		_, _ = conn.Write([]byte{core.Socks5Version, core.Socks5ReplyConnectionRefused, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0})
+		_, _ = conn.Write([]byte{socks5.Version, socks5.ReplyConnectionRefused, 0x00, socks5.AddrIPv4, 0, 0, 0, 0, 0, 0})
 		return
 	}
 	defer func() { _ = remote.Close() }()
 
 	// Success response
-	if _, err := conn.Write([]byte{core.Socks5Version, core.Socks5ReplySuccess, 0x00, core.Socks5AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
+	if _, err := conn.Write([]byte{socks5.Version, socks5.ReplySuccess, 0x00, socks5.AddrIPv4, 0, 0, 0, 0, 0, 0}); err != nil {
 		return
 	}
 

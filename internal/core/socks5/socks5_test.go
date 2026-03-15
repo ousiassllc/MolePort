@@ -1,4 +1,4 @@
-package core
+package socks5
 
 import (
 	"encoding/binary"
@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSocks5Negotiate(t *testing.T) {
+func TestNegotiate(t *testing.T) {
 	tests := []struct {
 		name       string
 		clientData []byte
@@ -17,23 +17,23 @@ func TestSocks5Negotiate(t *testing.T) {
 	}{
 		{
 			name:       "success with single NoAuth method",
-			clientData: []byte{Socks5Version, 0x01, Socks5AuthNone},
-			wantResp:   []byte{Socks5Version, Socks5AuthNone},
+			clientData: []byte{Version, 0x01, AuthNone},
+			wantResp:   []byte{Version, AuthNone},
 		},
 		{
 			name:       "success with multiple methods including NoAuth",
-			clientData: []byte{Socks5Version, 0x03, 0x01, 0x02, Socks5AuthNone},
-			wantResp:   []byte{Socks5Version, Socks5AuthNone},
+			clientData: []byte{Version, 0x03, 0x01, 0x02, AuthNone},
+			wantResp:   []byte{Version, AuthNone},
 		},
 		{
 			name:       "no acceptable methods",
-			clientData: []byte{Socks5Version, 0x01, 0x01},
-			wantResp:   []byte{Socks5Version, Socks5NoAcceptable},
+			clientData: []byte{Version, 0x01, 0x01},
+			wantResp:   []byte{Version, NoAcceptable},
 			wantErr:    "no acceptable auth methods",
 		},
 		{
 			name:       "wrong SOCKS version",
-			clientData: []byte{0x04, 0x01, Socks5AuthNone},
+			clientData: []byte{0x04, 0x01, AuthNone},
 			wantErr:    "unsupported SOCKS version",
 		},
 	}
@@ -46,7 +46,7 @@ func TestSocks5Negotiate(t *testing.T) {
 
 			errCh := make(chan error, 1)
 			go func() {
-				errCh <- Socks5Negotiate(serverConn)
+				errCh <- Negotiate(serverConn)
 			}()
 
 			// net.Pipe はバッファなしのため、サーバーが全バイトを読まない
@@ -85,7 +85,7 @@ func TestSocks5Negotiate(t *testing.T) {
 	}
 }
 
-func TestSocks5ParseRequest(t *testing.T) {
+func TestParseRequest(t *testing.T) {
 	// ポートをビッグエンディアンでエンコードするヘルパー
 	portBytes := func(port uint16) []byte {
 		buf := make([]byte, 2)
@@ -102,7 +102,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 		{
 			name: "IPv4 CONNECT",
 			clientData: func() []byte {
-				req := []byte{Socks5Version, Socks5CmdConnect, 0x00, Socks5AddrIPv4}
+				req := []byte{Version, CmdConnect, 0x00, AddrIPv4}
 				req = append(req, 127, 0, 0, 1)
 				req = append(req, portBytes(8080)...)
 				return req
@@ -113,7 +113,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 			name: "domain CONNECT",
 			clientData: func() []byte {
 				domain := "example.com"
-				req := []byte{Socks5Version, Socks5CmdConnect, 0x00, Socks5AddrDomain, byte(len(domain))} //nolint:gosec // domain length is always < 256
+				req := []byte{Version, CmdConnect, 0x00, AddrDomain, byte(len(domain))} //nolint:gosec // domain length is always < 256
 				req = append(req, []byte(domain)...)
 				req = append(req, portBytes(443)...)
 				return req
@@ -123,7 +123,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 		{
 			name: "IPv6 CONNECT",
 			clientData: func() []byte {
-				req := []byte{Socks5Version, Socks5CmdConnect, 0x00, Socks5AddrIPv6}
+				req := []byte{Version, CmdConnect, 0x00, AddrIPv6}
 				req = append(req, net.ParseIP("::1").To16()...)
 				req = append(req, portBytes(80)...)
 				return req
@@ -132,12 +132,12 @@ func TestSocks5ParseRequest(t *testing.T) {
 		},
 		{
 			name:       "unsupported command BIND",
-			clientData: []byte{Socks5Version, 0x02, 0x00, Socks5AddrIPv4, 127, 0, 0, 1, 0x00, 0x50},
+			clientData: []byte{Version, 0x02, 0x00, AddrIPv4, 127, 0, 0, 1, 0x00, 0x50},
 			wantErr:    "unsupported SOCKS5 command",
 		},
 		{
 			name:       "unsupported address type",
-			clientData: []byte{Socks5Version, Socks5CmdConnect, 0x00, 0x06, 0, 0, 0, 0, 0, 0},
+			clientData: []byte{Version, CmdConnect, 0x00, 0x06, 0, 0, 0, 0, 0, 0},
 			wantErr:    "unsupported address type",
 		},
 	}
@@ -154,7 +154,7 @@ func TestSocks5ParseRequest(t *testing.T) {
 			}
 			resCh := make(chan result, 1)
 			go func() {
-				addr, err := Socks5ParseRequest(serverConn)
+				addr, err := ParseRequest(serverConn)
 				resCh <- result{addr, err}
 			}()
 
