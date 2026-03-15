@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
 func TestForwardManager_GetRules_Order(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	names := []string{"alpha", "beta", "gamma"}
 	for _, name := range names {
 		if _, err := fm.AddRule(core.ForwardRule{
@@ -30,7 +31,7 @@ func TestForwardManager_GetRules_Order(t *testing.T) {
 }
 
 func TestForwardManager_GetRulesByHost(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web2", Host: "server2", Type: core.Dynamic, LocalPort: 1081})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web3", Host: "server1", Type: core.Dynamic, LocalPort: 1082})
@@ -47,15 +48,15 @@ func TestForwardManager_GetRulesByHost(t *testing.T) {
 }
 
 func TestForwardManager_GetRulesByHost_Empty(t *testing.T) {
-	rules := NewForwardManager(context.Background(), newMockSSHManager()).GetRulesByHost("nonexistent")
+	rules := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).GetRulesByHost("nonexistent")
 	if len(rules) != 0 {
 		t.Errorf("len(rules) = %d, want 0", len(rules))
 	}
 }
 
 func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockConn(false, true))
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetConnected("server1", forwardtest.NewMockConn(false, true))
 	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
@@ -74,7 +75,7 @@ func TestForwardManager_DeleteRule_Concurrent(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	// Local タイプで RemoteHost を指定しない場合、"localhost" がデフォルトになる
 	_, err := fm.AddRule(core.ForwardRule{Name: "web-local", Host: "server1", Type: core.Local, LocalPort: 8080, RemotePort: 80})
 	if err != nil {

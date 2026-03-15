@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
 type halfCloseConn struct {
@@ -37,11 +38,11 @@ func newSOCKS5TestPair(t *testing.T) (client, server net.Conn, fm *forwardManage
 	t.Helper()
 	c, s := net.Pipe()
 	t.Cleanup(func() { _ = c.Close(); _ = s.Close() })
-	return c, s, NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
+	return c, s, NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).(*forwardManager)
 }
 
-func newTestDialer(ch chan<- string) *mockSOCKS5Dialer {
-	return &mockSOCKS5Dialer{dialF: func(_, addr string) (net.Conn, error) {
+func newTestDialer(ch chan<- string) *forwardtest.MockSOCKS5Dialer {
+	return &forwardtest.MockSOCKS5Dialer{DialF: func(_, addr string) (net.Conn, error) {
 		ch <- addr
 		rc, _ := net.Pipe()
 		return rc, nil
@@ -50,7 +51,7 @@ func newTestDialer(ch chan<- string) *mockSOCKS5Dialer {
 
 func runCopyBidirectional(t *testing.T, a, b net.Conn) <-chan struct{} {
 	t.Helper()
-	fm := NewForwardManager(context.Background(), newMockSSHManager()).(*forwardManager)
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).(*forwardManager)
 	af := &activeForward{session: core.ForwardSession{Rule: core.ForwardRule{Name: t.Name()}}}
 	done := make(chan struct{})
 	go func() { defer close(done); fm.copyBidirectional(af, a, b) }()
@@ -120,7 +121,7 @@ func TestHandleSOCKS5_NoAuthMethodRejected(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		fm.handleSOCKS5(&activeForward{}, serverConn, &mockSOCKS5Dialer{})
+		fm.handleSOCKS5(&activeForward{}, serverConn, &forwardtest.MockSOCKS5Dialer{})
 	}()
 	_, _ = clientConn.Write([]byte{0x05, 0x01, 0x02}) // username/password only
 	resp := make([]byte, 2)

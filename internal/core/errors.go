@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // センチネルエラー
@@ -87,3 +88,7 @@ func IsAuthFailure(err error) bool {
 
 // LocalhostAddr はローカルホストの IPv4 アドレス。
 const LocalhostAddr = "127.0.0.1"
+
+// CredentialTimeout はクレデンシャル応答を待つサーバー側タイムアウト。
+// TUI 側はこの値に IPC オーバーヘッド分のバッファを加算して使用する。
+const CredentialTimeout = 30 * time.Second

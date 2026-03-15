@@ -165,6 +165,22 @@ func ParseConnectionState(s string) core.ConnectionState {
 	}
 }
 
+// ParseSessionStatus は IPC ワイヤー文字列を core.SessionStatus に変換する。
+func ParseSessionStatus(s string) core.SessionStatus {
+	switch s {
+	case SessionActive:
+		return core.Active
+	case SessionStarting:
+		return core.Starting
+	case SessionReconnecting:
+		return core.SessionReconnecting
+	case SessionError:
+		return core.SessionError
+	default:
+		return core.Stopped
+	}
+}
+
 // forwardTypeToWire は core.ForwardType を IPC ワイヤー文字列に変換する。
 func forwardTypeToWire(t core.ForwardType) string {
 	switch t {

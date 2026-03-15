@@ -22,7 +22,7 @@ func hostInfoToSSHHost(info protocol.HostInfo) core.SSHHost {
 // sessionInfoToForwardSession は IPC の SessionInfo を core.ForwardSession に変換する。
 func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession {
 	fwdType, _ := core.ParseForwardType(info.Type)
-	status := parseSessionStatus(info.Status)
+	status := protocol.ParseSessionStatus(info.Status)
 	var connectedAt time.Time
 	if info.ConnectedAt != "" {
 		connectedAt, _ = time.Parse(time.RFC3339, info.ConnectedAt) // パース失敗時はゼロ値（表示上は空欄）
@@ -44,20 +44,5 @@ func sessionInfoToForwardSession(info protocol.SessionInfo) core.ForwardSession 
 		BytesReceived:  info.BytesReceived,
 		ReconnectCount: info.ReconnectCount,
 		LastError:      info.LastError,
-	}
-}
-
-func parseSessionStatus(s string) core.SessionStatus {
-	switch s {
-	case protocol.SessionActive:
-		return core.Active
-	case protocol.SessionStarting:
-		return core.Starting
-	case protocol.SessionReconnecting:
-		return core.SessionReconnecting
-	case protocol.SessionError:
-		return core.SessionError
-	default:
-		return core.Stopped
 	}
 }

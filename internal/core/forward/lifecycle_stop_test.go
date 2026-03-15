@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
 func TestForwardManager_StopForward_NotActive(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	if err := fm.StopForward("web"); err != nil { // アクティブでないルールの停止はエラーにならない
 		t.Fatalf("StopForward() error = %v", err)
@@ -18,8 +19,8 @@ func TestForwardManager_StopForward_NotActive(t *testing.T) {
 }
 
 func TestForwardManager_StopAllForwards(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockConn(false, true))
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetConnected("server1", forwardtest.NewMockConn(false, true))
 	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd1", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_, _ = fm.AddRule(core.ForwardRule{Name: "fwd2", Host: "server1", Type: core.Dynamic, LocalPort: 1081})
@@ -36,8 +37,8 @@ func TestForwardManager_StopAllForwards(t *testing.T) {
 }
 
 func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockConn(false, true))
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetConnected("server1", forwardtest.NewMockConn(false, true))
 	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
@@ -50,23 +51,23 @@ func TestForwardManager_DeleteRule_StopsActive(t *testing.T) {
 }
 
 func TestForwardManager_Close(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", newMockConn(false, true))
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetConnected("server1", forwardtest.NewMockConn(false, true))
 	fm := NewForwardManager(context.Background(), sm)
 	events := fm.Subscribe()
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
-	drainEvent(t, events) // drain started event
+	forwardtest.DrainEvent(t, events) // drain started event
 	fm.Close()
 	for range events { // drain until channel closed
 	}
 }
 
 func TestForwardManager_StartForward_ListenerError(t *testing.T) {
-	sm := newMockSSHManager()
-	sm.setConnected("server1", &mockSSHConnection{
-		isAlive: true,
-		localForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) {
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetConnected("server1", &forwardtest.MockSSHConnection{
+		Alive: true,
+		LocalForwardF: func(_ context.Context, _ int, _ string) (net.Listener, error) {
 			return nil, fmt.Errorf("address already in use")
 		},
 	})
@@ -80,20 +81,19 @@ func TestForwardManager_StartForward_ListenerError(t *testing.T) {
 }
 
 func TestForwardManager_StopForward_ClosesListener(t *testing.T) {
-	sm := newMockSSHManager()
-	ml := newMockListener()
-	sm.setConnected("server1", &mockSSHConnection{
-		isAlive:         true,
-		dynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return ml, nil },
+	sm := forwardtest.NewMockSSHManager()
+	ml := forwardtest.NewMockListener()
+	sm.SetConnected("server1", &forwardtest.MockSSHConnection{
+		Alive:           true,
+		DynamicForwardF: func(_ context.Context, _ int) (net.Listener, error) { return ml, nil },
 	})
 	fm := NewForwardManager(context.Background(), sm)
 	_, _ = fm.AddRule(core.ForwardRule{Name: "web", Host: "server1", Type: core.Dynamic, LocalPort: 1080})
 	_ = fm.StartForward("web", nil)
 	_ = fm.StopForward("web")
-	ml.mu.Lock()
-	closed := ml.closed
-	ml.mu.Unlock()
-	if !closed {
-		t.Error("StopForward should close the listener")
+	// ConnCh が閉じられていることで listener の Close が呼ばれたことを検証する
+	_, ok := <-ml.ConnCh
+	if ok {
+		t.Error("StopForward should close the listener (ConnCh should be closed)")
 	}
 }

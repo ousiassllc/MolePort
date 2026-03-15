@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc"
@@ -132,8 +131,8 @@ func parseParams(params json.RawMessage, target any) *protocol.RPCError {
 	return nil
 }
 
-// credentialTimeout はクレデンシャル応答のタイムアウト。
-const credentialTimeout = 30 * time.Second
+// credentialTimeout はクレデンシャル応答のタイムアウト（core.CredentialTimeout を参照）。
+const credentialTimeout = core.CredentialTimeout
 
 type requiredField struct {
 	name  string
