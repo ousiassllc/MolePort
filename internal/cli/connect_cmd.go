@@ -21,7 +21,7 @@ func RunConnect(configDir string, args []string) {
 
 	host := args[0]
 	client := ConnectDaemon(configDir)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// クレデンシャルハンドラーを設定
 	client.SetCredentialHandler(newCLICredentialHandler())
@@ -32,7 +32,7 @@ func RunConnect(configDir string, args []string) {
 	params := protocol.SSHConnectParams{Host: host}
 	var result protocol.SSHConnectResult
 	if err := client.Call(ctx, "ssh.connect", params, &result); err != nil {
-		ExitError("%v", err)
+		ExitError("connect failed: %v", err)
 	}
 
 	fmt.Println(i18n.T("cli.connect.success", map[string]any{"Host": result.Host}))

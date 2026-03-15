@@ -22,7 +22,7 @@ func RunStop(configDir string, args []string) {
 	if *all {
 		var result protocol.ForwardStopAllResult
 		if err := client.Call(ctx, "forward.stopAll", nil, &result); err != nil {
-			ExitError("%v", err)
+			ExitError("stop all failed: %v", err)
 		}
 		fmt.Println(i18n.T("cli.stop.all_stopped", map[string]any{"Count": result.Stopped}))
 		return
@@ -37,7 +37,7 @@ func RunStop(configDir string, args []string) {
 	params := protocol.ForwardStopParams{Name: name}
 	var result protocol.ForwardStopResult
 	if err := client.Call(ctx, "forward.stop", params, &result); err != nil {
-		ExitError("%v", err)
+		ExitError("stop failed: %v", err)
 	}
 
 	fmt.Println(i18n.T("cli.stop.success", map[string]any{"Name": result.Name}))
