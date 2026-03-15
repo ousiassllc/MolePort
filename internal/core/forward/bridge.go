@@ -124,7 +124,7 @@ func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 
 	go func() {
 		defer wg.Done()
-		bufp := bufPool.Get().(*[]byte)
+		bufp := bufPool.Get().(*[]byte) // safe: Pool.New always returns *[]byte
 		defer bufPool.Put(bufp)
 		n, err := io.CopyBuffer(b, a, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
@@ -136,7 +136,7 @@ func (m *forwardManager) copyBidirectional(af *activeForward, a, b net.Conn) {
 
 	go func() {
 		defer wg.Done()
-		bufp := bufPool.Get().(*[]byte)
+		bufp := bufPool.Get().(*[]byte) // safe: Pool.New always returns *[]byte
 		defer bufPool.Put(bufp)
 		n, err := io.CopyBuffer(a, b, *bufp)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
