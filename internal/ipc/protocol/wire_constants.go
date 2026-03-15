@@ -37,6 +37,16 @@ const (
 	MethodCredentialResponse = "credential.response" //nolint:gosec // RPC method name, not a credential
 )
 
+// IPC ワイヤーフォーマット上のフォワードイベント種別文字列定数。
+const (
+	ForwardEventTypeStarted        = "started"
+	ForwardEventTypeStopped        = "stopped"
+	ForwardEventTypeError          = "error"
+	ForwardEventTypeMetricsUpdated = "metrics_updated"
+	ForwardEventTypeReconnecting   = "reconnecting"
+	ForwardEventTypeRestored       = "restored"
+)
+
 // IPC イベント通知メソッド名定数。
 const (
 	EventSSH     = "event.ssh"
