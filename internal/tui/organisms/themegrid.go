@@ -111,13 +111,13 @@ func (g ThemeGrid) View() string {
 		columnWidth = 20
 	}
 
-	left := g.renderColumn("Dark", g.darkPresets, 0, columnWidth)
-	right := g.renderColumn("Light", g.lightPresets, 1, columnWidth)
+	left := g.viewColumn("Dark", g.darkPresets, 0, columnWidth)
+	right := g.viewColumn("Light", g.lightPresets, 1, columnWidth)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 }
 
-func (g ThemeGrid) renderColumn(title string, presets []theme.Preset, baseIdx, width int) string {
+func (g ThemeGrid) viewColumn(title string, presets []theme.Preset, baseIdx, width int) string {
 	innerWidth := width - 4 // ボーダー2 + パディング2
 	if innerWidth < 10 {
 		innerWidth = 10
@@ -127,7 +127,7 @@ func (g ThemeGrid) renderColumn(title string, presets []theme.Preset, baseIdx, w
 	var rows []string
 	for i, p := range presets {
 		selected := g.baseIndex == baseIdx && g.accentIndex == i
-		rows = append(rows, g.renderPresetRow(p, selected))
+		rows = append(rows, g.viewPresetRow(p, selected))
 	}
 
 	content := strings.Join(rows, "\n")
@@ -142,7 +142,7 @@ func (g ThemeGrid) renderColumn(title string, presets []theme.Preset, baseIdx, w
 	return tui.RenderWithBorderTitle(style, innerWidth, innerHeight, title, content)
 }
 
-func (g ThemeGrid) renderPresetRow(preset theme.Preset, selected bool) string {
+func (g ThemeGrid) viewPresetRow(preset theme.Preset, selected bool) string {
 	swatch := lipgloss.NewStyle().Foreground(preset.Palette.Accent).Render("●")
 
 	if selected {
