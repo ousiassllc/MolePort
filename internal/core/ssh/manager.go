@@ -2,8 +2,6 @@ package ssh
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -15,9 +13,6 @@ import (
 const (
 	// defaultKeepAliveInterval は KeepAliveInterval が未設定時のフォールバック値。
 	defaultKeepAliveInterval = 30 * time.Second
-
-	// eventChannelBuffer はイベントチャネルのバッファサイズ。
-	eventChannelBuffer = 16
 )
 
 // keepAliveInterval は設定された KeepAlive 間隔を返す。未設定の場合はデフォルト値を返す。
@@ -50,7 +45,7 @@ type sshManager struct {
 	hostsMap         map[string]int
 	conns            map[string]*hostConnection
 	reconnectCancels map[string]context.CancelFunc // ホストごとの再接続キャンセル関数
-	subscribers      []chan core.SSHEvent
+	events           core.EventEmitter[core.SSHEvent]
 
 	closed bool
 }
@@ -67,7 +62,7 @@ func NewSSHManager(
 	if hostConfigs == nil {
 		hostConfigs = make(map[string]core.HostConfig)
 	}
-	return &sshManager{
+	m := &sshManager{
 		ctx:              ctx,
 		parser:           parser,
 		connFactory:      connFactory,
@@ -78,20 +73,8 @@ func NewSSHManager(
 		conns:            make(map[string]*hostConnection),
 		reconnectCancels: make(map[string]context.CancelFunc),
 	}
-}
-
-// emit はイベントを全サブスクライバーに非ブロッキングで送信する。
-func (m *sshManager) emit(event core.SSHEvent) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	for _, ch := range m.subscribers {
-		select {
-		case ch <- event:
-		default:
-			slog.Warn("event dropped", "event_type", fmt.Sprintf("%T", event))
-		}
-	}
+	m.events = core.NewEventEmitter[core.SSHEvent](&m.mu)
+	return m
 }
 
 // copyHosts はホスト一覧のコピーを返す。mu.Lock の中で呼ぶこと。

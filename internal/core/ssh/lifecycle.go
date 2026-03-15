@@ -76,7 +76,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 				m.hosts[i].State = core.PendingAuth
 			}
 			m.mu.Unlock()
-			m.emit(core.SSHEvent{Type: core.SSHEventPendingAuth, HostName: hostName})
+			m.events.Emit(core.SSHEvent{Type: core.SSHEventPendingAuth, HostName: hostName})
 			return &core.AuthRequiredError{HostName: hostName, Err: err}
 		}
 
@@ -84,7 +84,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 			m.hosts[i].State = core.ConnectionError
 		}
 		m.mu.Unlock()
-		m.emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName, Error: err})
+		m.events.Emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName, Error: err})
 		return fmt.Errorf("failed to connect to %s: %w", hostName, err)
 	}
 
@@ -104,7 +104,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	}
 	m.mu.Unlock()
 
-	m.emit(core.SSHEvent{Type: core.SSHEventConnected, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventConnected, HostName: hostName})
 	slog.Info("SSH connected", "host", hostName)
 
 	// KeepAlive goroutine
@@ -152,7 +152,7 @@ func (m *sshManager) Disconnect(hostName string) error {
 	}
 	m.mu.Unlock()
 
-	m.emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
 	slog.Info("SSH disconnected", "host", hostName)
 	return nil
 }
@@ -195,9 +195,7 @@ func (m *sshManager) Subscribe() <-chan core.SSHEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ch := make(chan core.SSHEvent, eventChannelBuffer)
-	m.subscribers = append(m.subscribers, ch)
-	return ch
+	return m.events.Subscribe()
 }
 
 // Close は全接続を切断し、サブスクライバーチャネルを閉じる。
@@ -227,8 +225,5 @@ func (m *sshManager) Close() {
 	}
 	m.conns = make(map[string]*hostConnection)
 
-	for _, ch := range m.subscribers {
-		close(ch)
-	}
-	m.subscribers = nil
+	m.events.CloseSubscribers()
 }

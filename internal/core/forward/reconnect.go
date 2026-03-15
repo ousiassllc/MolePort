@@ -35,7 +35,7 @@ func (m *forwardManager) MarkReconnecting(hostName string) {
 	m.mu.Unlock()
 
 	for _, evt := range events {
-		m.emit(evt)
+		m.events.Emit(evt)
 	}
 }
 
@@ -131,7 +131,7 @@ func (m *forwardManager) restoreSingleForward(
 
 	go m.acceptLoop(newAF, rule, sshClient)
 
-	m.emit(core.ForwardEvent{
+	m.events.Emit(core.ForwardEvent{
 		Type:     core.ForwardEventRestored,
 		RuleName: rule.Name,
 		Session:  &session,
@@ -149,7 +149,7 @@ func (m *forwardManager) setForwardError(af *activeForward, errMsg string) {
 	session := af.session
 	m.mu.Unlock()
 
-	m.emit(core.ForwardEvent{
+	m.events.Emit(core.ForwardEvent{
 		Type:     core.ForwardEventError,
 		RuleName: session.Rule.Name,
 		Session:  &session,
@@ -181,6 +181,6 @@ func (m *forwardManager) FailReconnecting(hostName string) {
 	m.mu.Unlock()
 
 	for _, evt := range events {
-		m.emit(evt)
+		m.events.Emit(evt)
 	}
 }
