@@ -10,6 +10,16 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+// closeOnCancel は ctx がキャンセルされたときにリスナーを閉じる goroutine を起動する。
+func closeOnCancel(ctx context.Context, listener net.Listener, label string, addr string) {
+	go func() {
+		<-ctx.Done()
+		if err := listener.Close(); err != nil {
+			slog.Debug("failed to close "+label+" listener", "addr", addr, "error", err)
+		}
+	}()
+}
+
 // LocalForward はローカルポートフォワーディング用のリスナーを作成する。
 // このメソッドはリスナーの作成のみを行い、accept ループやデータ転送は行わない。
 // 呼び出し元（ForwardManager）が返されたリスナーで accept ループを実行し、
@@ -26,13 +36,7 @@ func (c *sshConnection) LocalForward(ctx context.Context, localPort int, remoteA
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
 
-	go func() {
-		<-ctx.Done()
-		if err := listener.Close(); err != nil {
-			slog.Debug("failed to close local forward listener", "addr", addr, "error", err)
-		}
-	}()
-
+	closeOnCancel(ctx, listener, "local forward", addr)
 	return listener, nil
 }
 
@@ -55,13 +59,7 @@ func (c *sshConnection) RemoteForward(ctx context.Context, remotePort int, local
 		return nil, fmt.Errorf("failed to listen remotely on %s: %w", addr, err)
 	}
 
-	go func() {
-		<-ctx.Done()
-		if err := listener.Close(); err != nil {
-			slog.Debug("failed to close remote forward listener", "addr", addr, "error", err)
-		}
-	}()
-
+	closeOnCancel(ctx, listener, "remote forward", addr)
 	return listener, nil
 }
 
@@ -81,13 +79,7 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
 
-	go func() {
-		<-ctx.Done()
-		if err := listener.Close(); err != nil {
-			slog.Debug("failed to close dynamic forward listener", "addr", addr, "error", err)
-		}
-	}()
-
+	closeOnCancel(ctx, listener, "dynamic forward", addr)
 	return listener, nil
 }
 
