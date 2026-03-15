@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
 func TestOpenListener_Remote_PassesRemoteBindAddr(t *testing.T) {
@@ -21,11 +22,11 @@ func TestOpenListener_Remote_PassesRemoteBindAddr(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotBindAddr string
-			conn := &mockSSHConnection{
-				isAlive: true,
-				remoteForwardF: func(_ context.Context, _ int, _ string, remoteBindAddr string) (net.Listener, error) {
+			conn := &forwardtest.MockSSHConnection{
+				Alive: true,
+				RemoteForwardF: func(_ context.Context, _ int, _ string, remoteBindAddr string) (net.Listener, error) {
 					gotBindAddr = remoteBindAddr
-					return newMockListener(), nil
+					return forwardtest.NewMockListener(), nil
 				},
 			}
 

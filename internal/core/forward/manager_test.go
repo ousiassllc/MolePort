@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/core/forwardtest"
 )
 
 func TestForwardManager_AddRule(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	name, err := fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -31,7 +32,7 @@ func TestForwardManager_AddRule(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_AutoName(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	name, err := fm.AddRule(core.ForwardRule{
 		Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	})
@@ -51,7 +52,7 @@ func TestForwardManager_AddRule_AutoName(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	rule := core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	}
@@ -65,7 +66,7 @@ func TestForwardManager_AddRule_DuplicateName(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_Validation(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	tests := []struct {
 		name    string
 		rule    core.ForwardRule
@@ -91,13 +92,13 @@ func TestForwardManager_AddRule_Validation(t *testing.T) {
 }
 
 func TestForwardManager_AddRule_DynamicNoRemotePort(t *testing.T) {
-	if _, err := NewForwardManager(context.Background(), newMockSSHManager()).AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil { // Dynamic では RemotePort は不要
+	if _, err := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).AddRule(core.ForwardRule{Name: "socks", Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil { // Dynamic では RemotePort は不要
 		t.Fatalf("AddRule() error = %v (Dynamic should not require remote port)", err)
 	}
 }
 
 func TestForwardManager_DeleteRule(t *testing.T) {
-	fm := NewForwardManager(context.Background(), newMockSSHManager())
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
 	if _, err := fm.AddRule(core.ForwardRule{
 		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
 	}); err != nil {
@@ -112,7 +113,7 @@ func TestForwardManager_DeleteRule(t *testing.T) {
 }
 
 func TestForwardManager_DeleteRule_NotFound(t *testing.T) {
-	if err := NewForwardManager(context.Background(), newMockSSHManager()).DeleteRule("nonexistent"); err == nil {
+	if err := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager()).DeleteRule("nonexistent"); err == nil {
 		t.Fatal("DeleteRule() should return error for nonexistent rule")
 	}
 }
