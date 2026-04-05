@@ -21,7 +21,7 @@ func RunConnect(configDir string, args []string) {
 
 	host := args[0]
 	client := ConnectDaemon(configDir)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// クレデンシャルハンドラーを設定
 	client.SetCredentialHandler(newCLICredentialHandler())
