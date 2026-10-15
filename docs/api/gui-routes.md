@@ -68,7 +68,7 @@ HTMX 2 は既定で 4xx/5xx を差し替えない。`app.ts` で `htmx.config.re
 </div>
 ```
 
-トーストは Templ の `atoms.Toast(kind, message)`（`kind`: `info` / `success` / `error`）。成功・情報は 5 秒で自動消去、エラーは手動で閉じる。
+トーストは Templ の `atoms.Toast(kind, message)`（`kind`: `info` / `success` / `error`）。成功・情報は 5 秒で自動消去（`app.ts` が `#toast-stack` への追加を監視して消去）、エラーは `data-dismiss-toast` の閉じるボタンで手動消去する。
 
 ## ルート一覧
 
@@ -140,7 +140,8 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | `/fragments/settings` | — | 言語 / テーマ（base・accent スウォッチ）/ アップデートチェックのフォーム | — |
 
 - ホスト行・転送行の要素には安定した `id`（`host-{name}`、`fwd-{name}`、`fwd-{name}-start` 等）を付与する（ライブ更新でフォーカスを保つため。gui.md「ティッカー」）。`name` を `id` に使う際は英数字以外を `_` + 16 進でエスケープする（ID 衝突を避けるため `name` 自体も `data-name` 属性で保持する）
-- 稼働状態（`starting` / `failed`）のとき、操作系フラグメントは「起動中です」を返す
+- 稼働状態（`starting` / `failed`）のとき、ホスト・転送パネルは見出しのみを返し一覧（アクションボタン）を描画しない
+- `#toast-stack` は `hx-get="/fragments/toasts" hx-trigger="mp:toast from:body, mp:all from:body" hx-swap="none"` を持ち、`toast` / `all` トピックでキューを取り出す
 
 ## アクション
 
@@ -277,3 +278,4 @@ Lit コンポーネントは初期リリースでは存在しない（D-10）。
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
+| 1.1 | 2026-10-15 | `#toast-stack` の取り込みトリガーと稼働状態時のパネル描画を実装に合わせて明記 | #88 M3-1 ダッシュボード |

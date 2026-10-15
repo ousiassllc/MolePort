@@ -14,9 +14,11 @@ import (
 
 // Deps は Router が必要とする依存。
 type Deps struct {
-	Life   service.LifecycleSource // 内蔵デーモンの起動状態
-	Token  string                  // 起動ごとのランダムトークン（middleware.NewToken）
-	Static fs.FS                   // go:embed の dist 含む FS。テストでは fstest.MapFS
+	Life      service.LifecycleSource    // 内蔵デーモンの起動状態
+	Dashboard service.Dashboard          // ダッシュボードの ViewModel
+	Toasts    *service.NotificationQueue // 非同期通知のキュー（/fragments/toasts が取り出す）
+	Token     string                     // 起動ごとのランダムトークン（middleware.NewToken）
+	Static    fs.FS                      // go:embed の dist 含む FS。テストでは fstest.MapFS
 }
 
 // NewRouter は ServeMux とミドルウェアチェーンを組み立てた http.Handler を返す。
@@ -24,7 +26,13 @@ type Deps struct {
 // Recover → SecurityHeaders → Logging → Token → HXRequired の順に適用される。
 func NewRouter(deps Deps) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", handler.NewPage(deps.Life, deps.Token).Index)
+	frags := handler.NewFragments(deps.Life, deps.Dashboard, deps.Toasts)
+	mux.HandleFunc("GET /{$}", handler.NewPage(deps.Life, deps.Dashboard, deps.Token).Index)
+	mux.HandleFunc("GET /fragments/header", frags.Header)
+	mux.HandleFunc("GET /fragments/hosts", frags.Hosts)
+	mux.HandleFunc("GET /fragments/forwards", frags.Forwards)
+	mux.HandleFunc("GET /fragments/status", frags.Status)
+	mux.HandleFunc("GET /fragments/toasts", frags.Toasts)
 	mux.Handle("GET /static/{path...}", handler.NewStatic(deps.Static))
 
 	return middleware.Chain(mux,

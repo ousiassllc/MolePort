@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
 // DaemonHost は Lifecycle が内蔵デーモンに要求する操作。*daemon.Daemon が満たす。
@@ -33,6 +35,11 @@ type LifecycleDeps struct {
 	Quit func()
 	// ConfirmQuit はアクティブな転送が active 件ある場合の終了確認。承認されたら true。
 	ConfirmQuit func(active int) bool
+	// Queue は非同期通知の積み先。引き継ぎ完了トーストに使う（nil なら積まない）。
+	Queue *service.NotificationQueue
+	// OnReady は内蔵デーモンの起動完了直後（ready 遷移前）に呼ばれる。EventBridge の開始に使う。
+	// ctx は Start に渡された ctx（アプリ終了で cancel される）。
+	OnReady func(ctx context.Context, b service.Backend)
 }
 
 // Lifecycle は GUI プロセスの起動・引き継ぎ・終了を統括する。
@@ -47,9 +54,13 @@ type Lifecycle struct {
 	mu    sync.Mutex
 	state service.LifecycleState
 	host  DaemonHost
+	back  service.Backend
 }
 
-var _ service.LifecycleSource = (*Lifecycle)(nil)
+var (
+	_ service.LifecycleSource = (*Lifecycle)(nil)
+	_ service.BackendSource   = (*Lifecycle)(nil)
+)
 
 // NewLifecycle は starting 状態の Lifecycle を返す。
 func NewLifecycle(configDir, version string, deps LifecycleDeps) *Lifecycle {
@@ -68,6 +79,23 @@ func (l *Lifecycle) State() service.LifecycleState {
 	return l.state
 }
 
+// Backend は内蔵デーモン起動後の Core 参照を返す（service.BackendSource）。ready になるまでは ok=false。
+func (l *Lifecycle) Backend() (service.Backend, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.back, l.state == service.LifecycleReady
+}
+
+func (l *Lifecycle) newBackend(host DaemonHost) service.Backend {
+	svc := host.Services()
+	return service.Backend{
+		SSH:     svc.SSH,
+		Forward: svc.Forward,
+		Config:  svc.Config,
+		Info:    service.Info{Version: l.version, PID: os.Getpid()},
+	}
+}
+
 // Quitting は終了処理中かを返す。OnBeforeClose がウィンドウを閉じるかの判定に使う。
 func (l *Lifecycle) Quitting() bool { return l.quitting.Load() }
 
@@ -75,7 +103,8 @@ func (l *Lifecycle) Quitting() bool { return l.quitting.Load() }
 // WebView の読み込みを妨げないよう呼び出し側はゴルーチンで呼ぶ。
 // ctx は Wails の OnStartup の ctx（アプリ終了で cancel され、デーモンも停止する）。
 func (l *Lifecycle) Start(ctx context.Context) error {
-	if _, err := l.deps.Takeover(l.configDir, daemon.TakeoverTimeout); err != nil {
+	prevPID, err := l.deps.Takeover(l.configDir, daemon.TakeoverTimeout)
+	if err != nil {
 		return l.fail(fmt.Errorf("takeover: %w", err))
 	}
 
@@ -87,8 +116,17 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 		return l.fail(fmt.Errorf("start daemon: %w", err))
 	}
 
+	back := l.newBackend(host)
+	if l.deps.OnReady != nil {
+		l.deps.OnReady(ctx, back)
+	}
+	if prevPID > 0 && l.deps.Queue != nil {
+		l.deps.Queue.Push(service.ToastView{Kind: service.ToastInfo, Message: i18n.T("gui.toast.takeover")})
+	}
+
 	l.mu.Lock()
 	l.host = host
+	l.back = back
 	l.state = service.LifecycleReady
 	l.mu.Unlock()
 

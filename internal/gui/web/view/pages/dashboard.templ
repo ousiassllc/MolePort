@@ -6,11 +6,59 @@ import (
 	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
 )
 
-// DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーを表示する。
-// ホスト・転送などの各パネルは M3 で #dashboard 内に追加する。
-templ DashboardPage(p layout.LayoutProps, state service.LifecycleState) {
-	@layout.BaseLayout(p) {
-		@organisms.StatusBanner(state)
-		<main id="dashboard" data-lifecycle={ string(state) }></main>
+// DashboardProps は DashboardPage の引数。
+type DashboardProps struct {
+	Layout   layout.LayoutProps
+	State    service.LifecycleState
+	Header   service.HeaderView
+	Hosts    []service.HostView
+	Forwards []service.ForwardView
+	Status   service.StatusView
+}
+
+// DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーと、
+// 各領域（初期表示はインライン展開、mp:<topic> で /fragments/<name> を再取得）を持つ。
+// ready でない間は一覧（アクションボタン）を描画しない。
+templ DashboardPage(p DashboardProps) {
+	@layout.BaseLayout(p.Layout) {
+		@organisms.StatusBanner(p.State)
+		<header
+			id="header"
+			class="mp-header"
+			hx-get="/fragments/header"
+			hx-trigger="mp:header from:body, mp:all from:body"
+			hx-swap="innerHTML"
+		>
+			@organisms.Header(p.Header)
+		</header>
+		<main id="dashboard" data-lifecycle={ string(p.State) }>
+			<section
+				id="hosts-panel"
+				class="mp-panel"
+				hx-get="/fragments/hosts"
+				hx-trigger="mp:hosts from:body, mp:all from:body"
+				hx-swap="innerHTML"
+			>
+				@organisms.HostPanel(p.Hosts, p.State == service.LifecycleReady)
+			</section>
+			<section
+				id="forwards-panel"
+				class="mp-panel"
+				hx-get="/fragments/forwards"
+				hx-trigger="mp:forwards from:body, mp:all from:body"
+				hx-swap="innerHTML"
+			>
+				@organisms.ForwardPanel(p.Forwards, p.State == service.LifecycleReady)
+			</section>
+		</main>
+		<footer
+			id="status-bar"
+			class="mp-status-bar"
+			hx-get="/fragments/status"
+			hx-trigger="mp:status from:body, mp:all from:body"
+			hx-swap="innerHTML"
+		>
+			@organisms.StatusBar(p.Status)
+		</footer>
 	}
 }

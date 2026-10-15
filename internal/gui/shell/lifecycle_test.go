@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -26,6 +27,75 @@ func TestLifecycle_StartSuccess(t *testing.T) {
 	}
 	if len(h.notifier.got) != 1 || h.notifier.got[0] != service.TopicAll {
 		t.Errorf("ready 遷移時の通知 = %v, want [all]", h.notifier.got)
+	}
+}
+
+func TestLifecycle_BackendAvailableOnlyWhenReady(t *testing.T) {
+	d := newFakeDaemon()
+	h := newHarness(t, d)
+	if _, ok := h.life.Backend(); ok {
+		t.Fatal("起動前に Backend が返ってはならない")
+	}
+
+	if err := h.life.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	b, ok := h.life.Backend()
+	if !ok {
+		t.Fatal("ready 後に Backend が返らない")
+	}
+	if b.Forward != d.fwd {
+		t.Error("Backend.Forward がデーモンの ForwardManager でない")
+	}
+	if b.Info.Version != "1.2.3" || b.Info.PID != os.Getpid() {
+		t.Errorf("Backend.Info = %+v", b.Info)
+	}
+	if len(h.ready) != 1 || h.ready[0].Forward != d.fwd {
+		t.Errorf("OnReady の呼び出し = %+v, want ready 遷移時に 1 回", h.ready)
+	}
+}
+
+func TestLifecycle_BackendUnavailableAfterFailedStart(t *testing.T) {
+	h := newHarness(t, newFakeDaemon())
+	h.takeErr = errors.New("boom")
+
+	_ = h.life.Start(context.Background())
+
+	if _, ok := h.life.Backend(); ok {
+		t.Error("起動失敗後に Backend が返ってはならない")
+	}
+	if len(h.ready) != 0 {
+		t.Error("起動失敗時に OnReady を呼んではならない")
+	}
+}
+
+func TestLifecycle_TakeoverPushesToast(t *testing.T) {
+	tests := []struct {
+		name    string
+		prevPID int
+		want    int
+	}{
+		{"引き継ぎあり", 1234, 1},
+		{"引き継ぎなし", 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t, newFakeDaemon())
+			h.takePID = tt.prevPID
+
+			if err := h.life.Start(context.Background()); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+
+			toasts := h.queue.Drain()
+			if len(toasts) != tt.want {
+				t.Fatalf("toasts = %+v, want %d 件", toasts, tt.want)
+			}
+			if tt.want == 1 && toasts[0].Kind != service.ToastInfo {
+				t.Errorf("Kind = %q, want info", toasts[0].Kind)
+			}
+		})
 	}
 }
 

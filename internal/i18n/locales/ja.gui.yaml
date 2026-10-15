@@ -1,0 +1,76 @@
+gui:
+  tray:
+    show: "MolePort を表示"
+    quit: "終了"
+  banner:
+    starting: "デーモンを起動しています..."
+    failed: "デーモンの起動に失敗しました。"
+  error:
+    generic: "エラーが発生しました。もう一度お試しください。"
+    credential_timeout: "認証情報の入力がタイムアウトしました。"
+    credential_cancelled: "認証情報の入力がキャンセルされました。"
+    not_found: "「{{.Name}}」が見つかりません。"
+    already_exists: "「{{.Name}}」は既に存在します。"
+    already_active: "「{{.Name}}」は既に開始されています。"
+    not_connected: "ホスト「{{.Name}}」は接続されていません。"
+    auth_failed: "認証に失敗しました。"
+    port_in_use: "ポートが既に使用されています。"
+    unknown: "{{.Error}}"
+  dialog:
+    startup_failed_title: "MolePort を起動できません"
+    startup_failed: "内蔵デーモンの起動に失敗しました: {{.Error}}"
+    takeover_unresponsive: "別の moleport デーモンが PID ロックを保持していますが応答しません。`moleport daemon kill` で停止してから、MolePort を起動し直してください。"
+    takeover_timeout: "稼働中の moleport デーモンが時間内に停止しませんでした。`moleport daemon kill` で停止してから、MolePort を起動し直してください。"
+    quit_confirm_title: "MolePort を終了"
+    quit_confirm: "システムトレイが利用できないため、ウィンドウを閉じると MolePort を終了します。終了しますか？"
+    quit_confirm_active: "システムトレイが利用できないため、ウィンドウを閉じると MolePort を終了します。アクティブな転送 {{.Count}} 件が停止されます。終了しますか？"
+    quit_active_confirm: "アクティブな転送 {{.Count}} 件が停止されます。MolePort を終了しますか？"
+    yes: "はい"
+    no: "いいえ"
+  dashboard:
+    header:
+      running: "稼働中"
+      version: "バージョン"
+      pid: "PID"
+    hosts:
+      title: "ホスト"
+      empty: "SSH config にホストがありません。"
+      connect: "接続"
+      disconnect: "切断"
+      add_forward: "転送を追加"
+      forwards: "アクティブ転送"
+    forwards:
+      title: "ポートフォワード"
+      empty: "転送ルールがありません。ホストから追加してください。"
+      start: "開始"
+      stop: "停止"
+      delete: "削除"
+      uptime: "稼働時間"
+      sent: "送信"
+      received: "受信"
+      reconnects: "再接続"
+      last_error: "エラー"
+    status:
+      hosts: "ホスト"
+      connected: "接続中"
+      forwards: "転送"
+      active: "アクティブ"
+  status:
+    host:
+      disconnected: "未接続"
+      connecting: "接続中..."
+      connected: "接続済み"
+      reconnecting: "再接続中"
+      pending_auth: "認証待ち"
+      error: "エラー"
+    forward:
+      starting: "開始中"
+      active: "稼働中"
+      stopped: "停止中"
+      reconnecting: "再接続中"
+      error: "エラー"
+  toast:
+    ssh_error: "ホスト「{{.Host}}」でエラー: {{.Error}}"
+    forward_error: "転送「{{.Name}}」でエラー: {{.Error}}"
+    takeover: "稼働中のデーモンを引き継ぎました。"
+    dismiss: "閉じる"

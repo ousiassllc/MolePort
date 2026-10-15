@@ -968,7 +968,7 @@ type ForwardActions struct {
 type HostView struct {
     Name        string
     Address     string // "user@host:port"
-    State       string // "connected" | "disconnected" | "reconnecting" | "pending_auth" | "error"
+    State       string // "connected" | "connecting" | "disconnected" | "reconnecting" | "pending_auth" | "error"
     StateLabel  string // ローカライズ済み
     ActiveCount int
     Actions     HostActions
@@ -979,7 +979,7 @@ type ForwardView struct {
     Host        string
     Type        string // "local" | "remote" | "dynamic"
     Route       string // ":8080 → localhost:80" 等
-    Status      string // "active" | "stopped" | "error" | "reconnecting"
+    Status      string // "starting" | "active" | "stopped" | "error" | "reconnecting"
     StatusLabel string
     Uptime      string // "2h 15m"（停止中は空）
     Sent        string // "1.2 MB"
@@ -1037,6 +1037,7 @@ type ToastView struct {
 ```
 
 - `State` / `Status` / `Type` の文字列値は CSS クラス・`data-` 属性のキーとして使用する（ローカライズしない）。表示ラベルは `i18n.T` で解決済みの `*Label` を使う
+- `HostView.ActiveCount` は `GetAllSessions()` の `Active` セッションをホスト別に数えた値（`SSHHost.ActiveForwardCount` は使わない）。`ConnectionState.Connecting` は `connecting` として表示し、操作ボタンは出さない（`CanConnect` / `CanDisconnect` とも `false`）
 - `ForwardView.Route` は `ForwardRule` と `ForwardType` から組み立てる（local: `:LPORT → RHOST:RPORT`、remote: `RBIND:RPORT ← :LPORT`、dynamic: `SOCKS :LPORT`）
 
 ### GUI トピック
@@ -1072,3 +1073,4 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.1 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
 | 3.2 | 2026-10-15 | GUI 対応: `config.yaml` に `gui:` セクション（`GUIConfig` / `GUIThemeConfig`）を追加、PID ファイルの共有・排他ロック記述を更新、GUI ビューモデル・トピックを追加 | #84 Wails 版 GUI アプリケーション |
 | 3.3 | 2026-10-15 | ファイル構成図: GUI 内蔵デーモンと Sock / config / state / log / SSH config の関係を追加 | レビュー指摘対応 #84 |
+| 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |

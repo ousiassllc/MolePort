@@ -11,7 +11,9 @@ import templruntime "github.com/a-h/templ/runtime"
 import "github.com/ousiassllc/moleport/internal/i18n"
 
 // ToastStack はトーストの表示領域。OOB（hx-swap-oob="beforeend:#toast-stack"）で追記される。
-// data-error-message は app.ts がサーバー無応答時の汎用エラートーストに使うローカライズ済み文言。
+// mp:toast / mp:all で /fragments/toasts を取り出す（キューの drain。応答は OOB のみのため hx-swap="none"）。
+// data-error-message / data-dismiss-label は app.ts がサーバー無応答時の汎用エラートーストに使う
+// ローカライズ済み文言。
 func ToastStack() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -33,20 +35,33 @@ func ToastStack() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"toast-stack\" class=\"mp-toast-stack\" aria-live=\"polite\" data-error-message=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"toast-stack\" class=\"mp-toast-stack\" aria-live=\"polite\" hx-get=\"/fragments/toasts\" hx-trigger=\"mp:toast from:body, mp:all from:body\" hx-swap=\"none\" data-error-message=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T("gui.error.generic"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/organisms/toast_stack.templ`, Line: 8, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/organisms/toast_stack.templ`, Line: 17, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-dismiss-label=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(i18n.T("gui.toast.dismiss"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/organisms/toast_stack.templ`, Line: 18, Col: 50}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

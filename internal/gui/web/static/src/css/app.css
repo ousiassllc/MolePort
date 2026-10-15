@@ -60,6 +60,8 @@
 .mp-badge[data-status="active"],
 .mp-badge[data-status="connected"] { color: var(--mp-ok); }
 .mp-badge[data-status="reconnecting"],
+.mp-badge[data-status="connecting"],
+.mp-badge[data-status="starting"],
 .mp-badge[data-status="pending_auth"] { color: var(--mp-warn); }
 .mp-badge[data-status="error"] { color: var(--mp-danger); }
 
@@ -97,4 +99,46 @@
   color: var(--mp-fg);
 }
 .mp-toast[data-kind="error"] { border-color: var(--mp-danger); }
+.mp-toast-close {
+  margin-left: 0.75rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
 .mp-toast[data-kind="success"] { border-color: var(--mp-ok); }
+
+/* ダッシュボード（ヘッダー / ホスト・転送パネル / ステータスバー） */
+.mp-header,
+.mp-status-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: var(--mp-surface);
+}
+.mp-header { border-bottom: 1px solid var(--mp-border); }
+.mp-status-bar {
+  border-top: 1px solid var(--mp-border);
+  color: var(--mp-muted);
+  font-size: 0.875rem;
+}
+.mp-app-title { font-size: 1.125rem; font-weight: 600; }
+.mp-panel { padding: 0.5rem 1rem; }
+.mp-panel-title { margin: 0.5rem 0; font-size: 1rem; font-weight: 600; }
+.mp-empty { color: var(--mp-muted); }
+.mp-list { list-style: none; margin: 0; padding: 0; }
+.mp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--mp-border);
+}
+.mp-row-title { font-weight: 600; }
+.mp-row-sub,
+.mp-label { color: var(--mp-muted); font-size: 0.875rem; }
+.mp-row-actions { display: flex; gap: 0.5rem; margin-left: auto; }
+.mp-row-error { flex-basis: 100%; color: var(--mp-danger); font-size: 0.875rem; }
+.mp-port { font-family: ui-monospace, monospace; }

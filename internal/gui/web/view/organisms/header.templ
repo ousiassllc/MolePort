@@ -1,0 +1,18 @@
+package organisms
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// Header は #header の内容（アプリ名・稼働表示・バージョン・PID）。
+templ Header(v service.HeaderView) {
+	<h1 class="mp-app-title">MolePort</h1>
+	if v.Version != "" {
+		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.running") }</span>
+		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.version") }: { v.Version }</span>
+		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.pid") }: { strconv.Itoa(v.PID) }</span>
+	}
+}

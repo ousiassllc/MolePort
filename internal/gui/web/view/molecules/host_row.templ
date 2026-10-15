@@ -1,0 +1,62 @@
+package molecules
+
+import (
+	"net/url"
+	"strconv"
+
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// HostRow はホスト 1 行。Actions のうち実行可能なものだけを描画する（HATEOAS）。
+// ボタンの URL はサーバーが生成する。id / data-name はライブ更新でフォーカスを保つための安定した識別子。
+templ HostRow(v service.HostView) {
+	<li id={ atoms.ElementID("host-", v.Name) } class="mp-row" data-name={ v.Name }>
+		<span class="mp-row-title">{ v.Name }</span>
+		<span class="mp-row-sub">{ v.Address }</span>
+		@atoms.StatusBadge(v.State, v.StateLabel)
+		if v.ActiveCount > 0 {
+			<span class="mp-row-sub">{ i18n.T("gui.dashboard.hosts.forwards") }: { strconv.Itoa(v.ActiveCount) }</span>
+		}
+		<span class="mp-row-actions">
+			if v.Actions.CanConnect {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.hosts.connect"),
+					Variant: atoms.ButtonPrimary,
+					Attrs: templ.Attributes{
+						"id":              atoms.ElementID("host-", v.Name) + "-connect",
+						"hx-post":         "/actions/hosts/" + url.PathEscape(v.Name) + "/connect",
+						"hx-target":       "#hosts-panel",
+						"hx-swap":         "innerHTML",
+						"hx-disabled-elt": "this",
+					},
+				})
+			}
+			if v.Actions.CanDisconnect {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.hosts.disconnect"),
+					Variant: atoms.ButtonSecondary,
+					Attrs: templ.Attributes{
+						"id":              atoms.ElementID("host-", v.Name) + "-disconnect",
+						"hx-post":         "/actions/hosts/" + url.PathEscape(v.Name) + "/disconnect",
+						"hx-target":       "#hosts-panel",
+						"hx-swap":         "innerHTML",
+						"hx-disabled-elt": "this",
+					},
+				})
+			}
+			if v.Actions.CanAddForward {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.hosts.add_forward"),
+					Variant: atoms.ButtonSecondary,
+					Attrs: templ.Attributes{
+						"id":        atoms.ElementID("host-", v.Name) + "-add-forward",
+						"hx-get":    "/fragments/forward-form?host=" + url.QueryEscape(v.Name),
+						"hx-target": "#modal-root",
+					},
+				})
+			}
+		</span>
+	</li>
+}

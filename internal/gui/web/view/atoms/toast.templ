@@ -1,11 +1,18 @@
 package atoms
 
-import "github.com/ousiassllc/moleport/internal/gui/service"
+import (
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
 
-// Toast は通知 1 件。エラーは role="alert"、それ以外は role="status" とする。
+// Toast は通知 1 件。エラーは role="alert" で手動の閉じるボタン付き、
+// それ以外は role="status" で app.ts が 5 秒後に自動消去する。
 templ Toast(kind service.ToastKind, message string) {
 	if kind == service.ToastError {
-		<div class="mp-toast" data-kind={ string(kind) } role="alert">{ message }</div>
+		<div class="mp-toast" data-kind={ string(kind) } role="alert">
+			<span>{ message }</span>
+			<button type="button" class="mp-toast-close" data-dismiss-toast aria-label={ i18n.T("gui.toast.dismiss") }>&times;</button>
+		</div>
 	} else {
 		<div class="mp-toast" data-kind={ string(kind) } role="status">{ message }</div>
 	}

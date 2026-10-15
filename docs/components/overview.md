@@ -1728,7 +1728,11 @@ type Deps struct {
 Core の型から ViewModel を組み立て、操作を実行する。Wails・HTTP に依存しない。
 
 ```go
-type Dashboard interface {
+// 内蔵デーモン起動後の Core 参照。Shell の Lifecycle が BackendSource を実装する（ready 前は ok=false）
+type Backend struct { SSH core.SSHManager; Forward core.ForwardManager; Config core.ConfigManager; Info Info }
+type BackendSource interface{ Backend() (Backend, bool) }
+
+type Dashboard interface { // 実装は NewDashboardService(BackendSource)。ready 前は空の ViewModel を返す
     Header() HeaderView
     Hosts() []HostView
     Forwards() []ForwardView
@@ -1791,12 +1795,15 @@ Core のイベントとティッカーをトピックに変換する。
 ```go
 type Topic string // hosts | forwards | status | header | credential | toast | settings | all
 
-func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowController) *EventBridge
+func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowVisibility) *EventBridge
+type WindowVisibility interface{ Visible() bool } // Shell の VisibilityNotifier が満たす
 func (e *EventBridge) Start(ctx context.Context) // SSH/Forward の Subscribe + ライブ（1s）/照合（5s）ティッカー
 ```
 
 - イベント → トピックの写像、100ms コアレス、ティッカーの条件は [gui.md](../architecture/gui.md#eventbridge) に従う
 - 照合ティッカーは `GetRules` / `GetAllSessions` の名前+状態のシグネチャを比較し、変化があるときのみ通知する
+- 受信ループは `SSHEvent` / `ForwardEvent` をトピック集合へ写像するだけで、コアレス（100ms）・非表示中の抑止・`Notify` は emit ループが行う。`SSHEventError` / `ForwardEventError` は `LocalizeError` でローカライズしたメッセージを `NotificationQueue` に積み、`toast` を送る
+- `LifecycleDeps` に `Queue`（引き継ぎ完了トースト）と `OnReady`（ready 遷移前の EventBridge 開始）を追加した
 - Core のイベントチャネル（バッファ 16）を詰まらせないため、受信ゴルーチンはイベントをトピック集合へ写像してコアレス用の内部チャネルへ渡すだけにする
 
 ### Templ View（`gui/web/view`）
@@ -1810,17 +1817,19 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | molecules | `HostRow` | `HostView`（`Actions` に応じて接続 / 切断 / 転送追加を描画） |
 | molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
 | molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
-| organisms | `HostPanel` / `ForwardPanel` / `StatusBar` / `Header` | 対応する ViewModel のスライス・構造体 |
+| atoms | `PortLabel` / `DataSize` / `Duration` | 整形済み文字列（`DataSize` / `Duration` はラベル付き。`Duration` は空なら何も描画しない）。`atoms.ElementID(prefix, name)` が安定した `id` を作る（英数字以外は `_` + 16 進） |
+| organisms | `HostPanel` / `ForwardPanel` | `[]HostView` / `[]ForwardView`, `ready bool`（`ready` でない間は一覧・ボタンを描画しない） |
+| organisms | `StatusBar` / `Header` / `Toasts`（`/fragments/toasts` の OOB 本文） | 対応する ViewModel |
 | organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
 | organisms | `CredentialDialog` | `CredentialView` |
 | organisms | `SettingsForm` | `SettingsView, FormErrors` |
-| pages | `DashboardPage` | 全 ViewModel + `LifecycleState` |
+| pages | `DashboardPage` | `DashboardProps{Layout, State, Header, Hosts, Forwards, Status}` |
 | layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |
 
 ### 設定・i18n の拡張
 
 - `Config.GUI`（`GUIConfig`）をデフォルト値付きで追加（`DefaultConfig`: `base: system`、`accent: violet`）。`ConfigManager.LoadConfig` は未指定の値をデフォルトで補完する
-- 翻訳ファイルに `gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
+- 翻訳ファイルは言語ごとに `locales/<lang>.yaml`（基本）と `locales/<lang>.gui.yaml`（`gui:` 名前空間）に分け、ロード時にマージする（ファイルあたり 300 行の制限のため）。`gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
 - GUI が表示するエラー文字列は Core のエラー型から `i18n` キーへ変換する（Core の英語エラー文字列を画面に直接出さない）
 
 ### 既存コンポーネントの変更
@@ -1936,3 +1945,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.0 | 2026-10-15 | GUI Layer コンポーネント追加（Lifecycle / Wails App / Tray / Router / Service / CredentialBroker / NotificationQueue / EventBridge / Templ View）、Daemon に Services/Done/Info/Takeover、PIDFile に IsLocked を追加、依存関係図に GUI Layer を追加、既存コンポーネントの変更一覧とテスト方針を追加 | #84 Wails 版 GUI アプリケーション |
 | 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |
 | 6.2 | 2026-10-15 | M1 基盤整備の実装反映: PID ファイル管理を `daemon/pidfile` サブパッケージに分離（NFR-24〜26）、Windows ロック範囲、`TakeoverTimeout` を追記 | #85 M1 基盤整備 |
+| 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |

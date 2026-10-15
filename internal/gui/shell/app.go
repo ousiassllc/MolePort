@@ -20,6 +20,7 @@ import (
 
 	trayassets "github.com/ousiassllc/moleport/assets/tray"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/tray"
 	"github.com/ousiassllc/moleport/internal/gui/web"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
@@ -47,7 +48,7 @@ func Run(cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("generate token: %w", err)
 	}
-	a := &app{cfg: cfg}
+	a := &app{cfg: cfg, queue: service.NewNotificationQueue()}
 	a.notifier = NewVisibilityNotifier(a.emit)
 	a.life = NewLifecycle(cfg.ConfigDir, cfg.Version, LifecycleDeps{
 		Takeover:    daemon.Takeover,
@@ -55,10 +56,20 @@ func Run(cfg Config) error {
 		Notifier:    a.notifier,
 		Quit:        a.quit,
 		ConfirmQuit: a.confirmActiveQuit,
+		Queue:       a.queue,
+		OnReady: func(ctx context.Context, b service.Backend) {
+			service.NewEventBridge(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
+		},
 	})
 	a.closer = NewCloseController(a, a.life.Quitting, a.trayAvailable.Load)
 
-	handler := web.NewRouter(web.Deps{Life: a.life, Token: token, Static: cfg.Static})
+	handler := web.NewRouter(web.Deps{
+		Life:      a.life,
+		Dashboard: service.NewDashboardService(a.life),
+		Toasts:    a.queue,
+		Token:     token,
+		Static:    cfg.Static,
+	})
 
 	return wails.Run(&options.App{
 		Title:       windowTitle,
@@ -83,6 +94,7 @@ func Run(cfg Config) error {
 type app struct {
 	cfg      Config
 	notifier *VisibilityNotifier
+	queue    *service.NotificationQueue
 	life     *Lifecycle
 	closer   *CloseController
 

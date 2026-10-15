@@ -1,0 +1,16 @@
+package organisms
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// StatusBar は #status-bar の内容（ホスト数・接続数・転送数・アクティブ数）。
+templ StatusBar(v service.StatusView) {
+	<span>{ i18n.T("gui.dashboard.status.hosts") }: { strconv.Itoa(v.Hosts) }</span>
+	<span>{ i18n.T("gui.dashboard.status.connected") }: { strconv.Itoa(v.ConnectedHosts) }</span>
+	<span>{ i18n.T("gui.dashboard.status.forwards") }: { strconv.Itoa(v.Forwards) }</span>
+	<span>{ i18n.T("gui.dashboard.status.active") }: { strconv.Itoa(v.ActiveForwards) }</span>
+}

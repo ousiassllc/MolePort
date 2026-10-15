@@ -1,10 +1,13 @@
 // MolePort GUI のクライアント JS。HALT の原則（クライアント状態を持たない）に従い、
-// 責務は次の 4 点に限定する（docs/architecture/gui.md「JS の責務」）。
+// 責務は次の点に限定する（docs/architecture/gui.md「JS の責務」）。
 //   1. Wails Events（moleport:changed）→ htmx.trigger(mp:<topic>)
 //   2. htmx:configRequest での X-MolePort-Token 付与
-//   3. htmx:responseError / htmx:sendError の汎用エラートースト
+//   3. htmx:responseError / htmx:sendError の汎用エラートースト（3b: トーストの自動消去・手動消去）
 //   4. テーマのプレビュー（data-theme / data-accent の即時切り替え）
-// 各責務の中身（フラグメント・設定フォームとの結合）は M3 で実装する。
+//
+// ライブ更新（1 秒ごとのフラグメント差し替え）でフォーカスを保つため、操作可能要素には
+// サーバーが安定した id（host-{name}-connect、fwd-{name}-stop 等）を付与する。
+// HTMX は差し替え前後で同一 id の要素へフォーカスを復元するため、クライアント側に状態は持たない。
 
 // htmx.min.js はグローバルとして先に読み込まれる（CSP: script-src 'self'）。
 declare const htmx: {
@@ -57,11 +60,41 @@ function showErrorToast(): void {
   toast.className = "mp-toast";
   toast.dataset.kind = "error";
   toast.setAttribute("role", "alert");
-  toast.textContent = stack.dataset.errorMessage ?? "";
+  const message = document.createElement("span");
+  message.textContent = stack.dataset.errorMessage ?? "";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "mp-toast-close";
+  close.setAttribute("data-dismiss-toast", "");
+  close.setAttribute("aria-label", stack.dataset.dismissLabel ?? "");
+  close.textContent = "\u00d7";
+  toast.append(message, close);
   stack.append(toast);
 }
 document.body.addEventListener("htmx:responseError", showErrorToast);
 document.body.addEventListener("htmx:sendError", showErrorToast);
+
+// 3b. トーストの消去。成功・情報は 5 秒で自動消去し、エラーは閉じるボタン（data-dismiss-toast）で手動消去する。
+//     トースト本体は常にサーバーが描画する（OOB で #toast-stack の末尾へ追記される）。
+const TOAST_AUTO_DISMISS_MS = 5000;
+
+function watchToastStack(): void {
+  const stack = document.getElementById("toast-stack");
+  if (!stack) return;
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node instanceof HTMLElement && node.dataset.kind !== "error") {
+          setTimeout(() => node.remove(), TOAST_AUTO_DISMISS_MS);
+        }
+      }
+    }
+  }).observe(stack, { childList: true });
+  stack.addEventListener("click", (e) => {
+    const target = e.target as Element;
+    if (target.closest("[data-dismiss-toast]")) target.closest(".mp-toast")?.remove();
+  });
+}
 
 // 4. テーマのプレビュー。サーバー往復なしで <html> の属性を書き換える（保存値はサーバーが次回レンダリングで出力）。
 //    mp:theme-preview … 設定フォームのスウォッチ選択（detail: {theme, accent}）
@@ -83,3 +116,4 @@ for (const name of ["mp:theme-preview", "mp:settings-applied"]) {
 }
 
 bridgeWailsEvents();
+watchToastStack();

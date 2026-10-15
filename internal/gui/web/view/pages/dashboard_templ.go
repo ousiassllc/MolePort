@@ -14,9 +14,20 @@ import (
 	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
 )
 
-// DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーを表示する。
-// ホスト・転送などの各パネルは M3 で #dashboard 内に追加する。
-func DashboardPage(p layout.LayoutProps, state service.LifecycleState) templ.Component {
+// DashboardProps は DashboardPage の引数。
+type DashboardProps struct {
+	Layout   layout.LayoutProps
+	State    service.LifecycleState
+	Header   service.HeaderView
+	Hosts    []service.HostView
+	Forwards []service.ForwardView
+	Status   service.StatusView
+}
+
+// DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーと、
+// 各領域（初期表示はインライン展開、mp:<topic> で /fragments/<name> を再取得）を持つ。
+// ready でない間は一覧（アクションボタン）を描画しない。
+func DashboardPage(p DashboardProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -49,30 +60,62 @@ func DashboardPage(p layout.LayoutProps, state service.LifecycleState) templ.Com
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = organisms.StatusBanner(state).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = organisms.StatusBanner(p.State).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <main id=\"dashboard\" data-lifecycle=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <header id=\"header\" class=\"mp-header\" hx-get=\"/fragments/header\" hx-trigger=\"mp:header from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = organisms.Header(p.Header).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</header><main id=\"dashboard\" data-lifecycle=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(state))
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(p.State))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/pages/dashboard.templ`, Line: 14, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/pages/dashboard.templ`, Line: 34, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></main>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><section id=\"hosts-panel\" class=\"mp-panel\" hx-get=\"/fragments/hosts\" hx-trigger=\"mp:hosts from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = organisms.HostPanel(p.Hosts, p.State == service.LifecycleReady).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</section><section id=\"forwards-panel\" class=\"mp-panel\" hx-get=\"/fragments/forwards\" hx-trigger=\"mp:forwards from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = organisms.ForwardPanel(p.Forwards, p.State == service.LifecycleReady).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</section></main><footer id=\"status-bar\" class=\"mp-status-bar\" hx-get=\"/fragments/status\" hx-trigger=\"mp:status from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = organisms.StatusBar(p.Status).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</footer>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layout.BaseLayout(p).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layout.BaseLayout(p.Layout).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

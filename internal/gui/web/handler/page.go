@@ -18,20 +18,32 @@ const (
 // Page は GET /（フルページ）を返すハンドラー。
 type Page struct {
 	life  service.LifecycleSource
+	dash  service.Dashboard
 	token string
 }
 
 // NewPage は Page を返す。token は <meta name="mp-token"> に埋め込む起動ごとのトークン。
-func NewPage(life service.LifecycleSource, token string) *Page {
-	return &Page{life: life, token: token}
+func NewPage(life service.LifecycleSource, dash service.Dashboard, token string) *Page {
+	return &Page{life: life, dash: dash, token: token}
 }
 
-// Index は BaseLayout + ライフサイクル状態に応じたバナーを返す。
+// Index は BaseLayout + バナー + ダッシュボード各領域（インライン展開）を返す。
 func (p *Page) Index(w http.ResponseWriter, r *http.Request) {
-	render(w, r, http.StatusOK, pages.DashboardPage(layout.LayoutProps{
-		Lang:   string(i18n.CurrentLang()),
-		Theme:  defaultTheme,
-		Accent: defaultAccent,
-		Token:  p.token,
-	}, p.life.State()))
+	state := p.life.State()
+	props := pages.DashboardProps{
+		Layout: layout.LayoutProps{
+			Lang:   string(i18n.CurrentLang()),
+			Theme:  defaultTheme,
+			Accent: defaultAccent,
+			Token:  p.token,
+		},
+		State: state,
+	}
+	if state == service.LifecycleReady {
+		props.Header = p.dash.Header()
+		props.Hosts = p.dash.Hosts()
+		props.Forwards = p.dash.Forwards()
+		props.Status = p.dash.Status()
+	}
+	render(w, r, http.StatusOK, pages.DashboardPage(props))
 }
