@@ -94,6 +94,57 @@ jobs:
       - name: Build assets
         run: npm run build
 
+  # -tags gui (CGO + OS ネイティブ WebView) のビルド確認。通常ジョブ (gui タグなし・CGO なし) とは分離する (NFR-41)。
+  # Linux は libwebkit2gtk-4.1-dev が必要なため -tags gui,webkit2_41 を付ける。
+  gui-build:
+    name: GUI Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            tags: gui,webkit2_41
+          - os: macos-latest
+            tags: gui
+          - os: windows-latest
+            tags: gui
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install templ and wails
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Build assets
+        run: |
+          templ generate
+          npm ci
+          npm run build
+
+      - name: wails build
+        working-directory: cmd/moleport-gui
+        run: wails build -tags "${{ matrix.tags }}" -skipbindings -s -nosyncgomod -nopackage
+
   build:
     name: Build
     runs-on: ubuntu-latest

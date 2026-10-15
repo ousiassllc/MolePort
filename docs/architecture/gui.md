@@ -436,30 +436,35 @@ TUI のテーマ（`tui.theme`）は独立して保持する。GUI のテーマ�
 |------|---------|------|
 | 通常ビルド・テスト・lint | `go build ./...` / `go test ./...` / golangci-lint | `gui` タグなし。Wails・トレイを含まない |
 | GUI 開発 | `make gui-dev`（`cd cmd/moleport-gui && wails dev -tags gui -skipbindings`） | templ watch + esbuild watch。`wails.json` は `cmd/moleport-gui/` に置く |
-| GUI ビルド | `make gui-build`（`cd cmd/moleport-gui && wails build -tags gui -skipbindings`） | OS ごとのネイティブ環境が必要。`wails.json` の `frontend:build` が `make gui-assets` を実行する |
+| GUI ビルド | `make gui-build`（`cd cmd/moleport-gui && wails build -tags "$(GUI_TAGS)" -skipbindings -ldflags "$(LDFLAGS)"`。`GUI_TAGS` の既定は `gui`） | OS ごとのネイティブ環境が必要。`wails.json` の `frontend:build` が `make gui-assets` を実行する |
 | アセット | `make gui-assets`（`templ generate` + `npm run build`） | |
 
 ### リリースワークフロー
 
-既存の `release.yml`（GoReleaser による CLI アーカイブ）はそのまま維持し、GUI は別ジョブで同じタグに追加アップロードする。
+既存の `release.yml`（GoReleaser による CLI アーカイブ）の `release` ジョブ（タグ付け + GoReleaser）はそのまま維持し、GUI は別ジョブで同じタグに追加アップロードする。`release` ジョブはタグ名を job output（`tag`）として公開するだけで、GoReleaser の設定・手順は変更しない。
 
 ```mermaid
 flowchart LR
-    Tag["タグ push v*.*.*"] --> GR["release (ubuntu)<br/>GoReleaser: moleport"]
-    Tag --> GL["gui-linux (ubuntu-24.04 / arm64)<br/>wails build -tags gui<br/>(libwebkit2gtk-4.1-dev)"]
-    Tag --> GM["gui-macos (macos)<br/>wails build -platform darwin/universal"]
-    Tag --> GW["gui-windows (windows)<br/>wails build -platform windows/amd64"]
-    GL --> Pack["アーカイブ化 + checksums_gui.txt"]
+    Tag["タグ push v*.*.*<br/>または main push（自動タグ付け）"] --> GR["release (ubuntu)<br/>GoReleaser: moleport"]
+    GR --> GL["gui-linux (ubuntu-24.04 / ubuntu-24.04-arm)<br/>wails build -tags gui,webkit2_41<br/>(libwebkit2gtk-4.1-dev)"]
+    GR --> GM["gui-macos (macos-latest)<br/>wails build -platform darwin/universal"]
+    GR --> GW["gui-windows (windows-latest)<br/>wails build -platform windows/amd64"]
+    GL --> Pack["gui-publish (ubuntu)<br/>checksums_gui.txt"]
     GM --> Pack
     GW --> Pack
     GR --> Rel["GitHub Release"]
     Pack -->|"gh release upload"| Rel
 ```
 
-- GUI ジョブは GoReleaser ジョブがリリースを作成した後に `gh release upload` で追加する（`needs: release`）
-- バージョンは `-ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=<tag>"` で埋め込む（CLI と同じ変数。`internal/version` パッケージに置き、CLI・`moleport-gui` の両方が参照する）
-- CI（`ci.yml`）に GUI ビルド確認ジョブを追加する（Linux / macOS / Windows のマトリクスで `-tags gui` ビルド）。Linux ジョブは `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` を導入する。テストは通常ジョブの `go test ./...` に含まれる（GUI タグなし部分）
-- 初期リリースは未署名。README に macOS の「開発元を確認できません」警告（右クリック → 開く）と Windows SmartScreen 警告の回避手順を記載する
+- GUI ジョブは `release` ジョブがリリースを作成した後に動く（`needs: release`）。リリース対象がない `main` push（`release` の `tag` 出力が空）では GUI ジョブはスキップされる
+- GUI ジョブはタグ（`refs/tags/<tag>`）をチェックアウトし、`templ generate` と `npm ci && npm run build` を行ってから `wails build -s`（フロントエンドビルドをスキップ。Windows ランナーに `make` を前提としないため）でビルドする。Wails CLI は `go.mod` と同じ `v2.16.0` を固定し、`-nosyncgomod` で `go.mod` を書き換えない
+- OS ごとのアーカイブ（Linux: `tar.gz`、macOS: `ditto` で作る zip（`MolePort.app` を含む）、Windows: zip）をアーティファクトに上げ、`gui-publish` ジョブが全て集めて `checksums_gui.txt`（SHA-256）を生成し、`gh release upload --clobber` で Release に追加する。1 つでも GUI ジョブが失敗した場合は GUI アセットを一切添付しない（`moleport` のアセットは添付済みのまま）
+- アセット名の `<version>` は先頭の `v` を除いたバージョン（例: `moleport-gui_1.2.3_linux_amd64.tar.gz`）。バージョンは `-ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=<tag から v を除いた値>"` で埋め込む（GoReleaser の `{{ .Version }}` と同じ形式。CLI・`moleport-gui` の両方が `internal/version` を参照する）
+- Linux は Ubuntu 24.04 で `libwebkit2gtk-4.0-dev` が提供されないため、ビルドタグに `webkit2_41` を追加する（`-tags gui,webkit2_41`）
+- CI（`ci.yml`）の `gui-build` ジョブが Linux / macOS / Windows のマトリクスで `wails build -tags gui -nopackage`（Linux は `gui,webkit2_41`）を実行して GUI ビルドを確認する。Linux ジョブは `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` を導入する。`gui-assets` ジョブは `templ generate` 後に `*_templ.go` の差分がないことを検査する。テストは通常ジョブの `go test ./...` に含まれる（GUI タグなし部分）。既存の `lint` / `test` / `build` ジョブは `gui` タグなし・CGO なしのまま変更しない
+- `make gui-build` は `GUI_TAGS`（既定 `gui`）と `LDFLAGS`（`internal/version.Version` を含む）を `wails build` に渡す。Linux で WebKitGTK 4.1 を使う場合は `make gui-build GUI_TAGS=gui,webkit2_41`
+- 初期リリースは未署名。README に macOS の「開発元を確認できません」警告（右クリック → 開く）と Windows SmartScreen 警告の回避手順、Linux のトレイ要件を記載する
+- 3 OS での `wails build` の成功、macOS universal の生成、Windows アーカイブ、タグ push での実 Release 添付（`gh release upload`）、成果物の起動確認は、実際の GitHub Actions ランナーでのみ確認できるため**実行待ち**（ローカルでは `actionlint` による静的検証と、Linux ホストからの Windows クロスビルドまで確認済み）
 
 ## リスクと PoC（M2 で検証）
 
@@ -542,3 +547,4 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.3 | 2026-10-15 | EventBridge の非表示中の抑止方法、トーストの自動消去（成功・情報 5 秒 / エラーは手動）を `app.ts` が担うことを明記 | #88 M3-1 ダッシュボード |
 | 1.4 | 2026-10-15 | クレデンシャルフローの実装反映: 接続アクションの応答を `200` に修正、`Activity`（進行中の接続・開始と直近の開始失敗の重ね合わせ）、`#credential-root`（他モーダルに重ねる）、Service のサブパッケージ（`bridge/` / `credential/`）を追記 | #89 M3-2 操作系 |
 | 1.5 | 2026-10-15 | 設定の拡張の実装反映: 既存 `config.yaml` の互換・値の補完、起動前ページのテーマ、`update_check` の即時反映を追記 | #90 M3-3 設定・更新バッジ |
+| 1.6 | 2026-10-15 | 配布の実装反映: `gui-publish` ジョブによる `checksums_gui.txt` 生成と一括アップロード、`release` ジョブの `tag` 出力、`wails build -s` と Wails CLI のバージョン固定、アセット名のバージョン表記（`v` なし）、Linux の `webkit2_41` タグ、CI の `gui-build` ジョブ、`make gui-build` の `GUI_TAGS` / `LDFLAGS`、実ランナー検証待ちの明記 | #92 M4 配布 |
