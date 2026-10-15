@@ -6,6 +6,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/format"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -73,7 +74,7 @@ func runSessionGet(configDir string, name string, jsonOutput bool) {
 
 func runStatusSummary(configDir string, jsonOutput bool) {
 	pidPath := daemon.PIDFilePath(configDir)
-	running, _ := daemon.IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return

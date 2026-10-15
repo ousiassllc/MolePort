@@ -9,8 +9,10 @@ import (
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
+	"github.com/ousiassllc/moleport/internal/version"
 )
 
 // newVersionChecker は VersionChecker を生成するファクトリ関数。テストで差し替え可能。
@@ -29,14 +31,14 @@ func RunUpdate(configDir string, args []string) {
 	}
 
 	// dev ビルドではアップデート不可
-	if cli.Version == "dev" {
+	if version.Version == "dev" {
 		cli.ExitError("%s", i18n.T("cli.update.dev_build"))
 	}
 
 	fmt.Println(i18n.T("cli.update.checking"))
 
 	ctx := context.Background()
-	vc := newVersionChecker(cli.Version)
+	vc := newVersionChecker(version.Version)
 
 	result, err := vc.LatestVersion(ctx)
 	if err != nil {
@@ -44,13 +46,13 @@ func RunUpdate(configDir string, args []string) {
 	}
 
 	if result == nil || !result.UpdateAvailable {
-		fmt.Println(i18n.T("cli.update.already_latest", map[string]any{"Version": cli.Version}))
+		fmt.Println(i18n.T("cli.update.already_latest", map[string]any{"Version": version.Version}))
 		return
 	}
 
 	fmt.Println(i18n.T("cli.update.available", map[string]any{
 		"Latest":  result.LatestVersion,
-		"Current": cli.Version,
+		"Current": version.Version,
 	}))
 
 	if checkOnly {
@@ -64,7 +66,7 @@ func RunUpdate(configDir string, args []string) {
 	u := update.NewUpdater(vc)
 
 	pidPath := daemon.PIDFilePath(configDir)
-	daemonRunning, _ := daemon.IsRunning(pidPath)
+	daemonRunning, _ := pidfile.IsRunning(pidPath)
 
 	assetName := fmt.Sprintf("moleport_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
 	fmt.Println(i18n.T("cli.update.downloading", map[string]any{"Asset": assetName}))

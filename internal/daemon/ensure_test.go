@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 )
 
 func TestEnsureDaemon_AutoStartFailure(t *testing.T) {
@@ -28,7 +30,7 @@ func TestEnsureDaemon_AlreadyRunning_ConnectFails(t *testing.T) {
 	dir := t.TempDir()
 
 	// PIDファイルを作成し、自プロセスのPIDを書き込む（デーモン稼働中と見せかける）
-	pf := NewPIDFile(PIDFilePath(dir))
+	pf := pidfile.NewPIDFile(PIDFilePath(dir))
 	if err := pf.Acquire(); err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}

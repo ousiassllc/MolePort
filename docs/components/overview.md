@@ -252,6 +252,8 @@ func (d *Daemon) Info() Info               // Version / PID / StartedAt
 
 // headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
 func Takeover(configDir string, timeout time.Duration) (prevPID int, err error)
+
+const TakeoverTimeout = 10 * time.Second // 標準の待機時間（Shell が Takeover に渡す）
 ```
 
 #### 起動シーケンス
@@ -270,7 +272,7 @@ flowchart TD
 
 ### PIDFile
 
-PID ファイルの作成・検証・削除を管理する。
+PID ファイルの作成・検証・削除を管理する。`internal/daemon/pidfile` パッケージ（Linterly の 2000 行/ディレクトリ制限のため `daemon` から分離）に置き、`daemon` / CLI からは `pidfile.IsRunning` のように参照する。
 
 #### インターフェース
 
@@ -287,6 +289,9 @@ func IsRunning(path string) (bool, int)  // 既存デーモンの稼働確認（
 func KillProcess(pidPath string) error   // PID ファイルからプロセスを特定して停止（Unix のみ）
 func IsLocked(path string) (locked bool, pid int) // 排他ロックを他プロセスが保持しているか（ロックを試行して即解放）。Takeover が使用する
 ```
+
+- `KillProcess` は Unix では `SIGKILL`、Windows では `TerminateProcess` で停止する
+- Windows の `LockFileEx` は強制ロックのため、PID の読み取りを妨げないようファイル先頭ではなくオフセット `0x7FFFFFFF` の 1 バイトをロックする
 
 ### Fork
 
@@ -1817,7 +1822,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 
 | コンポーネント | 変更内容 |
 |---------------|---------|
-| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `PIDFile.IsLocked` 追加 |
+| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `pidfile.IsLocked` 追加（PID ファイル管理は `daemon/pidfile` サブパッケージ） |
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
 | `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
@@ -1925,3 +1930,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 5.4 | 2026-03-14 | SSH 互換性改善: SSHConnection.RemoteForward に bindAddr 引数追加、buildAuthMethods を IdentityFiles 複数鍵対応に更新（for range ループ化、デフォルト鍵フォールバック条件を IdentityFiles 空時に限定） | #74 SSH 互換性改善 |
 | 6.0 | 2026-10-15 | GUI Layer コンポーネント追加（Lifecycle / Wails App / Tray / Router / Service / CredentialBroker / NotificationQueue / EventBridge / Templ View）、Daemon に Services/Done/Info/Takeover、PIDFile に IsLocked を追加、依存関係図に GUI Layer を追加、既存コンポーネントの変更一覧とテスト方針を追加 | #84 Wails 版 GUI アプリケーション |
 | 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |
+| 6.2 | 2026-10-15 | M1 基盤整備の実装反映: PID ファイル管理を `daemon/pidfile` サブパッケージに分離（NFR-24〜26）、Windows ロック範囲、`TakeoverTimeout` を追記 | #85 M1 基盤整備 |

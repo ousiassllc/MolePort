@@ -11,8 +11,10 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
+	"github.com/ousiassllc/moleport/internal/version"
 )
 
 // RunDaemon は daemon サブコマンドをルーティングする。
@@ -37,7 +39,7 @@ func RunDaemon(configDir string, args []string) {
 
 func runDaemonStart(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
-	running, pid := daemon.IsRunning(pidPath)
+	running, pid := pidfile.IsRunning(pidPath)
 	if running {
 		fmt.Println(i18n.T("cli.daemon.already_running", map[string]any{"PID": pid}))
 		return
@@ -59,7 +61,7 @@ func runDaemonStop(configDir string, args []string) {
 	}
 
 	pidPath := daemon.PIDFilePath(configDir)
-	running, _ := daemon.IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
@@ -89,13 +91,13 @@ func runDaemonStop(configDir string, args []string) {
 
 func runDaemonKill(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
-	running, pid := daemon.IsRunning(pidPath)
+	running, pid := pidfile.IsRunning(pidPath)
 	if !running {
 		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
 	}
 
-	if err := daemon.KillProcess(pidPath); err != nil {
+	if err := pidfile.KillProcess(pidPath); err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.kill_failed", map[string]any{"Error": err}))
 	}
 
@@ -109,7 +111,7 @@ func runDaemonKill(configDir string) {
 
 func runDaemonStatus(configDir string) {
 	pidPath := daemon.PIDFilePath(configDir)
-	running, _ := daemon.IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		fmt.Println(i18n.T("cli.daemon.not_running"))
 		return
@@ -148,7 +150,7 @@ func RunDaemonMode(configDir string) {
 	}
 	defer func() { _ = logFile.Close() }()
 
-	d, err := daemon.New(configDir, cli.Version)
+	d, err := daemon.New(configDir, version.Version)
 	if err != nil {
 		slog.Error("failed to create daemon", "error", err)
 		cli.ExitFunc(1)
