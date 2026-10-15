@@ -93,7 +93,7 @@ func BaseLayout(p LayoutProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><title>MolePort</title><link rel=\"stylesheet\" href=\"/static/dist/css/app.css\"><script src=\"/static/dist/js/htmx.min.js\"></script><script type=\"module\" src=\"/static/dist/js/app.js\"></script></head><body class=\"bg-mp-bg text-mp-fg\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><meta name=\"htmx-config\" content='{\"includeIndicatorStyles\":false,\"allowEval\":false}'><title>MolePort</title><link rel=\"stylesheet\" href=\"/static/dist/css/app.css\"><script src=\"/static/dist/js/htmx.min.js\"></script><script type=\"module\" src=\"/static/dist/js/app.js\"></script></head><body class=\"bg-mp-bg text-mp-fg\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
