@@ -57,6 +57,9 @@ func TestRouter_Index_BaseLayout(t *testing.T) {
 		"<!doctype html>",
 		"<head>",
 		`<meta name="mp-token" content="` + testToken + `">`,
+		// CSP（style-src 'self'、unsafe-eval なし）と衝突しないよう htmx のインライン style と eval を無効化する。
+		`"includeIndicatorStyles":false`,
+		`"allowEval":false`,
 		`href="/static/dist/css/app.css"`,
 		`src="/static/dist/js/htmx.min.js"`,
 		`<script type="module" src="/static/dist/js/app.js">`,

@@ -428,6 +428,8 @@ TUI のテーマ（`tui.theme`）は独立して保持する。GUI のテーマ�
 
 トークンの扱い: `crypto/rand` 32 バイトを起動時に生成し、`GET /` の `<meta name="mp-token">` に埋め込む。`POST` / `DELETE` はヘッダー `X-MolePort-Token` を `subtle.ConstantTimeCompare` で照合し、不一致は `403`。
 
+CSP との両立: htmx が注入するインライン `<style>`（インジケーター用）と `eval` は CSP（`style-src 'self'`、`unsafe-eval` なし）に違反するため、`<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>` で無効化する。
+
 ## ビルドと配布
 
 ### ビルドタグとコマンド
