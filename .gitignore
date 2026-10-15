@@ -1,7 +1,12 @@
 # Build output
 bin/
-dist/
+/dist/
 moleport
+
+# GUI フロントエンド
+node_modules/
+internal/gui/web/static/dist/*
+!internal/gui/web/static/dist/.gitkeep
 
 # IDE
 .idea/
@@ -21,3 +26,11 @@ Thumbs.db
 # Test
 coverage.out
 coverage_review.out
+
+# Wails のビルド成果物 (Windows インストーラー定義 build/windows/installer/project.nsi のみ追跡する)
+cmd/moleport-gui/build/*
+!cmd/moleport-gui/build/windows/
+cmd/moleport-gui/build/windows/*
+!cmd/moleport-gui/build/windows/installer/
+cmd/moleport-gui/build/windows/installer/*
+!cmd/moleport-gui/build/windows/installer/project.nsi

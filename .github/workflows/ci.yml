@@ -62,6 +62,115 @@ jobs:
       - name: Run tests
         run: go test -race -count=1 ./...
 
+  gui-assets:
+    name: GUI Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
+      - name: templ generate (生成物がコミット済みと一致すること)
+        run: |
+          templ generate
+          git diff --exit-code -- '*_templ.go'
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build assets
+        run: npm run build
+
+  # -tags gui (CGO + OS ネイティブ WebView) のビルド確認。通常ジョブ (gui タグなし・CGO なし) とは分離する (NFR-41)。
+  # Linux は libwebkit2gtk-4.1-dev が必要なため -tags gui,webkit2_41 を付ける。
+  gui-build:
+    name: GUI Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            tags: gui,webkit2_41
+          - os: macos-latest
+            tags: gui
+          - os: windows-latest
+            tags: gui
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install templ and wails
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Build assets
+        run: |
+          templ generate
+          npm ci
+          npm run build
+
+      - name: wails build
+        if: runner.os != 'Windows'
+        working-directory: cmd/moleport-gui
+        run: wails build -tags "${{ matrix.tags }}" -skipbindings -s -nosyncgomod -nopackage
+
+      # Windows は NSIS インストーラーの生成まで検証する (リリースは作らない。release.yml の gui-windows と同じ手順)。
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y --no-progress
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+
+      - name: Check makensis
+        if: runner.os == 'Windows'
+        run: makensis -VERSION
+
+      - name: wails build with NSIS installer
+        if: runner.os == 'Windows'
+        working-directory: cmd/moleport-gui
+        run: wails build -platform windows/amd64 -tags "${{ matrix.tags }}" -skipbindings -s -nosyncgomod -nsis -installscope user
+
+      - name: Verify installer
+        if: runner.os == 'Windows'
+        run: |
+          installer=cmd/moleport-gui/build/bin/moleport-gui-amd64-installer.exe
+          [ -f "$installer" ] || { echo "installer was not built: $installer"; exit 1; }
+          size=$(wc -c < "$installer")
+          echo "installer size: $size bytes"
+          [ "$size" -gt 1000000 ] || { echo "installer is unexpectedly small"; exit 1; }
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -1,0 +1,24 @@
+package organisms
+
+import (
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/molecules"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// HostPanel は #hosts-panel の内容。ready でない間は一覧を描画しない（アクションボタンも出ない）。
+// 0 件は案内文を表示する。
+templ HostPanel(hosts []service.HostView, ready bool) {
+	<h2 class="mp-panel-title">{ i18n.T("gui.dashboard.hosts.title") }</h2>
+	if ready {
+		if len(hosts) == 0 {
+			<p class="mp-empty">{ i18n.T("gui.dashboard.hosts.empty") }</p>
+		} else {
+			<ul class="mp-list">
+				for _, h := range hosts {
+					@molecules.HostRow(h)
+				}
+			</ul>
+		}
+	}
+}

@@ -4,9 +4,11 @@ APP_NAME := moleport
 BUILD_DIR := bin
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS := -trimpath
-LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/version.Version=$(VERSION)
+# GUI ビルドタグ。Linux で libwebkit2gtk-4.1 を使う場合は make gui-build GUI_TAGS=gui,webkit2_41
+GUI_TAGS ?= gui
 
-.PHONY: help build run clean test test-race vet fmt lint linterly install update setup-tools
+.PHONY: help build run clean test test-race vet fmt lint linterly install update setup-tools gui-assets gui-dev gui-build
 
 help: ## ヘルプを表示
 	@echo ""
@@ -42,9 +44,24 @@ lint: ## golangci-lint を実行
 linterly: ## linterly でファイル行数チェック
 	linterly check .
 
+gui-assets: ## GUI アセットを生成 (templ generate + npm run build)
+	templ generate
+	@test -d node_modules || npm ci
+	npm run build
+
+gui-dev: ## GUI 開発モード (templ watch + アセット watch + wails dev -tags gui -skipbindings。wails.json は cmd/moleport-gui)
+	@trap 'kill 0' EXIT; \
+	templ generate --watch & \
+	npm run watch & \
+	cd cmd/moleport-gui && wails dev -tags gui -skipbindings
+
+gui-build: ## GUI をビルド (wails build -tags gui。GUI_TAGS で変更可。frontend:build が gui-assets を実行。OS ネイティブ環境が必要)
+	cd cmd/moleport-gui && wails build -tags "$(GUI_TAGS)" -skipbindings -ldflags "$(LDFLAGS)"
+
 setup-tools: ## 開発ツールをインストール
 	go install github.com/ousiassllc/linterly/cmd/linterly@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/a-h/templ/cmd/templ@v0.3.1020
 
 clean: ## ビルド成果物を削除
 	rm -rf $(BUILD_DIR)

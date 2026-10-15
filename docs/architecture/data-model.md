@@ -3,8 +3,8 @@
 ## 概要
 
 MolePort はデータベースを使用せず、YAML ファイルで設定と状態を永続化する。
-デーモンとクライアント間は JSON-RPC 2.0 でメッセージを交換する。
-本ドキュメントでは、永続化ファイルの構造、アプリケーション内部のデータモデル、および IPC メッセージ型を定義する。
+デーモンとクライアント間は JSON-RPC 2.0 でメッセージを交換する。GUI（`moleport-gui`）は Core を内蔵するため IPC を経由せず、GUI 専用のビューモデルを使って Templ に値を渡す。
+本ドキュメントでは、永続化ファイルの構造、アプリケーション内部のデータモデル、IPC メッセージ型、および GUI ビューモデルを定義する。
 
 ## ファイル構成
 
@@ -30,9 +30,14 @@ graph LR
     Daemon --> |書き込み| Log
     Daemon --> |管理| PID
     Daemon --> |Listen| Sock
-
     CLI["CLI"] --> |接続| Sock
     TUI["TUI"] --> |接続| Sock
+    GUIApp["moleport-gui<br/>(内蔵デーモン)"] --> |"管理（headless デーモンと排他）"| PID
+    GUIApp --> |Listen| Sock
+    Config --> |読み書き| GUIApp
+    State --> |読み書き| GUIApp
+    GUIApp --> |書き込み| Log
+    SSHConfig --> |読み取り専用| GUIApp
 ```
 
 ## 設定ファイル（config.yaml）
@@ -120,6 +125,13 @@ tui:
   theme:
     base: "dark"           # "dark" | "light"
     accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+
+# GUI 設定（moleport-gui のみ参照。TUI とは独立）
+gui:
+  theme:
+    base: "system"         # "system" | "dark" | "light"
+    accent: "violet"       # "violet" | "blue" | "green" | "cyan" | "orange"
+  tray_notice_shown: false # 「トレイで稼働しています」通知を表示済みか
 ```
 
 ### Go 型定義
@@ -135,6 +147,7 @@ type Config struct {
     Language      string                    `yaml:"language"`
     UpdateCheck   UpdateCheckConfig         `yaml:"update_check"`
     TUI           TUIConfig                 `yaml:"tui"`
+    GUI           guiconfig.Config          `yaml:"gui"` // internal/core/guiconfig
 }
 
 type UpdateCheckConfig struct {
@@ -144,6 +157,17 @@ type UpdateCheckConfig struct {
 
 type TUIConfig struct {
     Theme ThemeConfig `yaml:"theme"`
+}
+
+// package guiconfig（internal/core/guiconfig。core のディレクトリ行数制限のためサブパッケージ）
+type Config struct {
+    Theme           Theme `yaml:"theme"`
+    TrayNoticeShown bool  `yaml:"tray_notice_shown"`
+}
+
+type Theme struct {
+    Base   string `yaml:"base"`   // "system" | "dark" | "light"（デフォルト: "system"）
+    Accent string `yaml:"accent"` // "violet" | "blue" | "green" | "cyan" | "orange"（デフォルト: "violet"）
 }
 
 type ThemeConfig struct {
@@ -242,7 +266,8 @@ type State struct {
 - **パス**: `~/.config/moleport/moleport.pid`
 - **内容**: PID 番号のみ（例: `12345`）
 - **パーミッション**: `0600`
-- **ライフサイクル**: デーモン起動時に作成、停止時に削除
+- **ライフサイクル**: デーモン起動時に作成、停止時に削除。headless デーモンと GUI 内蔵デーモンで共有する（同時に保持できるのはどちらか一方）
+- **排他ロック**: Unix は `flock`、Windows は `LockFileEx`。引き継ぎ判定（UC-26）はロック保持の有無で行う
 
 ## 内部データモデル
 
@@ -923,6 +948,115 @@ type CredentialResponseResult struct {
 | 1008 | CredentialTimeout | クレデンシャル応答タイムアウト（30秒） |
 | 1009 | CredentialCancelled | ユーザーがクレデンシャル入力をキャンセル |
 
+## GUI ビューモデル
+
+`internal/gui/service` が Templ に渡す表示用の構造体。Core の型（`SSHHost`、`ForwardSession` 等）から `DashboardService` が組み立てる。永続化しない。表示用の整形済み文字列（稼働時間、データ量、ローカライズ済みラベル）とアクション可否を持ち、Templ 側に条件判断を持ち込まない。
+
+```go
+// アクション可否（HATEOAS: true のものだけを Templ がレンダリングする）
+type HostActions struct {
+    CanConnect    bool // Disconnected / Error / PendingAuth
+    CanDisconnect bool // Connected / Reconnecting
+    CanAddForward bool // 常に true
+}
+
+type ForwardActions struct {
+    CanStart  bool // Stopped / Error
+    CanStop   bool // Active / Reconnecting（Starting を含む）
+    CanDelete bool // 常に true（確認ダイアログ経由）
+}
+
+type HostView struct {
+    Name        string
+    Address     string // "user@host:port"
+    State       string // "connected" | "connecting" | "disconnected" | "reconnecting" | "pending_auth" | "error"
+    StateLabel  string // ローカライズ済み
+    ActiveCount int
+    Actions     HostActions
+}
+
+type ForwardView struct {
+    Name        string
+    Host        string
+    Type        string // "local" | "remote" | "dynamic"
+    Route       string // ":8080 → localhost:80" 等
+    Status      string // "starting" | "active" | "stopped" | "error" | "reconnecting"
+    StatusLabel string
+    Uptime      string // "2h 15m"（停止中は空）
+    Sent        string // "1.2 MB"
+    Received    string
+    Reconnects  int
+    LastError   string
+    Actions     ForwardActions
+}
+
+type StatusView struct {
+    Hosts, ConnectedHosts, Forwards, ActiveForwards int
+}
+
+type HeaderView struct {
+    Version         string
+    PID             int
+    UpdateAvailable bool
+    LatestVersion   string
+    ReleaseURL      string
+}
+
+type ForwardFormInput struct { // フォームの入力値（再描画用に文字列のまま保持）
+    Host, Type, Name, LocalPort, RemoteHost, RemotePort, RemoteBindAddr string
+    AutoConnect bool
+}
+
+type FormErrors map[string]string // フィールド名 → ローカライズ済みエラーメッセージ（"_form" は全体エラー）
+
+type CredentialView struct {
+    RequestID string
+    Host      string
+    Type      string // core.CredentialType の文字列
+    Prompt    string
+    Prompts   []CredentialPromptView // keyboard-interactive 用
+    Remaining int                    // 待機中の他要求数
+}
+
+type CredentialPromptView struct {
+    Label string
+    Echo  bool
+}
+
+type SettingsView struct {
+    Language           string // "ja" | "en"
+    ThemeBase          string
+    ThemeAccent        string
+    UpdateCheckEnabled bool
+}
+
+// トースト（非同期通知）。NotificationQueue は最大 50 件の FIFO（超過時は古いものから破棄）
+type ToastView struct {
+    Kind    string // "info" | "success" | "error"
+    Message string // ローカライズ済み。クレデンシャル・内部パスを含めない
+}
+```
+
+- `State` / `Status` / `Type` の文字列値は CSS クラス・`data-` 属性のキーとして使用する（ローカライズしない）。表示ラベルは `i18n.T` で解決済みの `*Label` を使う
+- `HostView.ActiveCount` は `GetAllSessions()` の `Active` セッションをホスト別に数えた値（`SSHHost.ActiveForwardCount` は使わない）。`ConnectionState.Connecting` は `connecting` として表示し、操作ボタンは出さない（`CanConnect` / `CanDisconnect` とも `false`）
+- `ForwardView.Route` は `ForwardRule` と `ForwardType` から組み立てる（local: `:LPORT → RHOST:RPORT`、remote: `RBIND:RPORT ← :LPORT`、dynamic: `SOCKS :LPORT`）
+- GUI からの接続・転送開始は非同期のため、Service が進行中の操作を `Activity` に記録し、Core がまだ遷移していない間も `connecting` / `starting` として表示する。転送開始の失敗（Core ではセッションが `stopped` に戻る）は `error` と `LastError`（ポート競合は空きポート候補付き）として、停止・削除・再開始まで表示する
+
+### GUI トピック
+
+EventBridge が Wails Events で送るトピック名（文字列）。ペイロードは `{"topics": [...]}` のみ。
+
+| トピック | 対応フラグメント |
+|---------|----------------|
+| `hosts` | `/fragments/hosts` |
+| `forwards` | `/fragments/forwards` |
+| `status` | `/fragments/status`、`/fragments/banner` |
+| `header` | `/fragments/header` |
+| `credential` | `/fragments/credential` |
+| `toast` | `/fragments/toasts`（`NotificationQueue` の取り出し） |
+| `settings` | `/fragments/settings`（開いている場合のみ） |
+| `all` | 全フラグメント（表示復帰時・`ready` 遷移時・言語変更時） |
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -939,3 +1073,8 @@ type CredentialResponseResult struct {
 | 2.7 | 2026-03-01 | Config/ConfigGetResult/ConfigUpdateParams に Language フィールド追加、DaemonShutdownParams に Purge フィールド追加、PromptInfo→PromptData 型名統一、CredentialRequestNotification.Type を string 型に修正、forward.stopAll 型定義追加 | ドキュメント乖離修正 (#40) |
 | 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |
 | 3.1 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
+| 3.2 | 2026-10-15 | GUI 対応: `config.yaml` に `gui:` セクション（`GUIConfig` / `GUIThemeConfig`）を追加、PID ファイルの共有・排他ロック記述を更新、GUI ビューモデル・トピックを追加 | #84 Wails 版 GUI アプリケーション |
+| 3.3 | 2026-10-15 | ファイル構成図: GUI 内蔵デーモンと Sock / config / state / log / SSH config の関係を追加 | レビュー指摘対応 #84 |
+| 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |
+| 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
+| 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |

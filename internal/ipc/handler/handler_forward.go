@@ -153,11 +153,9 @@ func (h *Handler) forwardStopAll() (any, *protocol.RPCError) {
 }
 
 // saveForwardRulesToConfig はフォワードルールを設定ファイルに保存する。
+// 保存に失敗しても IPC 応答は成功として返すため、警告ログのみ出力する。
 func (h *Handler) saveForwardRulesToConfig() {
-	rules := h.fwdMgr.GetRules()
-	if err := h.cfgMgr.UpdateConfig(func(c *core.Config) {
-		c.Forwards = rules
-	}); err != nil {
+	if err := core.PersistForwardRules(h.cfgMgr, h.fwdMgr); err != nil {
 		slog.Warn("failed to save forward rules to config", "error", err)
 	}
 }

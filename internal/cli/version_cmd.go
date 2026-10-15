@@ -6,20 +6,19 @@ import (
 	"runtime"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
+	"github.com/ousiassllc/moleport/internal/version"
 )
-
-// Version はビルド時に -ldflags で設定されるバージョン情報。
-var Version = "dev"
 
 // RunVersion は version サブコマンドを実行する。
 func RunVersion(configDir string, args []string) {
-	fmt.Printf("MolePort %s (%s, %s/%s)\n", Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("MolePort %s (%s, %s/%s)\n", version.Version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	// デーモンが稼働中ならバージョンチェックを実行
 	pidPath := daemon.PIDFilePath(configDir)
-	running, _ := daemon.IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		return
 	}

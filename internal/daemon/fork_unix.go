@@ -1,0 +1,63 @@
+//go:build !windows
+
+package daemon
+
+import (
+	"fmt"
+	"net"
+	"os"
+	"syscall"
+	"time"
+)
+
+const (
+	forkStartupTimeout = 3 * time.Second
+	forkDialTimeout    = 100 * time.Millisecond
+	forkPollInterval   = 50 * time.Millisecond
+)
+
+// StartDaemonProcess は現在のバイナリをデーモンプロセスとしてフォークする。
+// 起動したプロセスの PID を返す。
+func StartDaemonProcess(configDir string) (int, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return 0, fmt.Errorf("get executable: %w", err)
+	}
+
+	args := []string{executable, "--daemon-mode", "--config-dir", configDir}
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		return 0, fmt.Errorf("open devnull: %w", err)
+	}
+	defer func() { _ = devNull.Close() }()
+
+	attr := &os.ProcAttr{
+		Dir:   "/",
+		Env:   os.Environ(),
+		Files: []*os.File{devNull, devNull, devNull},
+		Sys:   &syscall.SysProcAttr{Setsid: true},
+	}
+
+	proc, err := os.StartProcess(executable, args, attr)
+	if err != nil {
+		return 0, fmt.Errorf("start process: %w", err)
+	}
+
+	pid := proc.Pid
+	_ = proc.Release()
+
+	// デーモンの起動完了を待機（ソケット接続を試行）
+	socketPath := SocketPath(configDir)
+	deadline := time.Now().Add(forkStartupTimeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("unix", socketPath, forkDialTimeout)
+		if err == nil {
+			_ = conn.Close()
+			return pid, nil
+		}
+		time.Sleep(forkPollInterval)
+	}
+
+	return pid, nil // ソケット未準備でも PID を返す
+}

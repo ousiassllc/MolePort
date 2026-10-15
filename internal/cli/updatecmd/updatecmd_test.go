@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/core/update"
+	"github.com/ousiassllc/moleport/internal/version"
 )
 
 type exitCalled struct{ code int }
@@ -91,12 +92,12 @@ func stubVersionChecker(t *testing.T, serverURL string) {
 	}
 }
 
-// stubVersion は cli.Version を差し替えて t.Cleanup で復元するヘルパー。
+// stubVersion は version.Version を差し替えて t.Cleanup で復元するヘルパー。
 func stubVersion(t *testing.T, v string) {
 	t.Helper()
-	orig := cli.Version
-	t.Cleanup(func() { cli.Version = orig })
-	cli.Version = v
+	orig := version.Version
+	t.Cleanup(func() { version.Version = orig })
+	version.Version = v
 }
 
 func TestRunUpdate_DevBuild(t *testing.T) {

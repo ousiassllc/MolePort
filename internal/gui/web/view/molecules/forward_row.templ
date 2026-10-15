@@ -1,0 +1,69 @@
+package molecules
+
+import (
+	"net/url"
+	"strconv"
+
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// ForwardRow は転送 1 行。稼働時間・送受信量・再接続回数・エラー詳細を表示し、
+// Actions のうち実行可能なものだけを描画する（HATEOAS）。
+templ ForwardRow(v service.ForwardView) {
+	<li id={ atoms.ElementID("fwd-", v.Name) } class="mp-row" data-name={ v.Name } data-type={ v.Type }>
+		<span class="mp-row-title">{ v.Name }</span>
+		<span class="mp-row-sub">{ v.Host }</span>
+		@atoms.PortLabel(v.Route)
+		@atoms.StatusBadge(v.Status, v.StatusLabel)
+		@atoms.Duration(i18n.T("gui.dashboard.forwards.uptime"), v.Uptime)
+		@atoms.DataSize("sent", i18n.T("gui.dashboard.forwards.sent"), v.Sent)
+		@atoms.DataSize("received", i18n.T("gui.dashboard.forwards.received"), v.Received)
+		if v.Reconnects > 0 {
+			<span class="mp-row-sub">{ i18n.T("gui.dashboard.forwards.reconnects") }: { strconv.Itoa(v.Reconnects) }</span>
+		}
+		<span class="mp-row-actions">
+			if v.Actions.CanStart {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.forwards.start"),
+					Variant: atoms.ButtonPrimary,
+					Attrs: templ.Attributes{
+						"id":              atoms.ElementID("fwd-", v.Name) + "-start",
+						"hx-post":         "/actions/forwards/" + url.PathEscape(v.Name) + "/start",
+						"hx-target":       "#forwards-panel",
+						"hx-swap":         "innerHTML",
+						"hx-disabled-elt": "this",
+					},
+				})
+			}
+			if v.Actions.CanStop {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.forwards.stop"),
+					Variant: atoms.ButtonSecondary,
+					Attrs: templ.Attributes{
+						"id":              atoms.ElementID("fwd-", v.Name) + "-stop",
+						"hx-post":         "/actions/forwards/" + url.PathEscape(v.Name) + "/stop",
+						"hx-target":       "#forwards-panel",
+						"hx-swap":         "innerHTML",
+						"hx-disabled-elt": "this",
+					},
+				})
+			}
+			if v.Actions.CanDelete {
+				@atoms.Button(atoms.ButtonProps{
+					Label:   i18n.T("gui.dashboard.forwards.delete"),
+					Variant: atoms.ButtonDanger,
+					Attrs: templ.Attributes{
+						"id":        atoms.ElementID("fwd-", v.Name) + "-delete",
+						"hx-get":    "/fragments/forward-delete?name=" + url.QueryEscape(v.Name),
+						"hx-target": "#modal-root",
+					},
+				})
+			}
+		</span>
+		if v.LastError != "" {
+			<span class="mp-row-error" role="alert">{ i18n.T("gui.dashboard.forwards.last_error") }: { v.LastError }</span>
+		}
+	</li>
+}

@@ -1,0 +1,15 @@
+package organisms
+
+import (
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+)
+
+// Toasts は /fragments/toasts の本文。取り出した通知を #toast-stack の末尾へ OOB で追記する。
+templ Toasts(toasts []service.ToastView) {
+	<div hx-swap-oob="beforeend:#toast-stack">
+		for _, t := range toasts {
+			@atoms.Toast(t.Kind, t.Message)
+		}
+	</div>
+}

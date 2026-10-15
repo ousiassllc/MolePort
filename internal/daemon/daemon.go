@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core/forward"
 	"github.com/ousiassllc/moleport/internal/core/ssh"
 	"github.com/ousiassllc/moleport/internal/core/update"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/infra"
 	"github.com/ousiassllc/moleport/internal/infra/sshconfig"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
@@ -70,7 +71,7 @@ type Daemon struct {
 	broker  *ipc.EventBroker
 	handler *ipchandler.Handler
 	server  *ipc.IPCServer
-	pidFile *PIDFile
+	pidFile *pidfile.PIDFile
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -124,7 +125,7 @@ func New(configDir string, version string) (*Daemon, error) {
 		}
 	}
 
-	pidFile := NewPIDFile(PIDFilePath(configDir))
+	pidFile := pidfile.NewPIDFile(PIDFilePath(configDir))
 	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, cfg.UpdateCheck.Interval.Duration)
 
 	// Daemon を先に生成し、IPC コンポーネントに渡す

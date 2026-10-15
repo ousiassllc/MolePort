@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/ousiassllc/moleport/internal/version"
 )
 
 func TestRunVersion_BasicOutput(t *testing.T) {
@@ -19,8 +21,8 @@ func TestRunVersion_BasicOutput(t *testing.T) {
 	if !strings.Contains(output, "MolePort") {
 		t.Errorf("output should contain 'MolePort', got %q", output)
 	}
-	if !strings.Contains(output, Version) {
-		t.Errorf("output should contain version %q, got %q", Version, output)
+	if !strings.Contains(output, version.Version) {
+		t.Errorf("output should contain version %q, got %q", version.Version, output)
 	}
 	if !strings.Contains(output, runtime.Version()) {
 		t.Errorf("output should contain Go version %q, got %q", runtime.Version(), output)

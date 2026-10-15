@@ -1,0 +1,8 @@
+package atoms
+
+// Duration は稼働時間（整形済み文字列）をラベル付きで表示する。空文字なら何も描画しない。
+templ Duration(label string, value string) {
+	if value != "" {
+		<span class="mp-duration"><span class="mp-label">{ label }</span> { value }</span>
+	}
+}

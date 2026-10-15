@@ -19,11 +19,13 @@ graph LR
 - **Auto-reconnect** --- Automatic retry with exponential backoff
 - **Session restore** --- Automatically restores previous active forwarding on startup
 - **Daemon+client** --- Background daemon manages SSH connections; CLI/TUI operates as a client
+- **Desktop GUI** --- `moleport-gui` (Linux / macOS / Windows) with system tray residency and an embedded daemon
 
 ## Requirements
 
 - Go 1.25+
-- Linux / macOS
+- Linux / macOS (CLI / TUI)
+- Linux / macOS / Windows (GUI, see [Desktop GUI](#desktop-gui))
 
 ## Installation
 
@@ -44,6 +46,49 @@ To build only (outputs to `./bin/moleport`):
 
 ```bash
 make build
+```
+
+## Desktop GUI
+
+`moleport-gui` is a desktop app that embeds the daemon and shows the dashboard in a native window. It keeps running in the system tray when the window is closed. It is distributed as separate assets on the [GitHub Releases](https://github.com/ousiassllc/MolePort/releases) page (the `moleport` CLI/TUI assets are unchanged).
+
+| Asset | Platform |
+|-------|----------|
+| `moleport-gui_<version>_linux_amd64.tar.gz` / `moleport-gui_<version>_linux_arm64.tar.gz` | Linux x64 / arm64 |
+| `moleport-gui_<version>_darwin_universal.zip` | macOS 11+ (Apple Silicon / Intel) |
+| `moleport-gui_<version>_windows_amd64_installer.exe` | Windows 10 (1803+) / 11, x64 (installer) |
+| `checksums_gui.txt` | SHA-256 checksums of the assets above |
+
+Verify a downloaded asset with `sha256sum -c --ignore-missing checksums_gui.txt` (Linux), `shasum -a 256 -c --ignore-missing checksums_gui.txt` (macOS) or `Get-FileHash -Algorithm SHA256 <file>` (Windows PowerShell; compare with the value in `checksums_gui.txt`). Then extract the archive and run `moleport-gui` (Linux) or `MolePort.app` (macOS). On Windows, run the installer (below).
+
+### Windows installer
+
+Run `moleport-gui_<version>_windows_amd64_installer.exe`. It is a **per-user install** and needs no administrator rights.
+
+- Install location: `%LOCALAPPDATA%\Programs\MolePort`; the uninstall entry is registered under the current user (Settings → Apps), and Start menu / desktop shortcuts are created for the current user.
+- Upgrade: run the newer installer; it overwrites the existing installation in place. If `moleport-gui.exe` is running (including in the tray), the installer asks you to quit it first.
+- Uninstall: removes the installed files, shortcuts and the WebView2 data of the app. Your settings under `%USERPROFILE%\.config\moleport` are kept.
+- The WebView2 runtime is installed by the installer if it is missing.
+- Breaking change: Windows releases no longer ship a `.zip`; use the installer instead.
+- Status: installing and upgrading on a real Windows machine is not yet verified (pending real-machine verification).
+
+### Linux requirements
+
+- GTK 3 and WebKitGTK 4.1 (`libgtk-3-0` and `libwebkit2gtk-4.1-0`; e.g. `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0`)
+- **System tray**: a StatusNotifierItem (D-Bus) host is required. KDE Plasma, XFCE and similar desktops support it out of the box; GNOME needs the [AppIndicator / KStatusNotifierItem extension](https://extensions.gnome.org/extension/615/appindicator-support/). Without a tray host, closing the window asks for quit confirmation instead of hiding to the tray.
+
+### Unsigned builds (warnings on first launch)
+
+The initial releases are not code-signed or notarized, so your OS may show a warning.
+
+- **macOS** --- "MolePort.app cannot be opened because the developer cannot be verified": right-click (or Control-click) `MolePort.app` in Finder, choose **Open**, then click **Open** in the dialog. This is needed only the first time. If the app is still blocked, run `xattr -dr com.apple.quarantine MolePort.app`.
+- **Windows** --- SmartScreen shows "Windows protected your PC" when you run the installer: click **More info**, then **Run anyway**.
+
+### Building the GUI from source
+
+```bash
+make gui-build                           # Requires Wails CLI v2 and the native WebView environment
+make gui-build GUI_TAGS=gui,webkit2_41   # Linux with libwebkit2gtk-4.1-dev
 ```
 
 ## Quick Start
@@ -188,6 +233,8 @@ make vet         # Run go vet
 make fmt         # Run go fmt
 make lint        # Run golangci-lint
 make linterly    # Run linterly (file line count check)
+make gui-assets  # Generate GUI assets (templ generate + npm run build)
+make gui-build   # Build the GUI (-tags gui; requires Wails CLI and a native WebView environment)
 make setup-tools # Install development tools (linterly, golangci-lint)
 make clean       # Remove build artifacts
 ```

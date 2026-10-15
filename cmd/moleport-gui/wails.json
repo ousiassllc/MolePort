@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "moleport-gui",
+  "outputfilename": "moleport-gui",
+  "frontend:dir": ".",
+  "frontend:install": "",
+  "wailsjsdir": "build/wailsjs",
+  "frontend:build": "make -C ../.. gui-assets",
+  "info": {
+    "productName": "MolePort",
+    "companyName": "ousiassllc"
+  }
+}

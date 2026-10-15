@@ -6,9 +6,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/tui/app"
+	"github.com/ousiassllc/moleport/internal/version"
 )
 
 // daemonManagerAdapter は daemon パッケージの関数を app.DaemonManager に適合させる。
@@ -26,7 +28,7 @@ func (daemonManagerAdapter) EnsureDaemonWithRetry(configDir string, maxWait time
 func RunTUI(configDir string, args []string) {
 	// デーモンが未起動なら自動起動
 	pidPath := daemon.PIDFilePath(configDir)
-	running, _ := daemon.IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		pid, err := daemon.StartDaemonProcess(configDir)
 		if err != nil {
@@ -43,7 +45,7 @@ func RunTUI(configDir string, args []string) {
 	defer func() { _ = client.Close() }()
 
 	// Bubble Tea プログラム起動
-	model := app.NewMainModel(client, Version, configDir)
+	model := app.NewMainModel(client, version.Version, configDir)
 	model.SetDaemonManager(daemonManagerAdapter{})
 	p := tea.NewProgram(model, tea.WithAltScreen())
 
