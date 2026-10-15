@@ -84,6 +84,7 @@ gui:
     forward_error: "転送「{{.Name}}」でエラー: {{.Error}}"
     takeover: "稼働中のデーモン (PID: {{.PID}}) を引き継ぎました。"
     takeover_no_restore: "稼働中のデーモン (PID: {{.PID}}) を引き継ぎました。session.auto_restore が無効のため、停止時の転送は復元されません。"
+    update_available: "新しいバージョン {{.Version}} が利用可能です。"
     dismiss: "閉じる"
   forward:
     form:

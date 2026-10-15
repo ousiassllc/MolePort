@@ -42,7 +42,7 @@
 | `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'`（NFR-35。R-4 の結果に応じて最小限の例外を追加） |
 | `X-Content-Type-Options` | `nosniff` |
 | `Cache-Control` | HTML は `no-store`、`/static/*` は `no-cache` |
-| `Content-Type` | HTML は `text/html; charset=utf-8` |
+| `Content-Type` | HTML は `text/html; charset=utf-8`。`/static/*` は拡張子ごとの固定表（`.js` / `.mjs` は `text/javascript; charset=utf-8`、`.css` は `text/css; charset=utf-8`、`.map` / `.json` は `application/json` など）で明示し、OS の MIME 登録（Windows のレジストリ）に依存しない（`nosniff` 下の `<script type="module">` のため） |
 
 ### ステータスコードの方針
 
@@ -76,6 +76,7 @@ HTMX 2 は既定で 4xx/5xx を差し替えない。`app.ts` で `htmx.config.re
 |---------|------|------|------|
 | GET | `/` | ページ | ダッシュボード全体（layout + 全フラグメント） |
 | GET | `/static/{path...}` | 静的 | `app.js`、`htmx.min.js`、`app.css`、アイコン |
+| GET | `/fragments/banner` | フラグメント | 起動状態バナー（`ready` のときは空） |
 | GET | `/fragments/header` | フラグメント | ヘッダー（バージョン・稼働状態・更新バッジ・設定ボタン） |
 | GET | `/fragments/hosts` | フラグメント | ホストパネル |
 | GET | `/fragments/forwards` | フラグメント | 転送パネル |
@@ -108,7 +109,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 - `<meta name="mp-token" content="{起動ごとのランダムトークン}">`
 - `<script type="module" src="/static/dist/js/app.js">`、`<script src="/static/dist/js/htmx.min.js">`、`<link rel="stylesheet" href="/static/dist/css/app.css">`
 - `#header` / `#hosts-panel` / `#forwards-panel` / `#status-bar` / `#modal-root` / `#credential-root` / `#toast-stack`
-- ライフサイクル状態（`starting` / `ready` / `failed`）に応じたバナー。`ready` でない間はアクションボタンを描画しない
+- ライフサイクル状態（`starting` / `ready` / `failed`）に応じたバナー（`#status-banner-region`。`hx-get="/fragments/banner"` を `mp:all` / `mp:status` で再取得し、`ready` 後に消える）。`ready` でない間はアクションボタンを描画しない
 
 各領域は初期表示でインライン展開し、更新トリガーを持つ。
 
@@ -129,6 +130,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 
 | パス | クエリ | 内容 | 主な HATEOAS 出し分け |
 |------|--------|------|---------------------|
+| `/fragments/banner` | — | `LifecycleState` に応じた起動中 / 失敗バナー | `ready` のときは何も描画しない（空） |
 | `/fragments/header` | — | バージョン、PID、稼働表示、更新バッジ（`update_check` 有効かつ新版あり） | 更新バッジは更新があるときのみ。クリックで `POST /actions/update/open` |
 | `/fragments/hosts` | — | ホスト行（`HostView`）。0 件は案内文 | 接続 / 切断 / 転送追加ボタン（`HostActions`） |
 | `/fragments/forwards` | — | 転送行（`ForwardView`）。0 件は案内と追加ボタン | 開始 / 停止 / 削除ボタン（`ForwardActions`） |

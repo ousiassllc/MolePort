@@ -3,6 +3,7 @@ package bridge
 import (
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -159,6 +160,68 @@ func TestEventBridge_ClosedChannelsEndReceiveLoop(t *testing.T) {
 		close(e.ssh.Events)
 		close(e.fwd.Events)
 		synctest.Wait() // receive ゴルーチンが終了していること（emit ループのみ残る）
+		e.stop()
+	})
+}
+
+func TestEventBridge_NewVersionNotifiesHeaderAndToastOncePerVersion(t *testing.T) {
+	useEnglish(t)
+	synctest.Test(t, func(t *testing.T) {
+		var mu sync.Mutex
+		var cur *core.VersionCheckResult
+		set := func(r *core.VersionCheckResult) {
+			mu.Lock()
+			defer mu.Unlock()
+			cur = r
+		}
+		update := func() (core.VersionCheckResult, bool) {
+			mu.Lock()
+			defer mu.Unlock()
+			if cur == nil {
+				return core.VersionCheckResult{}, false
+			}
+			return *cur, true
+		}
+		e := newBridgeEnvWithUpdate(t, true, update)
+		tick := func() {
+			time.Sleep(reconcileInterval + coalesceWindow)
+			synctest.Wait()
+		}
+
+		tick()
+		if got := e.n.take(); len(got) != 0 {
+			t.Fatalf("新版なしでは通知しない: %v", got)
+		}
+
+		set(&core.VersionCheckResult{LatestVersion: "v1.2.0", UpdateAvailable: true})
+		tick()
+		want := [][]service.Topic{{service.TopicHeader, service.TopicToast}}
+		if got := e.n.take(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("新版検出: Notify = %v, want %v", got, want)
+		}
+		toasts := e.q.Drain()
+		if len(toasts) != 1 || toasts[0].Kind != service.ToastInfo || toasts[0].Message != "A new version v1.2.0 is available." {
+			t.Fatalf("toasts = %+v", toasts)
+		}
+
+		// 同じ版では重複通知しない。
+		tick()
+		if got := e.n.take(); len(got) != 0 {
+			t.Errorf("同じ版で再通知してはならない: %v", got)
+		}
+		if got := e.q.Drain(); len(got) != 0 {
+			t.Errorf("同じ版でトーストを積んではならない: %+v", got)
+		}
+
+		// さらに新しい版が出たら再度通知する。
+		set(&core.VersionCheckResult{LatestVersion: "v1.3.0", UpdateAvailable: true})
+		tick()
+		if got := e.n.take(); !reflect.DeepEqual(got, want) {
+			t.Errorf("次の版: Notify = %v, want %v", got, want)
+		}
+		if got := e.q.Drain(); len(got) != 1 {
+			t.Errorf("次の版のトースト = %+v, want 1 件", got)
+		}
 		e.stop()
 	})
 }

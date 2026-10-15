@@ -19,6 +19,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	trayassets "github.com/ousiassllc/moleport/assets/tray"
+	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/gui/service"
@@ -164,7 +165,9 @@ func (a *app) watchSignals(ctx context.Context) {
 
 // onDaemonReady は内蔵デーモンの起動完了時に EventBridge とトレイの追従を開始する。
 func (a *app) onDaemonReady(ctx context.Context, b service.Backend) {
-	bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
+	bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier, func() (core.VersionCheckResult, bool) {
+		return service.AvailableUpdate(b)
+	}).Start(ctx)
 	// 非表示中は EventBridge が通知を止めるため、トレイは独自に購読して追従する（NFR-33）。
 	go tray.Watch(ctx, b.SSH, b.Forward, tray.ReconcileInterval, a.refreshTray)
 	a.refreshTrayNow()

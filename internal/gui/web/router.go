@@ -36,6 +36,7 @@ func NewRouter(deps Deps) http.Handler {
 	mux := http.NewServeMux()
 	frags := handler.NewFragments(deps.Life, deps.Dashboard, deps.Toasts)
 	mux.HandleFunc("GET /{$}", handler.NewPage(deps.Life, deps.Dashboard, deps.Settings, deps.Theme, deps.Token).Index)
+	mux.HandleFunc("GET /fragments/banner", frags.Banner)
 	mux.HandleFunc("GET /fragments/header", frags.Header)
 	mux.HandleFunc("GET /fragments/hosts", frags.Hosts)
 	mux.HandleFunc("GET /fragments/forwards", frags.Forwards)

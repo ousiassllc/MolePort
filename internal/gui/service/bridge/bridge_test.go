@@ -63,6 +63,11 @@ type bridgeEnv struct {
 // 時間は偽クロックで進み、Sleep した分だけ即座にティッカー・タイマーが発火する。
 func newBridgeEnv(t *testing.T, visible bool, sessions ...core.ForwardSession) *bridgeEnv {
 	t.Helper()
+	return newBridgeEnvWithUpdate(t, visible, nil, sessions...)
+}
+
+func newBridgeEnvWithUpdate(t *testing.T, visible bool, update UpdateSource, sessions ...core.ForwardSession) *bridgeEnv {
+	t.Helper()
 	e := &bridgeEnv{
 		ssh: servicetest.NewSSH(), fwd: servicetest.NewForward(sessions...),
 		n: &batchNotifier{}, q: service.NewNotificationQueue(), vis: &fakeVisibility{},
@@ -70,7 +75,7 @@ func newBridgeEnv(t *testing.T, visible bool, sessions ...core.ForwardSession) *
 	e.vis.visible.Store(visible)
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
-	New(e.ssh, e.fwd, e.n, e.q, e.vis).Start(ctx)
+	New(e.ssh, e.fwd, e.n, e.q, e.vis, update).Start(ctx)
 	t.Cleanup(cancel)
 	return e
 }

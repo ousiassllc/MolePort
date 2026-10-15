@@ -1050,7 +1050,7 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 |---------|----------------|
 | `hosts` | `/fragments/hosts` |
 | `forwards` | `/fragments/forwards` |
-| `status` | `/fragments/status` |
+| `status` | `/fragments/status`、`/fragments/banner` |
 | `header` | `/fragments/header` |
 | `credential` | `/fragments/credential` |
 | `toast` | `/fragments/toasts`（`NotificationQueue` の取り出し） |

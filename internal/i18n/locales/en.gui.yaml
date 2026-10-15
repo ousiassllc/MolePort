@@ -84,6 +84,7 @@ gui:
     forward_error: "Error on forward \"{{.Name}}\": {{.Error}}"
     takeover: "Took over the running daemon (PID: {{.PID}})."
     takeover_no_restore: "Took over the running daemon (PID: {{.PID}}). Forwards saved at shutdown are not restored because session.auto_restore is disabled."
+    update_available: "A new version {{.Version}} is available."
     dismiss: "Dismiss"
   forward:
     form:

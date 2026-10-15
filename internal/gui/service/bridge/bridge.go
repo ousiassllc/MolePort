@@ -24,6 +24,10 @@ const (
 	reconcileInterval = 5 * time.Second        // CLI/TUI による変更の照合（常時）
 )
 
+// UpdateSource は表示してよい新バージョンを返す（ネットワークアクセスしない）。
+// service.AvailableUpdate を Backend で束ねたものを渡す。無効・新版なしなら ok=false。
+type UpdateSource func() (core.VersionCheckResult, bool)
+
 // bridgeTiming は EventBridge の周期。テストで短縮できるよう分離している。
 type bridgeTiming struct {
 	coalesce, live, reconcile time.Duration
@@ -46,6 +50,7 @@ type EventBridge struct {
 	notifier service.Notifier
 	queue    *service.NotificationQueue
 	win      WindowVisibility
+	update   UpdateSource // nil なら新バージョンを検出しない
 	timing   bridgeTiming
 
 	mu      sync.Mutex
@@ -53,14 +58,14 @@ type EventBridge struct {
 	wake    chan struct{} // pending が空から非空になったことを emit ループへ知らせる（容量 1）
 }
 
-// New は EventBridge を返す。Start するまで何も購読しない。
-func New(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility) *EventBridge {
-	return newEventBridge(ssh, fwd, n, q, win, bridgeTiming{coalesceWindow, liveInterval, reconcileInterval})
+// New は EventBridge を返す。Start するまで何も購読しない。update は nil 可（新バージョン通知なし）。
+func New(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility, update UpdateSource) *EventBridge {
+	return newEventBridge(ssh, fwd, n, q, win, update, bridgeTiming{coalesceWindow, liveInterval, reconcileInterval})
 }
 
-func newEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility, t bridgeTiming) *EventBridge {
+func newEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility, update UpdateSource, t bridgeTiming) *EventBridge {
 	return &EventBridge{
-		ssh: ssh, fwd: fwd, notifier: n, queue: q, win: win, timing: t,
+		ssh: ssh, fwd: fwd, notifier: n, queue: q, win: win, update: update, timing: t,
 		pending: make(map[service.Topic]struct{}),
 		wake:    make(chan struct{}, 1),
 	}
@@ -172,6 +177,7 @@ func (e *EventBridge) emit(ctx context.Context, lastSig uint64) {
 	reconcile := time.NewTicker(e.timing.reconcile)
 	defer reconcile.Stop()
 
+	var notifiedVersion string // 通知済みの新バージョン（同じ版でトーストを重複させない）
 	var window *time.Timer
 	var windowC <-chan time.Time // 窓が開いていない間は nil（select で選ばれない）
 	defer func() {
@@ -201,8 +207,30 @@ func (e *EventBridge) emit(ctx context.Context, lastSig uint64) {
 				lastSig = sig
 				e.add(service.TopicForwards, service.TopicHosts, service.TopicStatus)
 			}
+			notifiedVersion = e.checkUpdate(notifiedVersion)
 		}
 	}
+}
+
+// checkUpdate は新バージョンを検出したら header 更新とトースト通知を積み、通知済みの版を返す。
+// 同じ版では何もしない。無効化・新版なしになったら、再び新版が出たとき通知できるよう版を忘れる。
+func (e *EventBridge) checkUpdate(notified string) string {
+	if e.update == nil {
+		return notified
+	}
+	r, ok := e.update()
+	if !ok {
+		return ""
+	}
+	if r.LatestVersion == notified {
+		return notified
+	}
+	e.queue.Push(service.ToastView{
+		Kind:    service.ToastInfo,
+		Message: i18n.T("gui.toast.update_available", map[string]any{"Version": r.LatestVersion}),
+	})
+	e.add(service.TopicHeader, service.TopicToast)
+	return r.LatestVersion
 }
 
 // flush は溜まったトピックを 1 回の Notify にまとめる。非表示中は送らず破棄する

@@ -165,7 +165,8 @@ sequenceDiagram
     Life-->>User: （引き継ぎ時）トースト「デーモンを引き継ぎました」
 ```
 
-- ウィンドウ表示（WebView 読み込み）は内蔵デーモン起動をブロックしない。`GET /` は内蔵デーモンの起動完了まで「起動中」スケルトン画面ではなく、`LifecycleState`（`starting` / `ready` / `failed`）に応じたステータスバナー付きページを返す。`ready` 遷移時に全トピックの更新イベントを送る（NFR-32）
+- ウィンドウ表示（WebView 読み込み）は内蔵デーモン起動をブロックしない。`GET /` は内蔵デーモンの起動完了まで「起動中」スケルトン画面ではなく、`LifecycleState`（`starting` / `ready` / `failed`）に応じたステータスバナー付きページを返す。`ready` 遷移時に全トピックの更新イベントを送る（NFR-32）。起動中に表示されたページのバナーは `#status-banner-region` が `mp:all` / `mp:status` で `GET /fragments/banner` を再取得して `ready` 後に消える
+- 起動中（引き継ぎ後〜内蔵デーモンの `Start` 完了）に終了要求（トレイ・シグナル・ウィンドウ・`OnShutdown`）が来た場合、Lifecycle は `quitting` を先に立て、起動の完了を待ってから `Stop()` を 1 回呼ぶ（`ready` にも EventBridge 開始にもしない）。引き継ぎ中ならデーモンを起動しない。これにより state.yaml 保存・転送停止・PID / ソケット解放が取りこぼされない
 - 内蔵デーモン起動失敗（`failed`）はエラーダイアログ（`runtime.MessageDialog`）を表示してプロセスを終了する
 - `OnStartup` より前に Wails が `SingleInstanceLock` を判定するため、2 つ目のプロセスは引き継ぎ処理を行わない（UC-38）
 
@@ -324,7 +325,7 @@ sequenceDiagram
 | `ForwardEventStarted` / `Stopped` / `Error` / `Reconnecting` / `Restored` | `forwards`、`hosts`（アクティブ転送数）、`status` |
 | （Core はメトリクス更新イベントを発行しない。下記「ティッカー」で代替） | — |
 | 設定変更（言語・テーマ・update_check） | `settings`、`all` |
-| 新バージョン検出 | `header` |
+| 新バージョン検出（照合ティッカーで `VersionChecker.Cached()` の新版を確認。同じ版では 1 回だけ） | `header` |
 | クレデンシャル要求の発生・解決 | `credential` |
 | `SSHEventError` / `ForwardEventError` / 引き継ぎ完了 / 新バージョン検出 | `NotificationQueue` に通知（種別・ローカライズ済みメッセージ）を積み、`toast` |
 
@@ -334,7 +335,7 @@ sequenceDiagram
 | ティッカー | 周期 | 動作する条件 | 送るトピック |
 |-----------|------|-------------|-------------|
 | ライブ | 1 秒 | ウィンドウ表示中かつアクティブ転送 ≥ 1 | `forwards`、`status` |
-| 照合（reconcile） | 5 秒 | 常時（非表示中も） | ルール数・状態のシグネチャ（`GetRules` / `GetAllSessions` の名前+状態の連結ハッシュ）が前回と異なるときのみ `forwards`、`hosts`、`status` を送り、トレイメニューも更新する |
+| 照合（reconcile） | 5 秒 | 常時（非表示中も） | （新バージョン検出）`update_check` 有効かつキャッシュ済みの新版が未通知の版と異なるときのみ `header`、`toast`（ToastInfo をキューに積む）。ルール数・状態のシグネチャ（`GetRules` / `GetAllSessions` の名前+状態の連結ハッシュ）が前回と異なるときのみ `forwards`、`hosts`、`status` を送り、トレイメニューも更新する |
 
 - ウィンドウ非表示中は `EventsEmit` を送らない（NFR-33）。ウィンドウ表示（`OnDomReady` 後の表示・フォーカス復帰）時に `all` を 1 回送る。非表示中の抑止は emit ループが `Visible()`（Shell の `VisibilityNotifier`）を参照して行い、`Notifier.Notify` 自体を呼ばない（コアレスしたトピックは破棄し、復帰時の `all` で再同期する）
 - 照合ティッカーは Core のメモリ上の状態を読むだけでありディスク・ネットワークアクセスを行わない

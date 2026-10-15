@@ -7,7 +7,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
 )
 
-// Fragments はダッシュボードの読み取り専用フラグメント（/fragments/{header,hosts,forwards,status,toasts}）。
+// Fragments はダッシュボードの読み取り専用フラグメント（/fragments/{banner,header,hosts,forwards,status,toasts}）。
 // すべて GET で HX-Request: true が必要（HXRequired ミドルウェアが検査する）。
 type Fragments struct {
 	life   service.LifecycleSource
@@ -18,6 +18,11 @@ type Fragments struct {
 // NewFragments は Fragments を返す。
 func NewFragments(life service.LifecycleSource, dash service.Dashboard, toasts *service.NotificationQueue) *Fragments {
 	return &Fragments{life: life, dash: dash, toasts: toasts}
+}
+
+// Banner は #status-banner-region の内容を返す。ready のときは空（バナーを消す）。
+func (f *Fragments) Banner(w http.ResponseWriter, r *http.Request) {
+	render(w, r, http.StatusOK, organisms.StatusBanner(f.life.State()))
 }
 
 // Header は #header の内容を返す。
