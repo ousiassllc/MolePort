@@ -275,7 +275,7 @@ Templ コンポーネントのインターフェース規約は HALT に従う�
 | 入力 | `src/app.ts`（Wails Events → `htmx.trigger` の橋渡し、トークンヘッダー付与、テーマプレビュー）、`src/css/app.css`、（将来）`src/components/*` |
 | 出力 | `dist/js/app.js`、`dist/js/htmx.min.js`、`dist/css/app.css`（`go:embed all:dist`） |
 | `dist/` の扱い | git 管理しない（`.gitkeep` のみコミット）。`make gui-assets` で生成。`go:embed` が空ディレクトリで失敗しないよう `.gitkeep` を置く。Web 層のテストは `fstest.MapFS` を注入して静的アセット実体に依存しない |
-| Templ | `*_templ.go` はコミットする。CI で `templ generate` 後に差分がないことを検査する（NFR-41） |
+| Templ | `*_templ.go` はコミットする。CI で `templ generate` 後に差分がないことを検査する（NFR-41）。Linterly の行数制限（300 行/ファイル、2000 行/ディレクトリ）に掛かるため、`.linterlyignore` に `*_templ.go` を追加する（既存の `*.pb.go` / `*_generated.go` と同様の自動生成ファイル扱い） |
 | `wails build` | `wails.json` の `frontend:build` に `make gui-assets` 相当を設定。Wails の `frontend` ディレクトリ規約・生成バインディングは使わない（Bind なし）。設定キーは PoC で確認する |
 
 ### JS の責務（`app.ts` の範囲）
@@ -341,6 +341,7 @@ sequenceDiagram
 - 1 秒ごとのフラグメント差し替えでフォーカス・スクロールが失われないよう、操作可能要素（ボタン・入力）には安定した `id` を付与する（HTMX は差し替え前後で同一 `id` の要素へフォーカスを復元する）。モーダル表示中は背景パネルの差し替えのみとし、モーダル内の入力は差し替え対象にしない（`ModalRoot` はライブ更新の対象外）
 - GUI 自身の操作（追加・開始・停止・削除）は、アクションルートのレスポンスに更新後フラグメントを含めて即時反映する（イベント待ちにしない）
 - ペイロードにはトピック名のみ含める。データ・クレデンシャルは含めない（NFR-36）
+- **受信ループの規律**: `Subscribe()` のチャネルはバッファ 16 で、満杯になると Core はイベントを破棄する（`event dropped`）。EventBridge の受信ゴルーチンは非表示中も含め常に全件を即座にデキューし、トピック集合への写像だけを行う。コアレス・非表示中の `EventsEmit` 抑止・フラグメント再生成はすべて受信ループの下流（emit 側）で行い、受信ループでは Wails 呼び出しや HTML 生成をしない。復帰時は `all` で全体を再取得するため、破棄・抑止されたイベントがあっても一覧は最終的に整合する
 
 ## クレデンシャルフロー
 
@@ -470,3 +471,4 @@ Wails v2 とトレイの併用および AssetServer の挙動は公式にサポ�
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
+| 1.1 | 2026-10-15 | `*_templ.go` を `.linterlyignore` に追加する旨、EventBridge 受信ループの規律（常時全件デキュー、emit 側で抑止）を追記 | レビュー指摘対応 #84 |

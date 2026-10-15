@@ -1819,7 +1819,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 |---------------|---------|
 | `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `PIDFile.IsLocked` 追加 |
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
-| `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない |
+| `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
 | `core.Config` | `GUI GUIConfig` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない |
 
@@ -1924,3 +1924,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 5.3 | 2026-03-14 | SetupPanel ウィザードの placeholder 自動入力セクション追加: 全テキスト入力ステップで空 Enter 時に placeholder 採用、リモートポート placeholder をローカルポートと同じ値に変更 | #66 ウィザード placeholder 自動入力 |
 | 5.4 | 2026-03-14 | SSH 互換性改善: SSHConnection.RemoteForward に bindAddr 引数追加、buildAuthMethods を IdentityFiles 複数鍵対応に更新（for range ループ化、デフォルト鍵フォールバック条件を IdentityFiles 空時に限定） | #74 SSH 互換性改善 |
 | 6.0 | 2026-10-15 | GUI Layer コンポーネント追加（Lifecycle / Wails App / Tray / Router / Service / CredentialBroker / NotificationQueue / EventBridge / Templ View）、Daemon に Services/Done/Info/Takeover、PIDFile に IsLocked を追加、依存関係図に GUI Layer を追加、既存コンポーネントの変更一覧とテスト方針を追加 | #84 Wails 版 GUI アプリケーション |
+| 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |

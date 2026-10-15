@@ -32,7 +32,12 @@ graph LR
     Daemon --> |Listen| Sock
     CLI["CLI"] --> |接続| Sock
     TUI["TUI"] --> |接続| Sock
-    GUIApp["moleport-gui<br/>(内蔵デーモン)"] --> |"管理 / Listen / 読み書き<br/>(headless デーモンと排他)"| PID
+    GUIApp["moleport-gui<br/>(内蔵デーモン)"] --> |"管理（headless デーモンと排他）"| PID
+    GUIApp --> |Listen| Sock
+    Config --> |読み書き| GUIApp
+    State --> |読み書き| GUIApp
+    GUIApp --> |書き込み| Log
+    SSHConfig --> |読み取り専用| GUIApp
 ```
 
 ## 設定ファイル（config.yaml）
@@ -1066,3 +1071,4 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.0 | 2026-03-04 | config.yaml に update_check セクション追加、Config に UpdateCheckConfig 型追加、VersionCheckResult 内部モデル追加、IPC 型に VersionCheckResult/UpdateCheckInfo/UpdateCheckUpdateInfo 追加 | #44 最新バージョンチェック機能 |
 | 3.1 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
 | 3.2 | 2026-10-15 | GUI 対応: `config.yaml` に `gui:` セクション（`GUIConfig` / `GUIThemeConfig`）を追加、PID ファイルの共有・排他ロック記述を更新、GUI ビューモデル・トピックを追加 | #84 Wails 版 GUI アプリケーション |
+| 3.3 | 2026-10-15 | ファイル構成図: GUI 内蔵デーモンと Sock / config / state / log / SSH config の関係を追加 | レビュー指摘対応 #84 |
