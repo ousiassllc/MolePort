@@ -62,6 +62,38 @@ jobs:
       - name: Run tests
         run: go test -race -count=1 ./...
 
+  gui-assets:
+    name: GUI Assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
+      - name: templ generate (生成物がコミット済みと一致すること)
+        run: |
+          templ generate
+          git diff --exit-code -- '*_templ.go'
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build assets
+        run: npm run build
+
   build:
     name: Build
     runs-on: ubuntu-latest

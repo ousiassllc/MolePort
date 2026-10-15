@@ -1,0 +1,7 @@
+package atoms
+
+// StatusBadge は状態を示すバッジ。kind は CSS の data-status 属性キー（ローカライズしない）、
+// label は表示用のローカライズ済み文字列。
+templ StatusBadge(kind string, label string) {
+	<span class="mp-badge" data-status={ kind }>{ label }</span>
+}

@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/a-h/templ v0.3.1020 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect

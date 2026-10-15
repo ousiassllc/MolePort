@@ -269,3 +269,9 @@ tui:
     daemon_connect_failed: "新しいデーモンへの接続に失敗"
   prompt:
     placeholder: "コマンドを入力..."
+gui:
+  banner:
+    starting: "デーモンを起動しています..."
+    failed: "デーモンの起動に失敗しました。"
+  error:
+    generic: "エラーが発生しました。もう一度お試しください。"

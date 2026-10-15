@@ -1,0 +1,16 @@
+package pages
+
+import (
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/layout"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
+)
+
+// DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーを表示する。
+// ホスト・転送などの各パネルは M3 で #dashboard 内に追加する。
+templ DashboardPage(p layout.LayoutProps, state service.LifecycleState) {
+	@layout.BaseLayout(p) {
+		@organisms.StatusBanner(state)
+		<main id="dashboard" data-lifecycle={ string(state) }></main>
+	}
+}
