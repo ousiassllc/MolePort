@@ -248,8 +248,9 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 ### NFR-40: GUI の配布
 
 - **要件**: GitHub Releases の同一タグに、GUI 用の OS 別アセットと SHA-256 チェックサムを添付すること
-- **アセット**: `moleport-gui_<version>_linux_amd64.tar.gz` / `_linux_arm64.tar.gz`、`moleport-gui_<version>_darwin_universal.zip`（`MolePort.app` を含む）、`moleport-gui_<version>_windows_amd64.zip`、`checksums_gui.txt`
-- **備考**: Wails は CGO と OS ネイティブの WebView を必要とするため、GoReleaser（CGO 無効のクロスビルド）では生成せず、GitHub Actions の OS 別ランナー（ubuntu-24.04 / ubuntu-24.04-arm / macos / windows）で `wails build` する。既存の `moleport` アーカイブとチェックサム（`checksums.txt`）は変更しない。初期リリースはコード署名・公証なし（OS の警告が表示されうることを README に明記する）
+- **アセット**: `moleport-gui_<version>_linux_amd64.tar.gz` / `_linux_arm64.tar.gz`、`moleport-gui_<version>_darwin_universal.zip`（`MolePort.app` を含む）、`moleport-gui_<version>_windows_amd64_installer.exe`（NSIS インストーラー）、`checksums_gui.txt`（インストーラーを含む全 GUI アセットの SHA-256）
+- **Windows の配布形態**: zip ではなく NSIS インストーラーで配布する（zip 配布は廃止。破壊的変更）。ユーザー単位インストール（管理者権限不要、`RequestExecutionLevel user`）で、インストール先は `%LOCALAPPDATA%\Programs\MolePort`、アンインストール情報は HKCU、スタートメニュー・デスクトップのショートカットも現在のユーザー用とする。同一インストール先・同一アンインストールキーへの上書きで更新でき、起動中の `moleport-gui.exe` がある場合はインストーラーが終了を促す。WebView2 ランタイムは Wails の NSIS テンプレート標準のブートストラッパーで導入する。インストーラーの製品バージョンはリリースタグの `X.Y.Z` から `wails.json` の `info.productVersion` へ渡す
+- **備考**: Wails は CGO と OS ネイティブの WebView を必要とするため、GoReleaser（CGO 無効のクロスビルド）では生成せず、GitHub Actions の OS 別ランナー（ubuntu-24.04 / ubuntu-24.04-arm / macos / windows）で `wails build` する。既存の `moleport` アーカイブとチェックサム（`checksums.txt`）は変更しない。初期リリースはコード署名・公証なし（OS の警告が表示されうることを README に明記する。Windows は SmartScreen の「詳細情報」→「実行」）。実機の Windows でのインストール・上書き更新・アンインストールは**実機検証待ち**
 
 ### NFR-41: GUI のテスト容易性とビルド分離
 
@@ -271,3 +272,4 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 | 3.1 | 2026-03-14 | NFR-14a（RemoteForward デフォルトバインドアドレス）追加: リモート転送のデフォルトを `127.0.0.1` に変更し、外部公開リスクを防止 | #74 SSH 互換性改善 |
 | 4.0 | 2026-10-15 | NFR-32〜NFR-41 追加: GUI 要件（起動時間、資源使用量、ローカル限定通信、Web セキュリティ、クレデンシャル取り扱い、トレイ耐障害性、引き継ぎ安全性、対応環境、配布、ビルド分離）。NFR-19 / NFR-23 を GUI（Windows 含む）に合わせて更新 | #84 Wails 版 GUI アプリケーション |
 | 4.1 | 2026-10-15 | NFR-41: Templ 生成物を `.linterlyignore` で Linterly 対象外にする旨を追記 | レビュー指摘対応 #84 |
+| 4.2 | 2026-10-15 | NFR-40: Windows の配布を zip から NSIS インストーラー（ユーザー単位）に変更 | Windows 配布形態の変更 #92 |

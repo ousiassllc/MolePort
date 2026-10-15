@@ -142,8 +142,34 @@ jobs:
           npm run build
 
       - name: wails build
+        if: runner.os != 'Windows'
         working-directory: cmd/moleport-gui
         run: wails build -tags "${{ matrix.tags }}" -skipbindings -s -nosyncgomod -nopackage
+
+      # Windows は NSIS インストーラーの生成まで検証する (リリースは作らない。release.yml の gui-windows と同じ手順)。
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y --no-progress
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+
+      - name: Check makensis
+        if: runner.os == 'Windows'
+        run: makensis -VERSION
+
+      - name: wails build with NSIS installer
+        if: runner.os == 'Windows'
+        working-directory: cmd/moleport-gui
+        run: wails build -platform windows/amd64 -tags "${{ matrix.tags }}" -skipbindings -s -nosyncgomod -nsis -installscope user
+
+      - name: Verify installer
+        if: runner.os == 'Windows'
+        run: |
+          installer=cmd/moleport-gui/build/bin/moleport-gui-amd64-installer.exe
+          [ -f "$installer" ] || { echo "installer was not built: $installer"; exit 1; }
+          size=$(wc -c < "$installer")
+          echo "installer size: $size bytes"
+          [ "$size" -gt 1000000 ] || { echo "installer is unexpectedly small"; exit 1; }
 
   build:
     name: Build

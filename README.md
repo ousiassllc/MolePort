@@ -56,10 +56,21 @@ make build
 |-------|----------|
 | `moleport-gui_<version>_linux_amd64.tar.gz` / `moleport-gui_<version>_linux_arm64.tar.gz` | Linux x64 / arm64 |
 | `moleport-gui_<version>_darwin_universal.zip` | macOS 11+ (Apple Silicon / Intel) |
-| `moleport-gui_<version>_windows_amd64.zip` | Windows 10 (1803+) / 11, x64 |
+| `moleport-gui_<version>_windows_amd64_installer.exe` | Windows 10 (1803+) / 11, x64 (installer) |
 | `checksums_gui.txt` | SHA-256 checksums of the assets above |
 
-Verify a downloaded asset with `sha256sum -c --ignore-missing checksums_gui.txt` (Linux) or `shasum -a 256 -c --ignore-missing checksums_gui.txt` (macOS). Then extract the archive and run `moleport-gui` (Linux), `MolePort.app` (macOS) or `moleport-gui.exe` (Windows).
+Verify a downloaded asset with `sha256sum -c --ignore-missing checksums_gui.txt` (Linux), `shasum -a 256 -c --ignore-missing checksums_gui.txt` (macOS) or `Get-FileHash -Algorithm SHA256 <file>` (Windows PowerShell; compare with the value in `checksums_gui.txt`). Then extract the archive and run `moleport-gui` (Linux) or `MolePort.app` (macOS). On Windows, run the installer (below).
+
+### Windows installer
+
+Run `moleport-gui_<version>_windows_amd64_installer.exe`. It is a **per-user install** and needs no administrator rights.
+
+- Install location: `%LOCALAPPDATA%\Programs\MolePort`; the uninstall entry is registered under the current user (Settings → Apps), and Start menu / desktop shortcuts are created for the current user.
+- Upgrade: run the newer installer; it overwrites the existing installation in place. If `moleport-gui.exe` is running (including in the tray), the installer asks you to quit it first.
+- Uninstall: removes the installed files, shortcuts and the WebView2 data of the app. Your settings under `%USERPROFILE%\.config\moleport` are kept.
+- The WebView2 runtime is installed by the installer if it is missing.
+- Breaking change: Windows releases no longer ship a `.zip`; use the installer instead.
+- Status: installing and upgrading on a real Windows machine is not yet verified (pending real-machine verification).
 
 ### Linux requirements
 
@@ -71,7 +82,7 @@ Verify a downloaded asset with `sha256sum -c --ignore-missing checksums_gui.txt`
 The initial releases are not code-signed or notarized, so your OS may show a warning.
 
 - **macOS** --- "MolePort.app cannot be opened because the developer cannot be verified": right-click (or Control-click) `MolePort.app` in Finder, choose **Open**, then click **Open** in the dialog. This is needed only the first time. If the app is still blocked, run `xattr -dr com.apple.quarantine MolePort.app`.
-- **Windows** --- SmartScreen shows "Windows protected your PC": click **More info**, then **Run anyway**. Windows 10 installs the WebView2 runtime on first launch if it is missing.
+- **Windows** --- SmartScreen shows "Windows protected your PC" when you run the installer: click **More info**, then **Run anyway**.
 
 ### Building the GUI from source
 

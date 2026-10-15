@@ -54,10 +54,21 @@ make build
 |---------|------|
 | `moleport-gui_<version>_linux_amd64.tar.gz` / `moleport-gui_<version>_linux_arm64.tar.gz` | Linux x64 / arm64 |
 | `moleport-gui_<version>_darwin_universal.zip` | macOS 11 以降（Apple Silicon / Intel） |
-| `moleport-gui_<version>_windows_amd64.zip` | Windows 10（1803 以降）/ 11、x64 |
+| `moleport-gui_<version>_windows_amd64_installer.exe` | Windows 10（1803 以降）/ 11、x64（インストーラー） |
 | `checksums_gui.txt` | 上記アセットの SHA-256 チェックサム |
 
-ダウンロードしたアセットは `sha256sum -c --ignore-missing checksums_gui.txt`（Linux）または `shasum -a 256 -c --ignore-missing checksums_gui.txt`（macOS）で検証できます。アーカイブを展開し、`moleport-gui`（Linux）、`MolePort.app`（macOS）、`moleport-gui.exe`（Windows）を実行してください。
+ダウンロードしたアセットは `sha256sum -c --ignore-missing checksums_gui.txt`（Linux）、`shasum -a 256 -c --ignore-missing checksums_gui.txt`（macOS）、または `Get-FileHash -Algorithm SHA256 <ファイル>`（Windows PowerShell。`checksums_gui.txt` の値と比較）で検証できます。アーカイブを展開し、`moleport-gui`（Linux）または `MolePort.app`（macOS）を実行してください。Windows は下記のインストーラーを実行します。
+
+### Windows インストーラー
+
+`moleport-gui_<version>_windows_amd64_installer.exe` を実行します。**ユーザー単位のインストール**で、管理者権限は不要です。
+
+- インストール先: `%LOCALAPPDATA%\Programs\MolePort`。アンインストール情報（設定 → アプリ）、スタートメニューとデスクトップのショートカットは現在のユーザー用に登録されます。
+- 更新: 新しいインストーラーを実行すると既存のインストールに上書きされます。`moleport-gui.exe` が起動中（トレイ常駐を含む）の場合は、終了を促すダイアログが表示されます。
+- アンインストール: インストールしたファイル、ショートカット、アプリの WebView2 データを削除します。`%USERPROFILE%\.config\moleport` の設定は残ります。
+- WebView2 ランタイムがない場合はインストーラーが導入します。
+- 破壊的変更: Windows 向けの `.zip` は配布しなくなりました。インストーラーを使用してください。
+- 状態: 実機の Windows でのインストール・更新は未検証です（実機検証待ち）。
 
 ### Linux の要件
 
@@ -69,7 +80,7 @@ make build
 初期リリースはコード署名・公証を行っていないため、OS が警告を表示することがあります。
 
 - **macOS** --- 「開発元を確認できないため開けません」と表示された場合: Finder で `MolePort.app` を右クリック（または Control + クリック）して **開く** を選び、ダイアログで再度 **開く** をクリックします。初回のみ必要です。それでも開けない場合は `xattr -dr com.apple.quarantine MolePort.app` を実行してください。
-- **Windows** --- SmartScreen が「Windows によって PC が保護されました」と表示した場合: **詳細情報** をクリックし、**実行** を選びます。WebView2 ランタイムがない Windows 10 では、初回起動時に導入されます。
+- **Windows** --- インストーラーの実行時に SmartScreen が「Windows によって PC が保護されました」と表示した場合: **詳細情報** をクリックし、**実行** を選びます。
 
 ### GUI をソースからビルドする
 

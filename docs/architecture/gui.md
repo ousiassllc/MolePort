@@ -451,7 +451,7 @@ flowchart LR
     Tag["タグ push v*.*.*<br/>または main push（自動タグ付け）"] --> GR["release (ubuntu)<br/>GoReleaser: moleport"]
     GR --> GL["gui-linux (ubuntu-24.04 / ubuntu-24.04-arm)<br/>wails build -tags gui,webkit2_41<br/>(libwebkit2gtk-4.1-dev)"]
     GR --> GM["gui-macos (macos-latest)<br/>wails build -platform darwin/universal"]
-    GR --> GW["gui-windows (windows-latest)<br/>wails build -platform windows/amd64"]
+    GR --> GW["gui-windows (windows-latest)<br/>choco install nsis<br/>wails build -platform windows/amd64 -nsis -installscope user"]
     GL --> Pack["gui-publish (ubuntu)<br/>checksums_gui.txt"]
     GM --> Pack
     GW --> Pack
@@ -461,13 +461,15 @@ flowchart LR
 
 - GUI ジョブは `release` ジョブがリリースを作成した後に動く（`needs: release`）。リリース対象がない `main` push（`release` の `tag` 出力が空）では GUI ジョブはスキップされる
 - GUI ジョブはタグ（`refs/tags/<tag>`）をチェックアウトし、`templ generate` と `npm ci && npm run build` を行ってから `wails build -s`（フロントエンドビルドをスキップ。Windows ランナーに `make` を前提としないため）でビルドする。Wails CLI は `go.mod` と同じ `v2.16.0` を固定し、`-nosyncgomod` で `go.mod` を書き換えない
-- OS ごとのアーカイブ（Linux: `tar.gz`、macOS: `ditto` で作る zip（`MolePort.app` を含む）、Windows: zip）をアーティファクトに上げ、`gui-publish` ジョブが全て集めて `checksums_gui.txt`（SHA-256）を生成し、`gh release upload --clobber` で Release に追加する。1 つでも GUI ジョブが失敗した場合は GUI アセットを一切添付しない（`moleport` のアセットは添付済みのまま）
+- OS ごとのアセット（Linux: `tar.gz`、macOS: `ditto` で作る zip（`MolePort.app` を含む）、Windows: NSIS インストーラー `moleport-gui_<version>_windows_amd64_installer.exe`）をアーティファクトに上げ、`gui-publish` ジョブが全て集めて `checksums_gui.txt`（SHA-256。`sha256sum moleport-gui_*` なのでインストーラーも載る）を生成し、`gh release upload --clobber` で Release に追加する。1 つでも GUI ジョブが失敗した場合は GUI アセットを一切添付しない（`moleport` のアセットは添付済みのまま）
+- Windows のインストーラーは、リポジトリにコミットした `cmd/moleport-gui/build/windows/installer/project.nsi`（Wails v2.16.0 の NSIS テンプレートをベースにした定義。`.gitignore` で `build/` 配下のうちこのファイルだけ追跡する）から `wails build -nsis` が生成する。`gui-windows` ジョブは `choco install nsis` で `makensis` を導入して PATH に追加し（Wails は `makensis` がないと警告だけでインストーラーを作らないため、`makensis -VERSION` と生成物の存在を検証する）、`wails.json` の `info.productVersion` にタグの `X.Y.Z` を設定してから `wails build -platform windows/amd64 -tags gui -skipbindings -s -nosyncgomod -nsis -installscope user` を実行し、生成された `build/bin/moleport-gui-amd64-installer.exe` を `dist-gui/moleport-gui_<version>_windows_amd64_installer.exe` にコピーする
+- インストーラーの仕様: ユーザー単位（`RequestExecutionLevel user`、`WAILS_INSTALL_SCOPE=user`）。インストール先 `$LOCALAPPDATA\Programs\MolePort`、アンインストール情報は `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\ousiassllcMolePort`、ショートカットは `SetShellVarContext current`（スタートメニュー・デスクトップ）。同じ `UNINST_KEY` とインストール先への上書きで更新する。インストール・アンインストールの開始時に `tasklist` で `moleport-gui.exe` の起動を検出し、再試行 / 中止 / 無視を選ばせる（サイレント実行では確認しない）。アンインストールはインストールしたファイルのみ削除し、`$INSTDIR` の再帰削除と `%USERPROFILE%\.config\moleport` の削除は行わない。WebView2 は Wails テンプレート標準のブートストラッパー（`HKLM` / `HKCU` の EdgeUpdate キーで導入済みを判定）で導入する
 - アセット名の `<version>` は先頭の `v` を除いたバージョン（例: `moleport-gui_1.2.3_linux_amd64.tar.gz`）。バージョンは `-ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=<tag から v を除いた値>"` で埋め込む（GoReleaser の `{{ .Version }}` と同じ形式。CLI・`moleport-gui` の両方が `internal/version` を参照する）
 - Linux は Ubuntu 24.04 で `libwebkit2gtk-4.0-dev` が提供されないため、ビルドタグに `webkit2_41` を追加する（`-tags gui,webkit2_41`）
-- CI（`ci.yml`）の `gui-build` ジョブが Linux / macOS / Windows のマトリクスで `wails build -tags gui -nopackage`（Linux は `gui,webkit2_41`）を実行して GUI ビルドを確認する。Linux ジョブは `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` を導入する。`gui-assets` ジョブは `templ generate` 後に `*_templ.go` の差分がないことを検査する。テストは通常ジョブの `go test ./...` に含まれる（GUI タグなし部分）。既存の `lint` / `test` / `build` ジョブは `gui` タグなし・CGO なしのまま変更しない
+- CI（`ci.yml`）の `gui-build` ジョブが Linux / macOS / Windows のマトリクスで `wails build -tags gui -nopackage`（Linux は `gui,webkit2_41`）を実行して GUI ビルドを確認する。Windows は `-nopackage` の代わりに NSIS を導入して `-nsis -installscope user` でインストーラーまで生成し、生成物の存在とサイズを検証する（リリースは作らない）。Linux ジョブは `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` を導入する。`gui-assets` ジョブは `templ generate` 後に `*_templ.go` の差分がないことを検査する。テストは通常ジョブの `go test ./...` に含まれる（GUI タグなし部分）。既存の `lint` / `test` / `build` ジョブは `gui` タグなし・CGO なしのまま変更しない
 - `make gui-build` は `GUI_TAGS`（既定 `gui`）と `LDFLAGS`（`internal/version.Version` を含む）を `wails build` に渡す。Linux で WebKitGTK 4.1 を使う場合は `make gui-build GUI_TAGS=gui,webkit2_41`
 - 初期リリースは未署名。README に macOS の「開発元を確認できません」警告（右クリック → 開く）と Windows SmartScreen 警告の回避手順、Linux のトレイ要件を記載する
-- 3 OS での `wails build` の成功、macOS universal の生成、Windows アーカイブ、タグ push での実 Release 添付（`gh release upload`）、成果物の起動確認は、実際の GitHub Actions ランナーでのみ確認できるため**実行待ち**（ローカルでは `actionlint` による静的検証と、Linux ホストからの Windows クロスビルドまで確認済み）
+- 3 OS での `wails build` の成功、macOS universal の生成、Windows インストーラーの生成（GitHub Actions 上の `makensis`）、タグ push での実 Release 添付（`gh release upload`）、成果物の起動確認、Windows 実機でのインストール・上書き更新・起動中の終了確認・アンインストール・WebView2 ブートストラッパー（非管理者）は、実際の GitHub Actions ランナー / 実機でのみ確認できるため**実行待ち（実機検証待ち）**（ローカルでは `actionlint` による静的検証と、Linux ホストからの Windows クロスビルド・`makensis` によるインストーラー生成までを確認済み）
 
 ## リスクと PoC（M2 で検証）
 
@@ -551,3 +553,4 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.4 | 2026-10-15 | クレデンシャルフローの実装反映: 接続アクションの応答を `200` に修正、`Activity`（進行中の接続・開始と直近の開始失敗の重ね合わせ）、`#credential-root`（他モーダルに重ねる）、Service のサブパッケージ（`bridge/` / `credential/`）を追記 | #89 M3-2 操作系 |
 | 1.5 | 2026-10-15 | 設定の拡張の実装反映: 既存 `config.yaml` の互換・値の補完、起動前ページのテーマ、`update_check` の即時反映を追記 | #90 M3-3 設定・更新バッジ |
 | 1.6 | 2026-10-15 | 配布の実装反映: `gui-publish` ジョブによる `checksums_gui.txt` 生成と一括アップロード、`release` ジョブの `tag` 出力、`wails build -s` と Wails CLI のバージョン固定、アセット名のバージョン表記（`v` なし）、Linux の `webkit2_41` タグ、CI の `gui-build` ジョブ、`make gui-build` の `GUI_TAGS` / `LDFLAGS`、実ランナー検証待ちの明記 | #92 M4 配布 |
+| 1.7 | 2026-10-15 | Windows の配布を zip から NSIS インストーラー（ユーザー単位、`project.nsi` をリポジトリで管理）に変更。CI でもインストーラー生成を検証。実機検証待ちの明記 | Windows 配布形態の変更 #92 |
