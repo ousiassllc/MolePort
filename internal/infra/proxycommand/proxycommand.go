@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -26,6 +25,7 @@ type conn struct {
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
 	stdout    io.ReadCloser
+	terminate func() // プロセスと子孫を終了する（OS ごとに実装が異なる）
 	done      chan struct{}
 	closeOnce sync.Once
 }
@@ -43,9 +43,7 @@ func (c *conn) Close() error {
 		_ = c.stdin.Close()
 		_ = c.stdout.Close()
 
-		if c.cmd.Process != nil {
-			_ = syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
-		}
+		c.terminate()
 		// cmd.Wait() は goroutine 側で実行される。done チャネルで完了を待機する。
 		<-c.done
 	})
@@ -69,8 +67,7 @@ func (c *conn) SetWriteDeadline(_ time.Time) error { return nil }
 
 // Dial は ProxyCommand を起動し、その stdin/stdout を net.Conn として返す。
 func Dial(command string) (net.Conn, error) {
-	cmd := exec.Command("sh", "-c", command) //nolint:gosec // ProxyCommand は SSH config 由来のユーザー設定値
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd := newCommand(command)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -89,6 +86,7 @@ func Dial(command string) (net.Conn, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start ProxyCommand %q: %w", command, err)
 	}
+	terminate := attachProcess(cmd)
 
 	done := make(chan struct{})
 	go func() {
@@ -97,10 +95,11 @@ func Dial(command string) (net.Conn, error) {
 	}()
 
 	return &conn{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: stdout,
-		done:   done,
+		cmd:       cmd,
+		stdin:     stdin,
+		stdout:    stdout,
+		terminate: terminate,
+		done:      done,
 	}, nil
 }
 

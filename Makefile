@@ -4,7 +4,7 @@ APP_NAME := moleport
 BUILD_DIR := bin
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS := -trimpath
-LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/cli.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/version.Version=$(VERSION)
 
 .PHONY: help build run clean test test-race vet fmt lint linterly install update setup-tools
 

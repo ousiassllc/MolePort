@@ -54,15 +54,12 @@ func defaultKeyPaths() []string {
 }
 
 // trySSHAgent は SSH エージェントからの認証メソッドと接続を取得する。
+// 接続方法は OS ごとに異なる（auth_unix.go / auth_windows.go）。
 // 呼び出し元は返された net.Conn を適切にクローズする責任を持つ。
 func trySSHAgent() (ssh.AuthMethod, net.Conn, error) {
-	sock := os.Getenv("SSH_AUTH_SOCK")
-	if sock == "" {
-		return nil, nil, fmt.Errorf("SSH_AUTH_SOCK not set")
-	}
-	conn, err := net.Dial("unix", sock)
+	conn, err := dialSSHAgent()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to connect to SSH agent: %w", err)
+		return nil, nil, err
 	}
 	agentClient := agent.NewClient(conn)
 	return ssh.PublicKeysCallback(agentClient.Signers), conn, nil

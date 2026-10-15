@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
 
@@ -17,7 +18,7 @@ var startDaemonFunc = StartDaemonProcess
 // デーモンが起動していない場合は自動的にデーモンプロセスを起動してから接続する。
 func EnsureDaemon(configDir string) (*client.IPCClient, error) {
 	pidPath := PIDFilePath(configDir)
-	running, _ := IsRunning(pidPath)
+	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		if _, err := startDaemonFunc(configDir); err != nil {
 			return nil, fmt.Errorf("failed to auto-start daemon: %w", err)

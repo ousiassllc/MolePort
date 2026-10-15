@@ -521,9 +521,12 @@ moleport/
 │   │   ├── takeover.go                # headless デーモンの引き継ぎ（GUI 用）
 │   │   ├── fork_unix.go               # フォーク処理（self-fork）。Unix のみ
 │   │   ├── fork_windows.go            # フォーク非対応スタブ
-│   │   ├── pidfile.go                 # PID ファイル管理（共通）
-│   │   ├── pidfile_unix.go            # flock / kill(2)
-│   │   └── pidfile_windows.go         # LockFileEx / OpenProcess
+│   │   ├── daemon_host.go             # 内蔵ホスト向け API（Services / Info）
+│   │   ├── fork.go                    # --daemon-mode 判定（共通）
+│   │   └── pidfile/                   # PID ファイル管理（サブパッケージ。Linterly の 2000 行/ディレクトリ制限のため分離）
+│   │       ├── pidfile.go             # PIDFile / IsRunning / IsLocked / KillProcess（共通）
+│   │       ├── pidfile_unix.go        # flock / kill(2)
+│   │       └── pidfile_windows.go     # LockFileEx / OpenProcess
 │   ├── ipc/                           # IPC 通信層（ベース）
 │   │   ├── server.go                  # IPCServer（JSON-RPC サーバー）
 │   │   ├── broker.go                  # EventBroker（イベント配信）
@@ -1168,3 +1171,4 @@ GUI（`moleport-gui`）は CGO と OS ネイティブの WebView を必要とす
 | 4.1 | 2026-03-08 | リリース・配布セクション追加: GoReleaser 設定（4プラットフォーム）、GitHub Actions リリースワークフロー、Makefile update ターゲット | #58 セルフアップデート機能 |
 | 4.2 | 2026-03-09 | ドキュメント乖離修正: ディレクトリ構成に updatecmd/ サブパッケージ・updater.go・errors.go・panel_helper.go を追加、ipc/protocol/ ファイル数を 11 に修正 | #62 ドキュメント乖離修正 |
 | 5.0 | 2026-10-15 | GUI 構成を追加: 概要・技術選定（Wails / Templ / HTMX / Tailwind / systray / Windows API）、GUI 構成との関係、ディレクトリ構成（`cmd/moleport-gui`、`internal/gui/*`、`internal/version`、`daemon` / `infra` の OS 別ファイル分割）、並行処理モデル、ファイルレイアウト、GUI のリリース | #84 Wails 版 GUI アプリケーション |
+| 5.1 | 2026-10-15 | M1 基盤整備の実装反映: ディレクトリ構成の `daemon/pidfile/` サブパッケージ化（`daemon_host.go` / `fork.go` 追加） | #85 M1 基盤整備 |

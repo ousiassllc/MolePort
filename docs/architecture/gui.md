@@ -110,7 +110,7 @@ GUI から再利用するため、`Daemon` に次を追加する。fork 起動�
 | `Done() <-chan struct{}` | デーモンのコンテキスト終了を通知（`daemon.shutdown` IPC、`Shutdown()` 呼び出しで close）。GUI はこれを監視してアプリを終了する |
 | `Info() Info` | バージョン、PID、起動時刻（ヘッダー表示用） |
 | `Takeover(configDir string, timeout time.Duration) (prevPID int, err error)` | 稼働中の headless デーモンを `daemon.shutdown` で停止し PID ファイルの解放を待つ（後述） |
-| `IsLocked(pidPath string) (locked bool, pid int)` | PID ファイルの排他ロックが他プロセスに保持されているかを非破壊で判定する（ロックを試行して即解放）。`kill(pid, 0)` による生存確認は PID 再利用で誤判定するため、引き継ぎ判定には使わない |
+| `pidfile.IsLocked(pidPath string) (locked bool, pid int)`（`internal/daemon/pidfile`） | PID ファイルの排他ロックが他プロセスに保持されているかを非破壊で判定する（ロックを試行して即解放）。`kill(pid, 0)` による生存確認は PID 再利用で誤判定するため、引き継ぎ判定には使わない |
 
 - GUI は `Daemon.Wait()`（シグナル待ち）を使わず、`Start(ctx)` → `Done()` 監視 → `Stop()` の順で制御する。OS シグナル（SIGTERM/SIGINT）は Shell が受けて Wails の終了フローに接続する
 - `Daemon.Stop()` は冪等のため、トレイ「終了」・`daemon.shutdown`・OS シグナルが競合しても二重停止しない
@@ -122,7 +122,7 @@ CLI/TUI の Windows 対応は対象外だが、内蔵デーモンを Windows で
 
 | 対象 | Unix（既存） | Windows（新規） |
 |------|-------------|----------------|
-| PID ファイルの排他ロック | `syscall.Flock`（`pidfile_unix.go`） | `LockFileEx`（`pidfile_windows.go`、`golang.org/x/sys/windows`） |
+| PID ファイルの排他ロック | `syscall.Flock`（`daemon/pidfile/pidfile_unix.go`） | `LockFileEx`（`daemon/pidfile/pidfile_windows.go`、`golang.org/x/sys/windows`。強制ロックのため PID 読み取りを妨げない末尾側 1 バイトをロック） |
 | プロセス生存確認・強制終了 | `syscall.Kill(pid, 0)` / `SIGKILL` | `OpenProcess` + `GetExitCodeProcess` / `TerminateProcess` |
 | デーモンの fork 起動（`fork.go`） | `Setsid` | 非対応（`ErrUnsupported`。GUI は fork しない） |
 | ProxyCommand の起動・終了（`proxycommand`） | `sh -c` + `Setpgid`、`kill(-pgid)` | `cmd /C` + `CREATE_NEW_PROCESS_GROUP`、`TerminateProcess`（子孫を含めるため Job Object） |
@@ -447,7 +447,7 @@ flowchart LR
 ```
 
 - GUI ジョブは GoReleaser ジョブがリリースを作成した後に `gh release upload` で追加する（`needs: release`）
-- バージョンは `-ldflags "-X github.com/ousiassllc/moleport/internal/cli.Version=<tag>"` で埋め込む（CLI と同じ変数。`moleport-gui` から参照するため `internal/version` パッケージに切り出して `internal/cli.Version` もそこを参照させる）
+- バージョンは `-ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=<tag>"` で埋め込む（CLI と同じ変数。`internal/version` パッケージに置き、CLI・`moleport-gui` の両方が参照する）
 - CI（`ci.yml`）に GUI ビルド確認ジョブを追加する（Linux / macOS / Windows のマトリクスで `-tags gui` ビルド）。Linux ジョブは `libwebkit2gtk-4.1-dev` / `libgtk-3-dev` を導入する。テストは通常ジョブの `go test ./...` に含まれる（GUI タグなし部分）
 - 初期リリースは未署名。README に macOS の「開発元を確認できません」警告（右クリック → 開く）と Windows SmartScreen 警告の回避手順を記載する
 
