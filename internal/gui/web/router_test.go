@@ -85,8 +85,8 @@ func TestRouter_Index_LifecycleBanner(t *testing.T) {
 		t.Run(string(tt.state), func(t *testing.T) {
 			body := serve(newTestRouter(tt.state), http.MethodGet, "/", nil).Body.String()
 
-			if !strings.Contains(body, `data-lifecycle="`+string(tt.state)+`"`) {
-				t.Errorf("data-lifecycle=%q が含まれない", tt.state)
+			if !strings.Contains(body, `hx-get="/fragments/banner"`) {
+				t.Error("バナー領域が /fragments/banner の再取得を持たない")
 			}
 			hasBanner := strings.Contains(body, `id="status-banner"`)
 			if tt.wantBanner == "" {

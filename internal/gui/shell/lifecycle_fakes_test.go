@@ -46,7 +46,13 @@ type fakeDaemon struct {
 	fwd      *fakeForwardManager
 	cfg      core.ConfigManager
 
+	// startEntered / startGate が非 nil なら Start は entered を close してから gate が閉じるまで待つ
+	// （起動中の終了要求を再現する）。
+	startEntered chan struct{}
+	startGate    chan struct{}
+
 	mu        sync.Mutex
+	starts    int
 	stops     int
 	done      chan struct{}
 	closeOnce sync.Once
@@ -56,7 +62,16 @@ func newFakeDaemon(sessions ...core.ForwardSession) *fakeDaemon {
 	return &fakeDaemon{fwd: &fakeForwardManager{sessions: sessions}, done: make(chan struct{})}
 }
 
-func (f *fakeDaemon) Start(context.Context) error { return f.startErr }
+func (f *fakeDaemon) Start(context.Context) error {
+	f.mu.Lock()
+	f.starts++
+	f.mu.Unlock()
+	if f.startEntered != nil {
+		close(f.startEntered)
+		<-f.startGate
+	}
+	return f.startErr
+}
 func (f *fakeDaemon) Stop() error {
 	f.mu.Lock()
 	f.stops++
@@ -68,6 +83,11 @@ func (f *fakeDaemon) Done() <-chan struct{} { return f.done }
 func (f *fakeDaemon) closeDone()            { f.closeOnce.Do(func() { close(f.done) }) }
 func (f *fakeDaemon) Services() daemon.Services {
 	return daemon.Services{Forward: f.fwd, Config: f.cfg}
+}
+func (f *fakeDaemon) startCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.starts
 }
 func (f *fakeDaemon) stopCount() int {
 	f.mu.Lock()
@@ -144,6 +164,7 @@ type harness struct {
 	quits    chan struct{}
 	takeErr  error
 	takePID  int
+	takeHook func() // Takeover の中で呼ばれる（引き継ぎ中の終了要求を再現する）
 	newErr   error
 	queue    *service.NotificationQueue
 	ready    []service.Backend
@@ -160,6 +181,9 @@ func newHarness(t *testing.T, d *fakeDaemon) *harness {
 		Takeover: func(configDir string, _ time.Duration) (int, error) {
 			if configDir != "/cfg" {
 				t.Errorf("Takeover configDir = %q", configDir)
+			}
+			if h.takeHook != nil {
+				h.takeHook()
 			}
 			return h.takePID, h.takeErr
 		},

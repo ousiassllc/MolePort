@@ -26,6 +26,7 @@ type DashboardProps struct {
 
 // DashboardPage はダッシュボードのフルページ。ライフサイクル状態に応じたバナーと、
 // 各領域（初期表示はインライン展開、mp:<topic> で /fragments/<name> を再取得）を持つ。
+// バナーも再取得の対象で、起動完了（ready）後に mp:all で消える。
 // ready でない間は一覧（アクションボタン）を描画しない。
 func DashboardPage(p DashboardProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -60,11 +61,15 @@ func DashboardPage(p DashboardProps) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"status-banner-region\" hx-get=\"/fragments/banner\" hx-trigger=\"mp:all from:body, mp:status from:body\" hx-swap=\"innerHTML\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = organisms.StatusBanner(p.State).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, " <header id=\"header\" class=\"mp-header\" hx-get=\"/fragments/header\" hx-trigger=\"mp:header from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><header id=\"header\" class=\"mp-header\" hx-get=\"/fragments/header\" hx-trigger=\"mp:header from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -72,20 +77,7 @@ func DashboardPage(p DashboardProps) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</header><main id=\"dashboard\" data-lifecycle=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var3 string
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(p.State))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/gui/web/view/pages/dashboard.templ`, Line: 34, Col: 55}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><section id=\"hosts-panel\" class=\"mp-panel\" hx-get=\"/fragments/hosts\" hx-trigger=\"mp:hosts from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</header><main id=\"dashboard\"><section id=\"hosts-panel\" class=\"mp-panel\" hx-get=\"/fragments/hosts\" hx-trigger=\"mp:hosts from:body, mp:all from:body\" hx-swap=\"innerHTML\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

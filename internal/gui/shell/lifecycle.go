@@ -52,6 +52,7 @@ type Lifecycle struct {
 	quitting   atomic.Bool
 	confirming atomic.Bool
 	stopOnce   sync.Once
+	startMu    sync.Mutex // デーモンの生成〜ready 遷移の間保持する。stopDaemon が起動の完了を待つ
 
 	mu    sync.Mutex
 	state service.LifecycleState
@@ -114,12 +115,46 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 		return l.fail(fmt.Errorf("takeover: %w", err))
 	}
 
+	host, err := l.startDaemon(ctx, prevPID)
+	if err != nil {
+		return l.fail(err)
+	}
+	if host == nil { // 起動中に終了が要求された（デーモンは停止済み、または起動していない）
+		return nil
+	}
+
+	go l.watchDone(host)
+	l.deps.Notifier.Notify(service.TopicAll)
+	return nil
+}
+
+// startDaemon は内蔵デーモンを生成・起動し、ready に遷移させる。startMu を保持する間、
+// stopDaemon は完了を待つ。起動の前後に quitting を確認し、終了が要求されていれば
+// デーモンを起動しない / 起動済みなら停止して (nil, nil) を返す（ready にしない）。
+// これにより起動中（Takeover 後・host.Start 中）の終了要求でも state.yaml 保存・転送停止・
+// PID / ソケット解放が行われる。
+func (l *Lifecycle) startDaemon(ctx context.Context, prevPID int) (DaemonHost, error) {
+	l.startMu.Lock()
+	defer l.startMu.Unlock()
+	if l.quitting.Load() {
+		return nil, nil
+	}
+
 	host, err := l.deps.NewDaemon(l.configDir, l.version)
 	if err != nil {
-		return l.fail(fmt.Errorf("create daemon: %w", err))
+		return nil, fmt.Errorf("create daemon: %w", err)
 	}
 	if err := host.Start(ctx); err != nil {
-		return l.fail(fmt.Errorf("start daemon: %w", err))
+		return nil, fmt.Errorf("start daemon: %w", err)
+	}
+
+	l.mu.Lock()
+	l.host = host
+	l.mu.Unlock()
+	// host の代入より後に確認する。これ以降に立った quitting は stopDaemon が host を見つけて停止する。
+	if l.quitting.Load() {
+		l.stopHost(host)
+		return nil, nil
 	}
 
 	back := l.newBackend(host)
@@ -131,14 +166,10 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 	}
 
 	l.mu.Lock()
-	l.host = host
 	l.back = back
 	l.state = service.LifecycleReady
 	l.mu.Unlock()
-
-	go l.watchDone(host)
-	l.deps.Notifier.Notify(service.TopicAll)
-	return nil
+	return host, nil
 }
 
 // Run は Start を実行し、失敗したらエラーダイアログを表示してプロセスを終了する（UC-25 代替フロー）。
@@ -209,13 +240,22 @@ func (l *Lifecycle) Shutdown() {
 
 // stopDaemon はデーモンを 1 度だけ停止する。RequestQuit・Shutdown・Done 監視が競合しても Stop は 1 回で、
 // 後続の呼び出しは停止の完了まで待つ（state.yaml 保存・PID / ソケット解放の完了後に Wails を終了させるため）。
+//
+// 起動中（デーモンの生成〜ready 遷移）に呼ばれた場合は、起動の完了を待ってから停止する。
+// 呼び出し側が quitting を先に立てているため、startDaemon は起動後にそれを見て自ら停止する。
 func (l *Lifecycle) stopDaemon() {
+	l.startMu.Lock()
+	defer l.startMu.Unlock()
 	l.mu.Lock()
 	host := l.host
 	l.mu.Unlock()
 	if host == nil {
 		return
 	}
+	l.stopHost(host)
+}
+
+func (l *Lifecycle) stopHost(host DaemonHost) {
 	l.stopOnce.Do(func() {
 		_ = host.Stop() // daemon.Stop は失敗してもログのみで常に nil を返す
 	})
