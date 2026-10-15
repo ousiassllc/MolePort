@@ -219,18 +219,43 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build GUI
+      # NSIS インストーラーを作るために makensis が必要。Wails は makensis が無いと警告だけでインストーラーを作らないため、
+      # 直後のステップで makensis の存在を、収集ステップで生成物の存在を検証する。
+      - name: Install NSIS
+        run: |
+          choco install nsis -y --no-progress
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+
+      - name: Check makensis
+        run: makensis -VERSION
+
+      # インストーラーの製品バージョン (DisplayVersion・ファイルバージョン) をリリースタグから渡す。
+      # NSIS の VIProductVersion は数値 4 区切りのため、タグ先頭の X.Y.Z だけを使う。
+      - name: Set installer version from tag
+        working-directory: cmd/moleport-gui
+        run: |
+          node -e '
+            const fs = require("fs");
+            const m = /^v?(\d+\.\d+\.\d+)/.exec(process.env.TAG);
+            if (!m) throw new Error("cannot derive X.Y.Z from tag: " + process.env.TAG);
+            const cfg = JSON.parse(fs.readFileSync("wails.json", "utf8"));
+            cfg.info.productVersion = m[1];
+            fs.writeFileSync("wails.json", JSON.stringify(cfg, null, 2) + "\n");
+          '
+
+      - name: Build GUI and installer
         working-directory: cmd/moleport-gui
         run: >
           wails build -platform windows/amd64 -tags gui -skipbindings -s -nosyncgomod
+          -nsis -installscope user
           -ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=${TAG#v}"
 
-      - name: Archive
-        shell: pwsh
+      - name: Collect installer
         run: |
-          New-Item -ItemType Directory -Force dist-gui | Out-Null
-          $version = $env:TAG -replace '^v', ''
-          Compress-Archive -Path cmd/moleport-gui/build/bin/moleport-gui.exe -DestinationPath "dist-gui/moleport-gui_${version}_windows_amd64.zip"
+          installer=cmd/moleport-gui/build/bin/moleport-gui-amd64-installer.exe
+          [ -f "$installer" ] || { echo "installer was not built: $installer"; exit 1; }
+          mkdir -p dist-gui
+          cp "$installer" "dist-gui/moleport-gui_${TAG#v}_windows_amd64_installer.exe"
 
       - uses: actions/upload-artifact@v4
         with:

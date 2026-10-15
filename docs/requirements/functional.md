@@ -660,7 +660,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 | F-69 | GUI 新バージョン通知 | `VersionChecker` のキャッシュ結果をバッジ表示しリリース URL を案内 | 必須 |
 | F-70 | 単一インスタンス制御 | `SingleInstanceLock` による多重起動の抑止と既存ウィンドウの前面化 | 必須 |
 | F-71 | Windows 対応（GUI） | 内蔵デーモンの Windows 動作: PID ロック（LockFileEx）、ProxyCommand 子プロセス管理、OpenSSH agent（named pipe）、AF_UNIX ソケット | 必須 |
-| F-72 | GUI 配布 | OS 別ネイティブビルドを GitHub Releases に添付（Linux amd64/arm64 tar.gz、macOS universal zip、Windows amd64 zip）とチェックサム | 必須 |
+| F-72 | GUI 配布 | OS 別ネイティブビルドを GitHub Releases に添付（Linux amd64/arm64 tar.gz、macOS universal zip、Windows amd64 NSIS インストーラー（ユーザー単位））とチェックサム | 必須 |
 
 ## CLI サブコマンド体系
 
@@ -977,3 +977,4 @@ moleport daemon kill（応答しない場合の緊急手段）
 | 7.1 | 2026-03-14 | F-50 追加、フォワード追加ウィザードに placeholder 自動入力・空 Enter 採用の動作を追記。リモートポートの placeholder をローカルポートと同じ値に変更 | #66 ウィザード placeholder 自動入力 |
 | 8.0 | 2026-03-14 | F-51〜F-56 追加: SSH 互換性改善。F-51（RemoteForward バインドアドレス指定）、F-52（IdentityFile 複数対応）、F-53（ProxyJump 代替案内）、F-54〜F-56（将来対応: IdentitiesOnly/IdentityAgent/Match）。F-01/F-03 説明更新、UC-5 に `--remote-bind-addr` フラグ追加、add サブコマンド説明更新 | #74 SSH 互換性改善 |
 | 9.0 | 2026-10-15 | UC-25〜UC-38、F-57〜F-72、GUI 画面構成を追加: Wails 版デスクトップ GUI（内蔵デーモン、headless 引き継ぎ、トレイ常駐、クレデンシャルダイアログ、設定、Windows 対応、配布）。概要にバイナリ `moleport-gui` を追記 | #84 Wails 版 GUI アプリケーション |
+| 9.1 | 2026-10-15 | F-72: Windows の配布を zip から NSIS インストーラー（ユーザー単位）に変更 | Windows 配布形態の変更 #92 |
