@@ -26,3 +26,6 @@ Thumbs.db
 # Test
 coverage.out
 coverage_review.out
+
+# Wails のビルド成果物
+cmd/moleport-gui/build/

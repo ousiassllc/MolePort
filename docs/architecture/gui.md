@@ -386,7 +386,8 @@ sequenceDiagram
 
 - ライブラリ: `fyne.io/systray`。`systray.RunWithExternalLoop` により Wails のイベントループと共存させる（`Run` は使わない）
 - 初期化は Wails の `OnStartup`（ウィンドウ生成後）で行う
-- アイコン: `assets/tray/{mac-template.png, tray.png, tray.ico}`（`go:embed`。macOS はテンプレート画像でダーク/ライト自動反転）
+- アイコン: `assets/tray/{mac-template.png, tray.png, tray.ico}`（`go:embed`。macOS はテンプレート画像でダーク/ライト自動反転）。現在はプレースホルダー（単色の円）で、製品版アイコンはファイルの差し替えのみで置き換える
+- トレイ利用可否は起動時に 1 回だけ判定する（`onReady` に 5 秒以内に到達 かつ Linux は StatusNotifierWatcher が存在）。実行中にトレイが消えた場合の検知は行わない。M2 の PoC メニューは「表示」「終了」のみ（UC-33 のフルメニューは M3）
 - メニュー構成は UC-33。状態変化（イベント発生時）に 500ms デバウンスで `ResetMenu` を使わず既存項目の `SetTitle` / `Check` / `Show` / `Hide` で更新する。転送項目は最大 20 件のプールを使い回す
 - 左クリック: ウィンドウ表示（`SetOnTapped`）。右クリック: メニュー
 - 言語変更時はメニュー全項目のタイトルを再設定する
@@ -425,8 +426,8 @@ TUI のテーマ（`tui.theme`）は独立して保持する。GUI のテーマ�
 | 対象 | コマンド | 備考 |
 |------|---------|------|
 | 通常ビルド・テスト・lint | `go build ./...` / `go test ./...` / golangci-lint | `gui` タグなし。Wails・トレイを含まない |
-| GUI 開発 | `make gui-dev`（`wails dev -tags gui` 相当） | templ watch + esbuild watch |
-| GUI ビルド | `make gui-build`（`wails build -tags gui`） | OS ごとのネイティブ環境が必要 |
+| GUI 開発 | `make gui-dev`（`cd cmd/moleport-gui && wails dev -tags gui -skipbindings`） | templ watch + esbuild watch。`wails.json` は `cmd/moleport-gui/` に置く |
+| GUI ビルド | `make gui-build`（`cd cmd/moleport-gui && wails build -tags gui -skipbindings`） | OS ごとのネイティブ環境が必要。`wails.json` の `frontend:build` が `make gui-assets` を実行する |
 | アセット | `make gui-assets`（`templ generate` + `npm run build`） | |
 
 ### リリースワークフロー
@@ -455,6 +456,8 @@ flowchart LR
 
 Wails v2 とトレイの併用および AssetServer の挙動は公式にサポートされていない・文書化が不十分な箇所があるため、機能実装（M3）の前に PoC で次を検証し、結果をこのドキュメントに反映する。
 
+PoC 用の最小実装は `cmd/moleport-gui`、`internal/gui/shell`、`internal/gui/tray`（`gui` タグ）にある。結果の記録は「実際に実行して確認できたもの」だけに限り、未確認の項目は**実機検証待ち**と明記する。
+
 | # | 検証項目 | 失敗時の方針 |
 |---|---------|-------------|
 | R-1 | `fyne.io/systray.RunWithExternalLoop` と Wails v2 の併用（macOS: Cocoa、Windows: メッセージループ、Linux: D-Bus）でクラッシュ・フリーズ・ウィンドウ制御の不具合がない | トレイを OS 別に縮退（失敗した OS はトレイなし = 閉じる操作は終了確認）。それでも GUI 全体は成立する（NFR-37） |
@@ -466,9 +469,64 @@ Wails v2 とトレイの併用および AssetServer の挙動は公式にサポ�
 | R-7 | 非表示ウィンドウへの `EventsEmit` の挙動と、表示復帰時の再同期 | 非表示中は送信しない方針（NFR-33）のため影響は小さい。表示復帰で全トピックを送る |
 | R-8 | `wails.json` で `frontend` ディレクトリ・ビルドコマンドを既存リポジトリ構成に合わせられる | 合わせられない場合は Wails 既定の `frontend/` ディレクトリを使う |
 
+### 縮退方針の実装状況
+
+検証結果を待たずに、失敗時の縮退方針のうちコードで担保できるものは、`gui` タグに依存しない純粋ロジックとして実装し、ユニットテストしている。
+
+| 縮退方針 | 実装 | テスト |
+|---------|------|--------|
+| トレイ利用可否（`onReady` 到達 + Linux の StatusNotifierWatcher）。5 秒以内に `onReady` へ到達しなければ利用不可（R-1, NFR-37） | `internal/gui/tray/availability.go`（`Available` / `Detect`）。Linux のホスト確認は `host_linux.go`、他 OS は不要（`host_other.go`） | `availability_test.go` |
+| 閉じる操作の決定表（`quitting`・トレイ可否 → 素通し / `WindowHide` / 終了確認。トレイなしは必ず終了確認）（R-5, NFR-37） | `internal/gui/shell/close.go`（`DecideClose` / `CloseController`）、`dialog.go`（`IsAffirmative`） | `close_test.go`, `dialog_test.go` |
+| 非表示中は `EventsEmit` しない。非表示 → 表示で `all` を 1 回送る（R-7, NFR-33） | `internal/gui/shell/notifier.go`（`VisibilityNotifier`） | `notifier_test.go` |
+| 内蔵デーモン起動失敗（引き継ぎ失敗・PID ロック取得失敗を含む）はエラーダイアログ後に終了する。`SingleInstanceLock` が使えない環境でも PID ファイルのロックが二重起動を防ぐ（R-6） | `internal/gui/shell/lifecycle.go`（`Lifecycle.Start` / `StartupErrorKey`） | `lifecycle_test.go` |
+| `daemon.shutdown`（IPC）・OS シグナル起因の終了は確認なし、トレイ「終了」はアクティブな転送があれば確認。`quitting` の二重実行を防ぐ | `internal/gui/shell/lifecycle.go`（`RequestQuit` / `Shutdown`） | `lifecycle_test.go` |
+
+R-2（静的 `index.html` への切り替え）、R-3（トークンのフォームフィールド化）、R-4（CSP 例外）の縮退は、実機での検証結果が出てから該当する経路だけを実装する（現状は `GET /` を Router が返し、トークンはヘッダーで検証する）。
+
+### 検証手順と結果
+
+凡例: **確認済み** = 実際に実行して結果を得た / **実機検証待ち** = 必要な環境（ディスプレイ・各 OS の WebView・トレイ）がなく未実施。
+
+共通の準備（実機）:
+
+```bash
+make gui-assets                                    # templ generate + npm run build（dist を生成）
+cd cmd/moleport-gui && wails build -tags gui -skipbindings
+# 生成物: cmd/moleport-gui/build/bin/moleport-gui(.exe / .app)
+```
+
+Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,webkit2_41` を付ける。開発中の動作確認は `make gui-dev`。ログは stderr に出る（`moleport-gui 2>moleport-gui.log`）。
+
+| # | 手順（コマンド・操作） | 確認観点 / 判定 | Linux | macOS | Windows |
+|---|----------------------|----------------|-------|-------|---------|
+| R-1 | `moleport-gui` を起動し、トレイアイコンが出ることを確認。ウィンドウの表示・移動・リサイズ・最小化を 1 分間操作し、トレイ「表示」「終了」を実行する。Linux は `busctl --user list \| grep StatusNotifierWatcher` で Watcher の有無を確認し、ある環境とない環境の両方で起動する | クラッシュ・フリーズ・ウィンドウ制御不能がない。Watcher なしの Linux で閉じるボタンが終了確認になる（`Detect` が `false`）。判定: 全項目 OK なら採用、1 つでも NG ならその OS はトレイなしに縮退 | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-2 | `wails dev` で WebView の開発者ツールを開き、`GET /` のレスポンス HTML に `/wails/runtime.js`・`/wails/ipc.js` の `<script>` が含まれるか、`window.runtime.EventsOn` が定義されているかを確認する | 含まれ `EventsOn` が使える → 採用。含まれない → `Assets` に静的 `index.html` を置く方式に切り替える | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-3 | ダッシュボード上で `hx-post` / `hx-delete`（カスタムヘッダー `X-MolePort-Token` 付き、ボディあり）を実行し、Router のリクエストログ（`Logging`）で到達と 200 を確認する。ヘッダー欠落時は `Token` ミドルウェアが 403 を返す | ヘッダーとボディが欠落せず 403 にならない → 採用。欠落する → トークンをフォームフィールド（`_token`）に載せ替える | 実機検証待ち（WebKitGTK が主対象） | 実機検証待ち | 実機検証待ち |
+| R-4 | WebView のコンソールで CSP 違反（`Refused to execute inline script` 等）が出ないことを確認する。`runtime.js` 注入と HTMX の動作を同時に見る | 違反なし → 採用。違反あり → 違反箇所のみ最小の例外（nonce）を追加 | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-5 | ウィンドウの閉じるボタンを押す。(a) トレイあり: ウィンドウが消えトレイから再表示できる。(b) トレイなし（Linux で Watcher なし）: 終了確認ダイアログが出て、「はい」で終了、「いいえ」で継続する。(c) macOS: 非表示後に Dock アイコンをクリックして再表示されるか。(d) `QuestionDialog` の戻り値（ボタンのラベルか `Yes` か）を各 OS で記録する | (a)(b) が各 OS で安定する。(c) は結果を記録するだけで保証しない。(d) は `IsAffirmative` が受理する値であること（受理されなければ `dialog.go` を修正） | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-6 | 1 つ目を起動したまま 2 つ目を起動し、1 つ目が前面化して 2 つ目が引き継ぎ処理をせず終了することを確認する。Linux は `DBUS_SESSION_BUS_ADDRESS=` を空にして 2 つ目を起動し、PID ロック取得失敗のエラーダイアログで終了することを確認する | 多重起動が成立しない。D-Bus なしでも PID ロックで検出される | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-7 | ウィンドウを非表示にした状態で CLI から `moleport connect <host>` を実行して状態を変え、ウィンドウを再表示する。stderr に `EventsEmit` のエラー・パニックが出ないことと、再表示直後にダッシュボードが最新状態になる（`all` による再取得）ことを確認する | 非表示中に例外がなく、再表示後に再同期される | 実機検証待ち | 実機検証待ち | 実機検証待ち |
+| R-8 | `cd cmd/moleport-gui && wails build -tags gui -skipbindings -nopackage`（Linux ホストでは `-platform windows/amd64` を付けてクロスコンパイル）で `frontend:build` が実行されバイナリが生成されることを確認する | 実行されバイナリが生成される → 採用 | 実機検証待ち（`libgtk-3-dev` / `libwebkit2gtk-4.1-dev` が必要） | 実機検証待ち | ビルドのみ **確認済み**（下記）。起動は実機検証待ち |
+
+#### R-8 で確認できたこと（Wails CLI v2.16.0、Linux x86_64 ホスト、`-platform windows/amd64`）
+
+- `wails build` は `wails.json` のあるディレクトリの Go パッケージをビルドする（`-main` のようなオプションはない）。リポジトリルートに `wails.json` を置くと main パッケージが見つからず失敗するため、`wails.json` は `cmd/moleport-gui/` に置く。`make gui-build` / `make gui-dev` は `cd cmd/moleport-gui` してから `wails` を実行する
+- `frontend:dir` を `.`、`frontend:build` を `make -C ../.. gui-assets` とすることで、`frontend/` ディレクトリを作らずに既存のリポジトリ構成のままビルドフックが実行され（`dist/` が再生成された）、Windows 向けバイナリ `moleport-gui.exe` が生成された（`Compiling frontend: Done.` / `Compiling application: Done.`）
+- `-skipbindings` を付けても `wailsjs/runtime`（ランタイムの JS ラッパー）は生成されるため、`wails.json` の `wailsjsdir` を `build/wailsjs`（`.gitignore` 対象）にしてソースツリーを汚さない。Bind は使わないため、アプリ用の生成コードは作られない
+- 確認したのは**ビルドまで**で、生成したバイナリの起動は行っていない。Windows 実機がないため、R-1〜R-7 の Windows 欄は実機検証待ち
+- ビルド成果物（`cmd/moleport-gui/build/`）は `.gitignore` 対象
+
+#### この環境（headless Linux）で確認できた範囲
+
+- タグなしの `go build ./...` / `go test ./...` / golangci-lint が通る。`gui` タグ配下にのみ Wails・systray 依存がある（D-8, NFR-41）
+- `GOOS=windows CGO_ENABLED=0` で `gui` タグ配下（`shell/app.go`・`tray/tray.go`・`cmd/moleport-gui`）が型検査・コンパイルできる（実行は未確認）
+- Linux の `-tags gui,desktop,production` ビルドは `gtk+-3.0` / `webkit2gtk` の pkg-config がなく失敗する（環境要因）。macOS 向けは cgo が必要なため未確認
+- `wails build` は `-tags desktop,production` を自動付与する。Linux の `go build -tags gui`（`desktop` なし）は Wails のネイティブ部分を含まないため通るが、実際の GUI ビルドの確認にはならない。`gui` タグ配下の確認には `GOOS=windows CGO_ENABLED=0 go vet -tags gui ./cmd/moleport-gui ./internal/gui/...` と Windows クロスビルドを使う
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
 | 1.1 | 2026-10-15 | `*_templ.go` を `.linterlyignore` に追加する旨、EventBridge 受信ループの規律（常時全件デキュー、emit 側で抑止）を追記 | レビュー指摘対応 #84 |
+| 1.2 | 2026-10-15 | `wails.json` を `cmd/moleport-gui/` に置く構成（`frontend:dir: .` / `-skipbindings`）、PoC の検証手順・縮退方針の実装状況・実機検証待ちの明記、トレイ・ビルドコマンドの記述を実装に合わせて更新 | #87 M2 Shell 層 + PoC |
