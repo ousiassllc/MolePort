@@ -1,0 +1,23 @@
+package molecules
+
+import "github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+
+// FormFieldProps は FormField の引数。Name は入力項目名（ラベルの for とエラーの id に使う）、
+// Input は入力要素（TextInput / Select など）、Error は検証エラー（空なら描画しない）。
+type FormFieldProps struct {
+	Label string
+	Name  string
+	Error string
+	Input templ.Component
+}
+
+// FormField はラベル + 入力 + エラーメッセージ。
+templ FormField(p FormFieldProps) {
+	<div class="mp-field" data-invalid?={ p.Error != "" }>
+		<label class="mp-field-label" for={ atoms.FieldID(p.Name) }>{ p.Label }</label>
+		@p.Input
+		if p.Error != "" {
+			<p class="mp-field-error" role="alert">{ p.Error }</p>
+		}
+	</div>
+}

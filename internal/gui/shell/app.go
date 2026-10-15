@@ -19,7 +19,12 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	trayassets "github.com/ousiassllc/moleport/assets/tray"
+	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/service/bridge"
+	"github.com/ousiassllc/moleport/internal/gui/service/credential"
+	"github.com/ousiassllc/moleport/internal/gui/service/settings"
 	"github.com/ousiassllc/moleport/internal/gui/tray"
 	"github.com/ousiassllc/moleport/internal/gui/web"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
@@ -36,7 +41,8 @@ const (
 type Config struct {
 	ConfigDir string
 	Version   string
-	Static    fs.FS // go:embed の dist 含む FS
+	Static    fs.FS           // go:embed の dist 含む FS
+	Theme     guiconfig.Theme // 起動時に読んだ gui.theme（内蔵デーモンの起動前に描画するページで使う）
 }
 
 // Run は Wails を起動し、ウィンドウが閉じて終了するまでブロックする。
@@ -47,18 +53,34 @@ func Run(cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("generate token: %w", err)
 	}
-	a := &app{cfg: cfg}
+	a := &app{cfg: cfg, queue: service.NewNotificationQueue(), activity: service.NewActivity()}
 	a.notifier = NewVisibilityNotifier(a.emit)
+	broker := credential.NewBroker(a.notifier, windowShower(a.showWindow))
 	a.life = NewLifecycle(cfg.ConfigDir, cfg.Version, LifecycleDeps{
 		Takeover:    daemon.Takeover,
 		NewDaemon:   func(dir, ver string) (DaemonHost, error) { return daemon.New(dir, ver) },
 		Notifier:    a.notifier,
 		Quit:        a.quit,
 		ConfirmQuit: a.confirmActiveQuit,
+		Queue:       a.queue,
+		OnReady: func(ctx context.Context, b service.Backend) {
+			bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
+		},
 	})
 	a.closer = NewCloseController(a, a.life.Quitting, a.trayAvailable.Load)
 
-	handler := web.NewRouter(web.Deps{Life: a.life, Token: token, Static: cfg.Static})
+	handler := web.NewRouter(web.Deps{
+		Life:      a.life,
+		Dashboard: service.NewDashboardService(a.life, a.activity),
+		Toasts:    a.queue,
+		Forwards:  service.NewForwardService(a.life, broker, a.activity, a.queue, a.notifier),
+		Hosts:     service.NewHostService(a.life, broker, a.activity, a.queue, a.notifier),
+		Cred:      broker,
+		Settings:  settings.New(a.life, a),
+		Theme:     cfg.Theme,
+		Token:     token,
+		Static:    cfg.Static,
+	})
 
 	return wails.Run(&options.App{
 		Title:       windowTitle,
@@ -79,10 +101,17 @@ func Run(cfg Config) error {
 	})
 }
 
+// windowShower は関数を credential.WindowController にする。
+type windowShower func()
+
+func (f windowShower) Show() { f() }
+
 // app は Wails のコールバックと Shell の純粋ロジックを結ぶ。
 type app struct {
 	cfg      Config
 	notifier *VisibilityNotifier
+	queue    *service.NotificationQueue
+	activity *service.Activity
 	life     *Lifecycle
 	closer   *CloseController
 
@@ -183,6 +212,11 @@ func (a *app) showWindow() {
 	wailsruntime.WindowUnminimise(ctx)
 	wailsruntime.WindowShow(ctx)
 	a.notifier.SetVisible(true)
+}
+
+// OpenURL は settings.Opener の実装。既定のブラウザで url を開く（URL の検証は Service 側で行う）。
+func (a *app) OpenURL(url string) {
+	wailsruntime.BrowserOpenURL(a.context(), url)
 }
 
 // HideWindow は CloseHost の実装。

@@ -91,7 +91,7 @@ Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
 |---------|-----------|-----------|------|----------------|
 | Shell | `cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray` | `gui` | Wails 起動、ウィンドウ制御、トレイ、起動/引き継ぎ/終了の統括、Wails Events 送信 | Web, Service, daemon, Wails, systray |
 | Web | `internal/gui/web`（`handler/`, `middleware/`, `view/{atoms,molecules,organisms,pages,layout}`, `static/`） | なし | HTTP ルーティング、Templ レンダリング、トークン・CSP、静的アセット配信 | Service, i18n, Templ |
-| GUI Service | `internal/gui/service` | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
+| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker、`settings/`: 設定・更新バッジ、`servicetest/`: テスト用 Core フェイク） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
 | Core / Infra | 既存 | なし | 既存どおり | — |
 
 - `internal/gui/web` と `internal/gui/service` は Wails・トレイに依存しない。`go test ./...` で Linux CI 上でテストできる（NFR-41）
@@ -336,7 +336,7 @@ sequenceDiagram
 | ライブ | 1 秒 | ウィンドウ表示中かつアクティブ転送 ≥ 1 | `forwards`、`status` |
 | 照合（reconcile） | 5 秒 | 常時（非表示中も） | ルール数・状態のシグネチャ（`GetRules` / `GetAllSessions` の名前+状態の連結ハッシュ）が前回と異なるときのみ `forwards`、`hosts`、`status` を送り、トレイメニューも更新する |
 
-- ウィンドウ非表示中は `EventsEmit` を送らない（NFR-33）。ウィンドウ表示（`OnDomReady` 後の表示・フォーカス復帰）時に `all` を 1 回送る
+- ウィンドウ非表示中は `EventsEmit` を送らない（NFR-33）。ウィンドウ表示（`OnDomReady` 後の表示・フォーカス復帰）時に `all` を 1 回送る。非表示中の抑止は emit ループが `Visible()`（Shell の `VisibilityNotifier`）を参照して行い、`Notifier.Notify` 自体を呼ばない（コアレスしたトピックは破棄し、復帰時の `all` で再同期する）
 - 照合ティッカーは Core のメモリ上の状態を読むだけでありディスク・ネットワークアクセスを行わない
 - 1 秒ごとのフラグメント差し替えでフォーカス・スクロールが失われないよう、操作可能要素（ボタン・入力）には安定した `id` を付与する（HTMX は差し替え前後で同一 `id` の要素へフォーカスを復元する）。モーダル表示中は背景パネルの差し替えのみとし、モーダル内の入力は差し替え対象にしない（`ModalRoot` はライブ更新の対象外）
 - GUI 自身の操作（追加・開始・停止・削除）は、アクションルートのレスポンスに更新後フラグメントを含めて即時反映する（イベント待ちにしない）
@@ -359,7 +359,7 @@ sequenceDiagram
     User->>UI: [接続] をクリック
     UI->>H: POST /actions/hosts/{name}/connect
     H->>Core: ConnectWithCallback(host, cb) (非同期)
-    H-->>UI: 202 + 接続中バッジのフラグメント
+    H-->>UI: 200 + 接続中バッジのフラグメント
     Core->>Cred: cb(CredentialRequest)
     Cred->>Cred: pending[id] を登録（30 秒タイマー）
     Cred->>Shell: Notify({credential}) + ウィンドウ前面化要求
@@ -375,11 +375,13 @@ sequenceDiagram
 ```
 
 - 接続・転送開始アクションは認証待ちでブロックしないよう、ハンドラは非同期で Core を呼び、即座にフラグメントを返す（結果は EventBridge 経由で反映される。失敗は `Error` 状態とトーストで通知）
+- アクション直後のレスポンス時点では Core がまだ `Connecting` / `Starting` に遷移していないため、Service は進行中の接続・開始を `Activity` に記録して ViewModel に重ねる（「接続中…」「開始中…」バッジと 409 判定に使う）。Core は転送開始の失敗でセッションを `Stopped` に戻すだけなので、直近の開始失敗も `Activity` に保持して `Error` 表示（`LastError`）にする（停止・削除・再開始で消える）
 - `CredentialBroker` は `requestID` 単位の待機チャネルを保持し、`Resolve` / `Cancel` / 30 秒タイムアウト（`core.CredentialTimeout`）のいずれかで解放する。キャンセルは `core.ErrCredentialCancelled`、タイムアウトは `core.ErrCredentialTimeout` を返す
 - 複数要求が同時に発生した場合は FIFO で 1 件ずつダイアログに表示する
-- 入力値は `POST` ボディ（`application/x-www-form-urlencoded`）のみで受け渡し、URL・ログ・イベントに含めない。解決後にバッファをゼロ化する（NFR-36）
-- ウィンドウ非表示時は Shell がウィンドウを前面表示してからダイアログを表示する（UC-31）
-- トレイからの転送開始も同じ `CredentialBroker` を使う（UC-33）
+- 入力値は `POST` ボディ（`application/x-www-form-urlencoded`）のみで受け渡し、URL・ログ・イベントに含めない。ハンドラはボディを文字列化せずバイト列のまま解析し、`Resolve` が Core へ渡した後にバッファをゼロ化する（NFR-36）
+- ウィンドウ非表示時は Shell がウィンドウを前面表示してからダイアログを表示する（UC-31）。Broker は要求発生時に `WindowController.Show()` を呼ぶ
+- クレデンシャルダイアログは `#modal-root` とは別の `#credential-root` に差し込み、先に開いているモーダル（転送追加フォーム等）の上に重ねて表示する（入力途中の値を失わない）
+- トレイからの転送開始も同じ `CredentialBroker` を使う（UC-33）。`Callback()` を公開 API とする
 - CLI/TUI（IPC 経由）の認証要求は従来の `buildCredentialCallback` が処理し、GUI には出ない
 
 ## システムトレイ
@@ -406,6 +408,10 @@ gui:
 ```
 
 TUI のテーマ（`tui.theme`）は独立して保持する。GUI のテーマは TUI と共有しない（TUI は 2 値のベーステーマ、GUI は `system` を含む 3 値であり、ターミナルとウィンドウで好みが異なる想定のため）。
+
+- `gui:` セクションのない既存の `config.yaml` はデフォルト値（`system` / `violet` / `false`）で読み込む。手で編集された不正な `gui.theme` の値は、使用時（設定画面・`GET /`）にデフォルトへ置き換える
+- `GET /` の `<html data-theme data-accent>` は保存値を出力する。内蔵デーモンの起動前（`ConfigManager` を参照できない間）は `cmd/moleport-gui` が起動時に読んだ値（`shell.Config.Theme`）を使う
+- 設定画面は `language`・`gui.theme`・`update_check.enabled` のみを変更する。`update_check.enabled` の変更は `VersionChecker.SetEnabled` で即時に反映する（無効化でチェック停止・バッジ非表示、有効化でチェック再開）
 
 ## セキュリティ設計
 
@@ -530,3 +536,6 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
 | 1.1 | 2026-10-15 | `*_templ.go` を `.linterlyignore` に追加する旨、EventBridge 受信ループの規律（常時全件デキュー、emit 側で抑止）を追記 | レビュー指摘対応 #84 |
 | 1.2 | 2026-10-15 | `wails.json` を `cmd/moleport-gui/` に置く構成（`frontend:dir: .` / `-skipbindings`）、PoC の検証手順・縮退方針の実装状況・実機検証待ちの明記、トレイ・ビルドコマンドの記述を実装に合わせて更新 | #87 M2 Shell 層 + PoC |
+| 1.3 | 2026-10-15 | EventBridge の非表示中の抑止方法、トーストの自動消去（成功・情報 5 秒 / エラーは手動）を `app.ts` が担うことを明記 | #88 M3-1 ダッシュボード |
+| 1.4 | 2026-10-15 | クレデンシャルフローの実装反映: 接続アクションの応答を `200` に修正、`Activity`（進行中の接続・開始と直近の開始失敗の重ね合わせ）、`#credential-root`（他モーダルに重ねる）、Service のサブパッケージ（`bridge/` / `credential/`）を追記 | #89 M3-2 操作系 |
+| 1.5 | 2026-10-15 | 設定の拡張の実装反映: 既存 `config.yaml` の互換・値の補完、起動前ページのテーマ、`update_check` の即時反映を追記 | #90 M3-3 設定・更新バッジ |

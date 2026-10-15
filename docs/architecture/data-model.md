@@ -147,7 +147,7 @@ type Config struct {
     Language      string                    `yaml:"language"`
     UpdateCheck   UpdateCheckConfig         `yaml:"update_check"`
     TUI           TUIConfig                 `yaml:"tui"`
-    GUI           GUIConfig                 `yaml:"gui"`
+    GUI           guiconfig.Config          `yaml:"gui"` // internal/core/guiconfig
 }
 
 type UpdateCheckConfig struct {
@@ -159,12 +159,13 @@ type TUIConfig struct {
     Theme ThemeConfig `yaml:"theme"`
 }
 
-type GUIConfig struct {
-    Theme           GUIThemeConfig `yaml:"theme"`
-    TrayNoticeShown bool           `yaml:"tray_notice_shown"`
+// package guiconfig（internal/core/guiconfig。core のディレクトリ行数制限のためサブパッケージ）
+type Config struct {
+    Theme           Theme `yaml:"theme"`
+    TrayNoticeShown bool  `yaml:"tray_notice_shown"`
 }
 
-type GUIThemeConfig struct {
+type Theme struct {
     Base   string `yaml:"base"`   // "system" | "dark" | "light"（デフォルト: "system"）
     Accent string `yaml:"accent"` // "violet" | "blue" | "green" | "cyan" | "orange"（デフォルト: "violet"）
 }
@@ -968,7 +969,7 @@ type ForwardActions struct {
 type HostView struct {
     Name        string
     Address     string // "user@host:port"
-    State       string // "connected" | "disconnected" | "reconnecting" | "pending_auth" | "error"
+    State       string // "connected" | "connecting" | "disconnected" | "reconnecting" | "pending_auth" | "error"
     StateLabel  string // ローカライズ済み
     ActiveCount int
     Actions     HostActions
@@ -979,7 +980,7 @@ type ForwardView struct {
     Host        string
     Type        string // "local" | "remote" | "dynamic"
     Route       string // ":8080 → localhost:80" 等
-    Status      string // "active" | "stopped" | "error" | "reconnecting"
+    Status      string // "starting" | "active" | "stopped" | "error" | "reconnecting"
     StatusLabel string
     Uptime      string // "2h 15m"（停止中は空）
     Sent        string // "1.2 MB"
@@ -1037,7 +1038,9 @@ type ToastView struct {
 ```
 
 - `State` / `Status` / `Type` の文字列値は CSS クラス・`data-` 属性のキーとして使用する（ローカライズしない）。表示ラベルは `i18n.T` で解決済みの `*Label` を使う
+- `HostView.ActiveCount` は `GetAllSessions()` の `Active` セッションをホスト別に数えた値（`SSHHost.ActiveForwardCount` は使わない）。`ConnectionState.Connecting` は `connecting` として表示し、操作ボタンは出さない（`CanConnect` / `CanDisconnect` とも `false`）
 - `ForwardView.Route` は `ForwardRule` と `ForwardType` から組み立てる（local: `:LPORT → RHOST:RPORT`、remote: `RBIND:RPORT ← :LPORT`、dynamic: `SOCKS :LPORT`）
+- GUI からの接続・転送開始は非同期のため、Service が進行中の操作を `Activity` に記録し、Core がまだ遷移していない間も `connecting` / `starting` として表示する。転送開始の失敗（Core ではセッションが `stopped` に戻る）は `error` と `LastError`（ポート競合は空きポート候補付き）として、停止・削除・再開始まで表示する
 
 ### GUI トピック
 
@@ -1072,3 +1075,6 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.1 | 2026-03-14 | SSH 互換性改善: SSHHost.IdentityFile を SSHHost.IdentityFiles ([]string) に変更、ForwardRule に RemoteBindAddr フィールド追加（デフォルト: "127.0.0.1"）、ForwardInfo/ForwardAddParams に remote_bind_addr 追加、config.yaml サンプルにリモート転送例追加、モデル関連図更新 | #74 SSH 互換性改善 |
 | 3.2 | 2026-10-15 | GUI 対応: `config.yaml` に `gui:` セクション（`GUIConfig` / `GUIThemeConfig`）を追加、PID ファイルの共有・排他ロック記述を更新、GUI ビューモデル・トピックを追加 | #84 Wails 版 GUI アプリケーション |
 | 3.3 | 2026-10-15 | ファイル構成図: GUI 内蔵デーモンと Sock / config / state / log / SSH config の関係を追加 | レビュー指摘対応 #84 |
+| 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |
+| 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
+| 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |

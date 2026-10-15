@@ -1,0 +1,6 @@
+package atoms
+
+// PortLabel は転送の経路（":8080 → localhost:80" 等の整形済み文字列）を等幅で表示する。
+templ PortLabel(route string) {
+	<code class="mp-port">{ route }</code>
+}

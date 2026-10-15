@@ -107,7 +107,10 @@ func TestBaseLayout_EscapesTokenAndRendersChildren(t *testing.T) {
 
 func TestBaseLayout_NoInlineScript(t *testing.T) {
 	// CSP script-src 'self' のため、インラインスクリプト・インラインイベントハンドラーを出力してはならない。
-	out := renderToString(t, pages.DashboardPage(layout.LayoutProps{Lang: "en", Theme: "system", Accent: "violet", Token: "t"}, service.LifecycleReady))
+	out := renderToString(t, pages.DashboardPage(pages.DashboardProps{
+		Layout: layout.LayoutProps{Lang: "en", Theme: "system", Accent: "violet", Token: "t"},
+		State:  service.LifecycleReady,
+	}))
 
 	for _, script := range strings.Split(out, "<script")[1:] {
 		tag := script[:strings.Index(script, ">")]
@@ -117,5 +120,45 @@ func TestBaseLayout_NoInlineScript(t *testing.T) {
 	}
 	if strings.Contains(out, " onclick=") || strings.Contains(out, " style=") {
 		t.Errorf("インラインハンドラー/スタイルが含まれる: %s", out)
+	}
+}
+
+func TestElementID_EscapesNonAlphanumericWithoutCollision(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"web", "host-web"},
+		{"a b", "host-a_20b"},
+		{"a_b", "host-a_5fb"}, // "_" 自体もエスケープし、"a b" と衝突させない
+		{"a-b", "host-a_2db"},
+		{"日", "host-_e6_97_a5"},
+		{"\x01", "host-_01"},
+	}
+	seen := map[string]string{}
+	for _, tt := range tests {
+		got := atoms.ElementID("host-", tt.name)
+		if got != tt.want {
+			t.Errorf("ElementID(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+		if prev, dup := seen[got]; dup {
+			t.Errorf("ID 衝突: %q と %q がともに %q", prev, tt.name, got)
+		}
+		seen[got] = tt.name
+	}
+}
+
+func TestToast_ErrorHasDismissButton(t *testing.T) {
+	if out := renderToString(t, atoms.Toast(service.ToastError, "x")); !strings.Contains(out, "data-dismiss-toast") {
+		t.Errorf("error トーストは手動で閉じるボタンを持つ: %s", out)
+	}
+	if out := renderToString(t, atoms.Toast(service.ToastSuccess, "x")); strings.Contains(out, "data-dismiss-toast") {
+		t.Errorf("success トーストは自動消去のためボタンを持たない: %s", out)
+	}
+}
+
+func TestDuration_EmptyRendersNothing(t *testing.T) {
+	if out := renderToString(t, atoms.Duration("Uptime", "")); out != "" {
+		t.Errorf("空の稼働時間は何も描画しない: %q", out)
+	}
+	if out := renderToString(t, atoms.Duration("Uptime", "5m 0s")); !strings.Contains(out, "5m 0s") {
+		t.Errorf("稼働時間が含まれない: %q", out)
 	}
 }

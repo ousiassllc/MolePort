@@ -1,0 +1,8 @@
+package atoms
+
+// DataSize は転送量（整形済み文字列）を方向ラベル付きで表示する。
+// direction は CSS の data-direction 属性キー（"sent" | "received"。ローカライズしない）、
+// label は表示用のローカライズ済み文字列。
+templ DataSize(direction string, label string, value string) {
+	<span class="mp-data" data-direction={ direction }><span class="mp-label">{ label }</span> { value }</span>
+}

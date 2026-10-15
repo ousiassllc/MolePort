@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 )
 
 // SSHHost は SSH config から読み込んだホスト情報と実行時の接続状態を保持する。
@@ -69,6 +71,7 @@ type Config struct {
 	Language      string                `yaml:"language"`
 	UpdateCheck   UpdateCheckConfig     `yaml:"update_check"`
 	TUI           TUIConfig             `yaml:"tui"`
+	GUI           guiconfig.Config      `yaml:"gui"`
 }
 
 // UpdateCheckConfig は自動アップデートチェックの設定。
@@ -165,5 +168,6 @@ func DefaultConfig() Config {
 			Enabled:  true,
 			Interval: Duration{Duration: 24 * time.Hour},
 		},
+		GUI: guiconfig.Default(),
 	}
 }

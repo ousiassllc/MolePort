@@ -4,6 +4,10 @@
 
 ### ✨ New Features / 新機能
 - Add GUI Shell layer (`cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray`; `gui` build tag) with built-in daemon startup, Router wiring to the Wails AssetServer, system tray wrapper and window-close handling / GUI の Shell 層（`gui` タグ）を追加。内蔵デーモン起動、Wails AssetServer への Router 接続、トレイのラッパー、ウィンドウ閉じる操作の分岐を実装 (#87)
+- Add GUI dashboard (header, host/forward panels with HATEOAS actions, status bar), `DashboardService`, `EventBridge` (100ms coalescing, 1s live / 5s reconcile tickers, hidden-window suppression), `NotificationQueue` and `/fragments/{header,hosts,forwards,status,toasts}` / GUI ダッシュボード（ヘッダー・ホスト/転送パネル・ステータスバー）、`DashboardService`、`EventBridge`、`NotificationQueue`、各フラグメントを追加 (#88)
+- Split i18n locale files per namespace (`<lang>.yaml` + `<lang>.gui.yaml`) and add `format.Duration` / 翻訳ファイルを名前空間別に分割し、`format.Duration` を追加 (#88)
+- Add GUI operations: add (local/remote/dynamic form with server-side validation, placeholders and free-port suggestions on conflict), start, stop and delete forwards, connect/disconnect hosts (async, HATEOAS 409), and the credential dialog backed by `credential.Broker` (FIFO, cancel, 30s timeout, buffers zeroed, body-only) / GUI の操作系（転送の追加・開始・停止・削除、ホストの接続・切断、クレデンシャルダイアログと `credential.Broker`）を追加 (#89)
+- Add GUI settings (language, theme `system`/`dark`/`light` × 5 accents with live preview and cancel, update check) saved to the new `gui:` section of `config.yaml` (backward compatible; `tui.theme` untouched), and the new-version badge that opens the release page via `POST /actions/update/open` (server-side URL prefix check). `VersionChecker` gains `SetEnabled` / `Cached` / GUI の設定画面（言語・テーマ・アップデートチェック、`config.yaml` の `gui:` セクション）と新バージョンバッジ・リリースページ起動を追加 (#90)
 - Document PoC procedures (R-1 to R-8) and fallback policies; real-device results are pending / PoC の検証手順（R-1〜R-8）と縮退方針を仕様書に記載（実機検証結果は待ち） (#87)
 
 ## [v1.0.0] - 2026-03-15

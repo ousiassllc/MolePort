@@ -39,9 +39,10 @@ type VersionChecker struct {
 	httpClient     *http.Client
 	apiBase        string // テスト用。デフォルトは "https://api.github.com"
 	interval       time.Duration
-	enabled        bool
+	enabled        bool // mu で保護する（SetEnabled で実行中に変わる）
 	cache          *core.VersionCheckResult
 	mu             sync.RWMutex
+	parent         context.Context // Start に渡されたコンテキスト。SetEnabled(true) での再開に使う
 	ctx            context.Context
 	cancel         context.CancelFunc
 }
@@ -67,22 +68,55 @@ func (vc *VersionChecker) SetAPIBase(base string) {
 }
 
 // Start はバックグラウンドゴルーチンで定期的なバージョンチェックを開始する。
-// enabled が false またはバージョンが "dev" の場合は何もしない。
+// enabled が false またはバージョンが "dev" の場合は何もしない（ctx は SetEnabled(true) での再開用に保持する）。
 // initialDelay 後に最初のチェックを行い、以後 interval ごとにチェックする。
 func (vc *VersionChecker) Start(ctx context.Context, initialDelay time.Duration) {
-	if !vc.enabled || vc.currentVersion == "dev" {
-		return
-	}
-
 	vc.mu.Lock()
-	if vc.cancel != nil {
+	vc.parent = ctx
+	if !vc.enabled || vc.currentVersion == "dev" || vc.cancel != nil {
 		vc.mu.Unlock()
-		return // 二重起動防止
+		return // 無効、または二重起動防止
 	}
 	vc.ctx, vc.cancel = context.WithCancel(ctx)
+	runCtx := vc.ctx
 	vc.mu.Unlock()
 
-	go vc.loop(vc.ctx, initialDelay)
+	go vc.loop(runCtx, initialDelay)
+}
+
+// SetEnabled はチェックの有効/無効を実行中に切り替える（GUI の設定画面、UC-34）。
+// 無効にするとバックグラウンドチェックを停止し、有効にすると Start 済みであれば直ちにチェックを再開する。
+func (vc *VersionChecker) SetEnabled(enabled bool) {
+	vc.mu.Lock()
+	vc.enabled = enabled
+	parent := vc.parent
+	vc.mu.Unlock()
+
+	if !enabled {
+		vc.Stop()
+		return
+	}
+	if parent != nil {
+		vc.Start(parent, 0)
+	}
+}
+
+// active はチェックが有効（enabled かつ "dev" でない）かを返す。
+func (vc *VersionChecker) active() bool {
+	vc.mu.RLock()
+	defer vc.mu.RUnlock()
+	return vc.enabled && vc.currentVersion != "dev"
+}
+
+// Cached はキャッシュ済みのチェック結果を返す。ネットワークアクセスは行わない。
+// 無効・"dev"・未チェックの場合は ok=false。
+func (vc *VersionChecker) Cached() (core.VersionCheckResult, bool) {
+	vc.mu.RLock()
+	defer vc.mu.RUnlock()
+	if !vc.enabled || vc.currentVersion == "dev" || vc.cache == nil {
+		return core.VersionCheckResult{}, false
+	}
+	return *vc.cache, true
 }
 
 // Stop はバックグラウンドチェックを停止する。冪等。
@@ -100,7 +134,7 @@ func (vc *VersionChecker) Stop() {
 // キャッシュがない場合は即時チェックを行う。
 // disabled または "dev" の場合は nil, nil を返す。
 func (vc *VersionChecker) LatestVersion(ctx context.Context) (*core.VersionCheckResult, error) {
-	if !vc.enabled || vc.currentVersion == "dev" {
+	if !vc.active() {
 		return nil, nil
 	}
 

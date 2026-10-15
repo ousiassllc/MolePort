@@ -990,6 +990,13 @@ func (vc *VersionChecker) Stop()
 func (vc *VersionChecker) LatestVersion(ctx context.Context) (*VersionCheckResult, error)
 
 // UpdateAvailable は更新が利用可能かどうかを返す。
+
+// SetEnabled はチェックの有効/無効を実行中に切り替える（GUI の設定画面、UC-34）。
+// 無効化でバックグラウンドチェックを停止し、有効化で Start 済みなら直ちに再開する。
+func (vc *VersionChecker) SetEnabled(enabled bool)
+
+// Cached はキャッシュ済みの結果を返す（ネットワークアクセスしない）。無効・"dev"・未チェックは ok=false。
+func (vc *VersionChecker) Cached() (core.VersionCheckResult, bool)
 func (vc *VersionChecker) UpdateAvailable() bool
 ```
 
@@ -1710,11 +1717,11 @@ type Deps struct {
     Dashboard service.Dashboard
     Forwards  service.Forwards
     Hosts     service.Hosts
-    Settings  service.Settings
-    Cred      *service.CredentialBroker
+    Settings  settings.Settings   // settings.New(BackendSource, Opener)
+    Cred      credential.Prompter // *credential.Broker
     Toasts    *service.NotificationQueue
     Life      LifecycleState   // State() のみ
-    Opener    service.Opener
+    Theme     guiconfig.Theme  // 内蔵デーモンの起動前に描画する GET / のテーマ（起動時に読んだ gui.theme）
     Token     string           // 起動ごとのランダムトークン
     Static    fs.FS            // go:embed。テストでは fstest.MapFS
 }
@@ -1728,75 +1735,94 @@ type Deps struct {
 Core の型から ViewModel を組み立て、操作を実行する。Wails・HTTP に依存しない。
 
 ```go
-type Dashboard interface {
+// 内蔵デーモン起動後の Core 参照。Shell の Lifecycle が BackendSource を実装する（ready 前は ok=false）
+type Backend struct { SSH core.SSHManager; Forward core.ForwardManager; Config core.ConfigManager; Version VersionSource; Info Info }
+type VersionSource interface { Cached() (core.VersionCheckResult, bool); SetEnabled(bool) } // update.VersionChecker
+func AvailableUpdate(b Backend) (core.VersionCheckResult, bool) // update_check 有効・新版あり・URL が ReleaseURLPrefix で始まるときのみ ok
+type BackendSource interface{ Backend() (Backend, bool) }
+
+type Dashboard interface { // 実装は NewDashboardService(BackendSource, *Activity)。ready 前は空の ViewModel を返す
     Header() HeaderView
     Hosts() []HostView
     Forwards() []ForwardView
     Status() StatusView
 }
 
-type Forwards interface {
+type Forwards interface { // 実装は NewForwardService(BackendSource, CallbackProvider, *Activity, *NotificationQueue, Notifier)
+    HostNames() []string                                // フォームのホスト選択肢
     Form(host string) ForwardFormInput                  // 初期値（placeholder 方針は F-50）
-    Add(in ForwardFormInput) (FormErrors, error)        // 検証 → AddRule → 永続化 → 開始（非同期）
-    Start(name string) error                            // 非同期。cb は CredentialBroker
+    Add(in ForwardFormInput) (name string, errs FormErrors, err error) // 検証 → AddRule → 永続化 → 開始（非同期）
+    Start(name string) error                            // 非同期。cb は credential.Broker
     Stop(name string) error
     Delete(name string) error                           // 停止 + 削除 + 永続化
 }
 
-type Hosts interface {
+type Hosts interface { // 実装は NewHostService（引数は NewForwardService と同じ）
     Connect(name string) error                          // ConnectWithCallback（非同期）
-    Disconnect(name string) error
+    Disconnect(name string) error                       // 当該ホストのアクティブ転送を停止してから切断
 }
 
+type CallbackProvider interface{ Callback() core.CredentialCallback } // credential.Broker が実装
+
+// gui/service/settings（Linterly の行数制限によりサブパッケージ）
 type Settings interface {
-    View() SettingsView
-    Apply(in SettingsView) (FormErrors, error)          // UpdateConfig → i18n.SetLang → Notifier
+    View() (SettingsView, error)                         // language（解決済み）・gui.theme・update_check.enabled
+    Save(in SettingsView) (FormErrors, error)            // 検証 → UpdateConfig → i18n.SetLang → VersionSource.SetEnabled
+    OpenUpdate() error                                   // AvailableUpdate の URL を Opener に渡す。なければ ErrNoUpdate
 }
+type Opener interface{ OpenURL(url string) }             // Shell が runtime.BrowserOpenURL で実装
 
 type Notifier interface{ Notify(topics ...Topic) }
-type Opener interface{ OpenURL(url string) error }
 ```
 
-- `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼び、失敗は `NotificationQueue` に積む。呼び出し側のレスポンスは即時に返る
-- 状態不一致（`Start` が `CanStart=false` の行等）は `ErrStateConflict`（ハンドラが `409` に変換）。存在しない対象は `core.NotFoundError`（`404`）
-- `Forwards.Add` の検証は `core.ValidatePort`、名前重複（`core.AlreadyExistsError`）、ホスト存在確認を行い、フィールド別の `FormErrors` に変換する
+- `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼ぶ。呼び出し側のレスポンスは即時に返る。転送開始の失敗は `NotificationQueue` に積み（ポート競合は空きポート候補付き）、接続の失敗は Core の `SSHEventError` を EventBridge がトーストにする
+- 進行中の接続・開始と直近の転送開始失敗は `Activity`（`DashboardService` と共有）に記録し、ViewModel の `Connecting` / `Starting` / `Error` 表示と状態判定に重ねる（Core はアクション直後にまだ遷移しておらず、開始失敗後はセッションを `Stopped` に戻すため）
+- 状態不一致（`Start` が `CanStart=false` の行等）は `ErrStateConflict`（ハンドラが `409` に変換）。存在しない対象は `core.NotFoundError`（`404`）、ready 前は `ErrNotReady`（`409`）
+- `Forwards.Add` の検証は `core.ParseForwardType` / `core.ValidatePort`、名前重複（`core.AlreadyExistsError`）、ホスト存在確認を行い、フィールド別の `FormErrors` に変換する
 - ルール永続化は `core.PersistForwardRules`（IPC ハンドラと共有。後述「既存コンポーネントの変更」）
 - 表示文字列（稼働時間・データ量）は `internal/format` を使用する。ラベルは `i18n.T` をレンダリング時に呼ぶ（言語切り替えの即時反映のため）
 
-### CredentialBroker（`gui/service/credential.go`）
+### CredentialBroker（`gui/service/credential/broker.go`）
 
-`core.CredentialCallback` を実装し、WebView を介してクレデンシャルを要求する。IPC ハンドラの `buildCredentialCallback` と同じ契約。
+`core.CredentialCallback` を実装し、WebView を介してクレデンシャルを要求する。IPC ハンドラの `buildCredentialCallback` と同じ契約。`gui/service` のディレクトリ行数制限（Linterly）のためサブパッケージに置く（`credential` → `service` の一方向依存）。
 
 ```go
-type CredentialBroker struct { /* mu sync.Mutex, pending []*pendingReq, notifier Notifier, win WindowController */ }
+type Broker struct { /* mu sync.Mutex, pending []*pendingRequest, notifier service.Notifier, win WindowController */ }
+type Input struct { Value []byte; Answers [][]byte } // POST ボディから取り出した値。Zero() でゼロ化
+type Prompter interface { Pending() (service.CredentialView, bool); Resolve(id string, in Input) error; Cancel(id string) error }
+type WindowController interface{ Show() }            // Shell が実装（非表示なら前面化）
 
-func (b *CredentialBroker) Callback() core.CredentialCallback
-func (b *CredentialBroker) Pending() (CredentialView, bool)       // 先頭の要求（FIFO）
-func (b *CredentialBroker) Resolve(id string, r core.CredentialResponse) error // 未知/解決済みは ErrUnknownRequest
-func (b *CredentialBroker) Cancel(id string) error
+func NewBroker(n service.Notifier, win WindowController) *Broker
+func (b *Broker) Callback() core.CredentialCallback // ダッシュボード・トレイ（UC-33）共通の公開 API
+func (b *Broker) Pending() (service.CredentialView, bool)  // 先頭の要求（FIFO）
+func (b *Broker) Resolve(id string, in Input) error        // 未知/解決済み/タイムアウト済みは ErrUnknownRequest
+func (b *Broker) Cancel(id string) error
 ```
 
 - 要求ごとに `core.CredentialTimeout` のタイマーを持ち、満了時は `core.ErrCredentialTimeout` を返して `pending` から除く
 - 要求発生時に `WindowController.Show()`（非表示なら前面化）と `Notify(TopicCredential)`。解決・キャンセル・タイムアウトでも `Notify(TopicCredential)`
-- 解決後、`CredentialResponse` の `Value` / `Answers` を保持するバッファはゼロ化する
+- `Resolve` は戻る時点で `Input` のバッファをゼロ化する（成功・失敗とも）。keyboard-interactive の回答数はプロンプト数に揃える
 
 ### NotificationQueue（`gui/service/notification.go`）
 
 非同期通知（接続・転送開始の失敗、引き継ぎ完了、新バージョン検出）のメモリ上 FIFO（最大 50 件）。`Push(ToastView)` と `Drain() []ToastView`（`/fragments/toasts` が使用）。ウィンドウ非表示中も溜め、表示時に `all` トピックで取り出す。
 
-### EventBridge（`gui/service/bridge.go`）
+### EventBridge（`gui/service/bridge/bridge.go`）
 
 Core のイベントとティッカーをトピックに変換する。
 
 ```go
 type Topic string // hosts | forwards | status | header | credential | toast | settings | all
 
-func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowController) *EventBridge
+func New(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility) *EventBridge
+type WindowVisibility interface{ Visible() bool } // Shell の VisibilityNotifier が満たす
 func (e *EventBridge) Start(ctx context.Context) // SSH/Forward の Subscribe + ライブ（1s）/照合（5s）ティッカー
 ```
 
 - イベント → トピックの写像、100ms コアレス、ティッカーの条件は [gui.md](../architecture/gui.md#eventbridge) に従う
 - 照合ティッカーは `GetRules` / `GetAllSessions` の名前+状態のシグネチャを比較し、変化があるときのみ通知する
+- 受信ループは `SSHEvent` / `ForwardEvent` をトピック集合へ写像するだけで、コアレス（100ms）・非表示中の抑止・`Notify` は emit ループが行う。`SSHEventError` / `ForwardEventError` は `LocalizeError` でローカライズしたメッセージを `NotificationQueue` に積み、`toast` を送る
+- `LifecycleDeps` に `Queue`（引き継ぎ完了トースト）と `OnReady`（ready 遷移前の EventBridge 開始）を追加した
 - Core のイベントチャネル（バッファ 16）を詰まらせないため、受信ゴルーチンはイベントをトピック集合へ写像してコアレス用の内部チャネルへ渡すだけにする
 
 ### Templ View（`gui/web/view`）
@@ -1810,17 +1836,22 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | molecules | `HostRow` | `HostView`（`Actions` に応じて接続 / 切断 / 転送追加を描画） |
 | molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
 | molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
-| organisms | `HostPanel` / `ForwardPanel` / `StatusBar` / `Header` | 対応する ViewModel のスライス・構造体 |
+| atoms | `PortLabel` / `DataSize` / `Duration` | 整形済み文字列（`DataSize` / `Duration` はラベル付き。`Duration` は空なら何も描画しない）。`atoms.ElementID(prefix, name)` が安定した `id` を作る（英数字以外は `_` + 16 進） |
+| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid`）/ `name, checked` |
+| molecules | `ConfirmDialog` | `ConfirmDialogProps{ID, Title, Message, ConfirmLabel, CancelLabel, ConfirmVariant, ConfirmAttrs}` |
+| molecules | `CredentialPrompt` | `CredentialPromptProps{Label, Name, Echo, Autofocus}`（`Echo=false` は `type="password"`、値を描画しない） |
+| organisms | `HostPanel` / `ForwardPanel` | `[]HostView` / `[]ForwardView`, `ready bool`（`ready` でない間は一覧・ボタンを描画しない） |
+| organisms | `StatusBar` / `Header` / `Toasts`（`/fragments/toasts` の OOB 本文） | 対応する ViewModel |
 | organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
-| organisms | `CredentialDialog` | `CredentialView` |
+| organisms | `CredentialDialog` / `ForwardDeleteDialog` | `CredentialView` / ルール名 |
 | organisms | `SettingsForm` | `SettingsView, FormErrors` |
-| pages | `DashboardPage` | 全 ViewModel + `LifecycleState` |
+| pages | `DashboardPage` | `DashboardProps{Layout, State, Header, Hosts, Forwards, Status}` |
 | layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |
 
 ### 設定・i18n の拡張
 
-- `Config.GUI`（`GUIConfig`）をデフォルト値付きで追加（`DefaultConfig`: `base: system`、`accent: violet`）。`ConfigManager.LoadConfig` は未指定の値をデフォルトで補完する
-- 翻訳ファイルに `gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
+- `Config.GUI`（`guiconfig.Config`。`core/guiconfig` サブパッケージ: `core` のディレクトリ行数制限のため）をデフォルト値付きで追加（`DefaultConfig` が `guiconfig.Default()` = `base: system`、`accent: violet` を入れてから読み込むため、`gui:` のない既存ファイルは既定値になる）。選択肢と検証は `guiconfig.Bases` / `Accents` / `ValidBase` / `ValidAccent`。手で編集された不正値は使用時に `Theme.Normalized()` で既定値に置き換える（設定画面・`GET /`）
+- 翻訳ファイルは言語ごとに `locales/<lang>.yaml`（基本）と `locales/<lang>.gui.yaml`（`gui:` 名前空間）に分け、ロード時にマージする（ファイルあたり 300 行の制限のため）。`gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
 - GUI が表示するエラー文字列は Core のエラー型から `i18n` キーへ変換する（Core の英語エラー文字列を画面に直接出さない）
 
 ### 既存コンポーネントの変更
@@ -1831,13 +1862,14 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
 | `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
-| `core.Config` | `GUI GUIConfig` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない |
+| `core.Config` | `GUI guiconfig.Config` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない。`tui.theme` は GUI から変更しない |
+| `update.VersionChecker` | `SetEnabled`（実行中の有効/無効切り替え）と `Cached`（キャッシュのみ参照）を追加。`Start` は無効時も再開用にコンテキストを保持する |
 
 ### GUI のテスト方針
 
 | 対象 | 手法 | 実行環境 |
 |------|------|---------|
-| Service | Core の fake（`forwardtest` 等）を使い、ViewModel・`Actions` の出し分け・検証エラー・状態不一致・クレデンシャルのタイムアウト/キャンセルを検証 | `go test ./...`（Linux CI） |
+| Service | Core の fake（`gui/service/servicetest` の `SSH` / `Forward` / `Config`）を使い、ViewModel・`Actions` の出し分け・検証エラー・状態不一致・クレデンシャルのタイムアウト/キャンセルを検証 | `go test ./...`（Linux CI） |
 | Web ハンドラ | `httptest` + HTML アサーション（フラグメントに `<html>` がない、トークンなしは 403、`HX-Request` なしは 400、`422` でフォーム再描画、OOB トースト） | `go test ./...` |
 | Templ | `Render()` → HTML 文字列のアサーション（ボタンの有無、エスケープ） | `go test ./...` |
 | EventBridge | 疑似時計でコアレス・ティッカー・非表示中の抑止を検証 | `go test ./...` |
@@ -1936,3 +1968,6 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.0 | 2026-10-15 | GUI Layer コンポーネント追加（Lifecycle / Wails App / Tray / Router / Service / CredentialBroker / NotificationQueue / EventBridge / Templ View）、Daemon に Services/Done/Info/Takeover、PIDFile に IsLocked を追加、依存関係図に GUI Layer を追加、既存コンポーネントの変更一覧とテスト方針を追加 | #84 Wails 版 GUI アプリケーション |
 | 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |
 | 6.2 | 2026-10-15 | M1 基盤整備の実装反映: PID ファイル管理を `daemon/pidfile` サブパッケージに分離（NFR-24〜26）、Windows ロック範囲、`TakeoverTimeout` を追記 | #85 M1 基盤整備 |
+| 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |
+| 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |
+| 6.5 | 2026-10-15 | M3-3 の実装反映: `Settings`（`gui/service/settings`。`View` / `Save` / `OpenUpdate`）、`Opener`、`Backend.Version`（`VersionSource`）と `AvailableUpdate`、`Deps.Theme`、`VersionChecker.SetEnabled` / `Cached`、`gui:` セクションの型を `core/guiconfig` サブパッケージ（`Config` / `Theme` / `Normalized`）に置くことを追記 | #90 M3-3 設定・更新バッジ |

@@ -1,0 +1,40 @@
+package atoms
+
+// FieldID はフォームの項目名から入力要素の id を作る。ラベル（for）とエラー表示（aria-describedby）が同じ値を参照する。
+func FieldID(name string) string { return "field-" + name }
+
+// TextInputProps は TextInput の引数。Type が空なら "text"。Attrs には hx-* などの追加属性を渡す。
+type TextInputProps struct {
+	Name        string
+	Value       string
+	Placeholder string
+	Type        string // "text"（既定）| "password" | "number" など
+	Required    bool
+	Invalid     bool
+	Autofocus   bool
+	Attrs       templ.Attributes
+}
+
+func inputType(t string) string {
+	if t == "" {
+		return "text"
+	}
+	return t
+}
+
+// TextInput は 1 行の入力欄。値の空欄は placeholder の表示になる（採用はサーバー側で行う）。
+templ TextInput(p TextInputProps) {
+	<input
+		class="mp-input"
+		type={ inputType(p.Type) }
+		id={ FieldID(p.Name) }
+		name={ p.Name }
+		value={ p.Value }
+		placeholder={ p.Placeholder }
+		autocomplete="off"
+		required?={ p.Required }
+		autofocus?={ p.Autofocus }
+		aria-invalid?={ p.Invalid }
+		{ p.Attrs... }
+	/>
+}

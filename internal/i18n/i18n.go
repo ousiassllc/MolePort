@@ -3,6 +3,7 @@ package i18n
 import (
 	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"log/slog"
 	"strings"
@@ -12,6 +13,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// 翻訳は言語ごとに locales/<lang>.yaml（基本）と locales/<lang>.<名前空間>.yaml（追加。例: ja.gui.yaml）に
+// 分けて置き、ロード時にマージする。ファイルあたりの行数制限を超えずに名前空間を増やすための分割。
+//
 //go:embed locales/*.yaml
 var localeFS embed.FS
 
@@ -67,18 +71,10 @@ func init() {
 
 // SetLang は現在の言語を設定し、翻訳データをロードする。
 func SetLang(lang Lang) error {
-	data, err := localeFS.ReadFile(fmt.Sprintf("locales/%s.yaml", string(lang)))
+	messages, err := loadMessages(lang)
 	if err != nil {
-		return fmt.Errorf("i18n: unsupported language %q: %w", lang, err)
+		return err
 	}
-
-	var raw map[string]any
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("i18n: failed to parse %s.yaml: %w", lang, err)
-	}
-
-	messages := make(map[string]string)
-	flattenYAML(raw, "", messages)
 
 	global.mu.Lock()
 	defer global.mu.Unlock()
@@ -86,6 +82,32 @@ func SetLang(lang Lang) error {
 	global.messages = messages
 	global.tmplCache = make(map[string]*template.Template)
 	return nil
+}
+
+// loadMessages は lang の翻訳ファイル（基本 + 追加）を読み込み、ドット区切りキーのフラットマップにマージして返す。
+func loadMessages(lang Lang) (map[string]string, error) {
+	base := fmt.Sprintf("locales/%s.yaml", string(lang))
+	if _, err := fs.Stat(localeFS, base); err != nil {
+		return nil, fmt.Errorf("i18n: unsupported language %q: %w", lang, err)
+	}
+	extras, err := fs.Glob(localeFS, fmt.Sprintf("locales/%s.*.yaml", string(lang)))
+	if err != nil {
+		return nil, fmt.Errorf("i18n: failed to list locales for %q: %w", lang, err)
+	}
+
+	messages := make(map[string]string)
+	for _, name := range append([]string{base}, extras...) {
+		data, err := localeFS.ReadFile(name)
+		if err != nil {
+			return nil, fmt.Errorf("i18n: failed to read %s: %w", name, err)
+		}
+		var raw map[string]any
+		if err := yaml.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("i18n: failed to parse %s: %w", name, err)
+		}
+		flattenYAML(raw, "", messages)
+	}
+	return messages, nil
 }
 
 // CurrentLang は現在設定されている言語を返す。

@@ -20,8 +20,11 @@ const testToken = "test-token-0123"
 
 func newTestRouter(state service.LifecycleState) http.Handler {
 	return NewRouter(Deps{
-		Life:  fakeLife{state: state},
-		Token: testToken,
+		Life:      fakeLife{state: state},
+		Dashboard: &fakeDashboard{},
+		Toasts:    service.NewNotificationQueue(),
+		Settings:  &fakeSettings{notReady: state != service.LifecycleReady},
+		Token:     testToken,
 		Static: fstest.MapFS{
 			"dist/js/app.js":   {Data: []byte("console.log('app')")},
 			"dist/css/app.css": {Data: []byte("body{}")},
@@ -167,14 +170,14 @@ func TestRouter_StateChangingRequestsNeedToken(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			if got := serve(h, method, "/actions/forwards/x", nil).Code; got != http.StatusForbidden {
+			if got := serve(h, method, "/actions/unknown", nil).Code; got != http.StatusForbidden {
 				t.Errorf("トークンなし: status = %d, want 403", got)
 			}
-			if got := serve(h, method, "/actions/forwards/x", map[string]string{middleware.TokenHeader: "wrong"}).Code; got != http.StatusForbidden {
+			if got := serve(h, method, "/actions/unknown", map[string]string{middleware.TokenHeader: "wrong"}).Code; got != http.StatusForbidden {
 				t.Errorf("不一致トークン: status = %d, want 403", got)
 			}
 			// トークンが一致すればミドルウェアを通過し、未定義ルートとして 404 になる。
-			if got := serve(h, method, "/actions/forwards/x", map[string]string{middleware.TokenHeader: testToken}).Code; got != http.StatusNotFound {
+			if got := serve(h, method, "/actions/unknown", map[string]string{middleware.TokenHeader: testToken}).Code; got != http.StatusNotFound {
 				t.Errorf("一致トークン: status = %d, want 404（未定義ルート）", got)
 			}
 		})
@@ -184,11 +187,16 @@ func TestRouter_StateChangingRequestsNeedToken(t *testing.T) {
 func TestRouter_FragmentsNeedHXRequest(t *testing.T) {
 	h := newTestRouter(service.LifecycleReady)
 
-	if got := serve(h, http.MethodGet, "/fragments/hosts", nil).Code; got != http.StatusBadRequest {
-		t.Errorf("HX-Request なし: status = %d, want 400", got)
+	for _, target := range []string{"/fragments/hosts", "/fragments/unknown"} {
+		if got := serve(h, http.MethodGet, target, nil).Code; got != http.StatusBadRequest {
+			t.Errorf("GET %s HX-Request なし: status = %d, want 400", target, got)
+		}
+	}
+	if got := serve(h, http.MethodGet, "/fragments/hosts", map[string]string{"HX-Request": "true"}).Code; got != http.StatusOK {
+		t.Errorf("HX-Request あり（定義済みルート）: status = %d, want 200", got)
 	}
 	// HX-Request があればミドルウェアを通過し、未定義ルートとして 404 になる。
-	if got := serve(h, http.MethodGet, "/fragments/hosts", map[string]string{"HX-Request": "true"}).Code; got != http.StatusNotFound {
+	if got := serve(h, http.MethodGet, "/fragments/unknown", map[string]string{"HX-Request": "true"}).Code; got != http.StatusNotFound {
 		t.Errorf("HX-Request あり: status = %d, want 404（未定義ルート）", got)
 	}
 }

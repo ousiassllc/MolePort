@@ -68,18 +68,21 @@ type harness struct {
 	confirms []int
 	confirm  bool
 	takeErr  error
+	takePID  int
 	newErr   error
+	queue    *service.NotificationQueue
+	ready    []service.Backend
 }
 
 func newHarness(t *testing.T, d *fakeDaemon) *harness {
 	t.Helper()
-	h := &harness{daemon: d, notifier: &recordingNotifier{}, quits: make(chan struct{}, 8)}
+	h := &harness{daemon: d, notifier: &recordingNotifier{}, quits: make(chan struct{}, 8), queue: service.NewNotificationQueue()}
 	h.life = NewLifecycle("/cfg", "1.2.3", LifecycleDeps{
 		Takeover: func(configDir string, _ time.Duration) (int, error) {
 			if configDir != "/cfg" {
 				t.Errorf("Takeover configDir = %q", configDir)
 			}
-			return 0, h.takeErr
+			return h.takePID, h.takeErr
 		},
 		NewDaemon: func(configDir, version string) (DaemonHost, error) {
 			if configDir != "/cfg" || version != "1.2.3" {
@@ -91,7 +94,11 @@ func newHarness(t *testing.T, d *fakeDaemon) *harness {
 			return h.daemon, nil
 		},
 		Notifier: h.notifier,
-		Quit:     func() { h.quits <- struct{}{} },
+		Queue:    h.queue,
+		OnReady: func(_ context.Context, b service.Backend) {
+			h.ready = append(h.ready, b)
+		},
+		Quit: func() { h.quits <- struct{}{} },
 		ConfirmQuit: func(active int) bool {
 			h.confirms = append(h.confirms, active)
 			return h.confirm

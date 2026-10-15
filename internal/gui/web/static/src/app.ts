@@ -1,10 +1,14 @@
 // MolePort GUI のクライアント JS。HALT の原則（クライアント状態を持たない）に従い、
-// 責務は次の 4 点に限定する（docs/architecture/gui.md「JS の責務」）。
+// 責務は次の点に限定する（docs/architecture/gui.md「JS の責務」）。
 //   1. Wails Events（moleport:changed）→ htmx.trigger(mp:<topic>)
 //   2. htmx:configRequest での X-MolePort-Token 付与
-//   3. htmx:responseError / htmx:sendError の汎用エラートースト
+//   3. htmx:responseError / htmx:sendError の汎用エラートースト（3b: トーストの自動消去・手動消去）
 //   4. テーマのプレビュー（data-theme / data-accent の即時切り替え）
-// 各責務の中身（フラグメント・設定フォームとの結合）は M3 で実装する。
+//   5. モーダル（ネイティブ <dialog>）の開閉
+//
+// ライブ更新（1 秒ごとのフラグメント差し替え）でフォーカスを保つため、操作可能要素には
+// サーバーが安定した id（host-{name}-connect、fwd-{name}-stop 等）を付与する。
+// HTMX は差し替え前後で同一 id の要素へフォーカスを復元するため、クライアント側に状態は持たない。
 
 // htmx.min.js はグローバルとして先に読み込まれる（CSP: script-src 'self'）。
 declare const htmx: {
@@ -57,15 +61,47 @@ function showErrorToast(): void {
   toast.className = "mp-toast";
   toast.dataset.kind = "error";
   toast.setAttribute("role", "alert");
-  toast.textContent = stack.dataset.errorMessage ?? "";
+  const message = document.createElement("span");
+  message.textContent = stack.dataset.errorMessage ?? "";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "mp-toast-close";
+  close.setAttribute("data-dismiss-toast", "");
+  close.setAttribute("aria-label", stack.dataset.dismissLabel ?? "");
+  close.textContent = "\u00d7";
+  toast.append(message, close);
   stack.append(toast);
 }
 document.body.addEventListener("htmx:responseError", showErrorToast);
 document.body.addEventListener("htmx:sendError", showErrorToast);
 
+// 3b. トーストの消去。成功・情報は 5 秒で自動消去し、エラーは閉じるボタン（data-dismiss-toast）で手動消去する。
+//     トースト本体は常にサーバーが描画する（OOB で #toast-stack の末尾へ追記される）。
+const TOAST_AUTO_DISMISS_MS = 5000;
+
+function watchToastStack(): void {
+  const stack = document.getElementById("toast-stack");
+  if (!stack) return;
+  new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node instanceof HTMLElement && node.dataset.kind !== "error") {
+          setTimeout(() => node.remove(), TOAST_AUTO_DISMISS_MS);
+        }
+      }
+    }
+  }).observe(stack, { childList: true });
+  stack.addEventListener("click", (e) => {
+    const target = e.target as Element;
+    if (target.closest("[data-dismiss-toast]")) target.closest(".mp-toast")?.remove();
+  });
+}
+
 // 4. テーマのプレビュー。サーバー往復なしで <html> の属性を書き換える（保存値はサーバーが次回レンダリングで出力）。
-//    mp:theme-preview … 設定フォームのスウォッチ選択（detail: {theme, accent}）
-//    mp:settings-applied … 保存成功時に HX-Trigger で受け取る確定値（detail: {lang, theme, accent}）
+//    - 設定フォームのスウォッチ（[data-theme-preview] のラジオ）を選ぶと data-theme / data-accent を即時に反映する。
+//      最初のプレビュー時に元の値を覚え、保存せずにモーダルを閉じたら（キャンセル・Esc）元に戻す。
+//    - mp:settings-applied … 保存成功時に HX-Trigger で受け取る確定値（detail: {lang, theme, accent}）。
+//    data-theme="system" の追従は CSS（prefers-color-scheme）のみで行う。
 interface ThemeDetail {
   lang?: string;
   theme: string;
@@ -78,8 +114,76 @@ function applyTheme({ lang, theme, accent }: ThemeDetail): void {
   root.dataset.theme = theme;
   root.dataset.accent = accent;
 }
-for (const name of ["mp:theme-preview", "mp:settings-applied"]) {
-  document.body.addEventListener(name, (e) => applyTheme((e as CustomEvent<ThemeDetail>).detail));
+
+let themeBeforePreview: ThemeDetail | null = null;
+
+function previewTheme(form: HTMLFormElement): void {
+  const root = document.documentElement;
+  themeBeforePreview ??= { theme: root.dataset.theme ?? "", accent: root.dataset.accent ?? "" };
+  const data = new FormData(form);
+  applyTheme({
+    theme: String(data.get("theme_base") ?? themeBeforePreview.theme),
+    accent: String(data.get("theme_accent") ?? themeBeforePreview.accent),
+  });
 }
 
+function restorePreviewedTheme(): void {
+  if (themeBeforePreview) applyTheme(themeBeforePreview);
+  themeBeforePreview = null;
+}
+
+document.body.addEventListener("change", (e) => {
+  const input = e.target as HTMLInputElement;
+  if (input.matches("[data-theme-preview]") && input.form) previewTheme(input.form);
+});
+document.body.addEventListener("mp:settings-applied", (e) => {
+  themeBeforePreview = null;
+  applyTheme((e as CustomEvent<ThemeDetail>).detail);
+});
+
+// 5. モーダル。#modal-root（転送追加フォーム・削除確認・設定）と #credential-root（クレデンシャルダイアログ）に
+//    差し込まれた <dialog> を showModal() で開く（フォーカストラップと Esc はネイティブ）。
+//    - mp:close-modal（HX-Trigger）と [data-close-modal] のクリックで #modal-root を空にする。
+//    - Esc で閉じたとき（close イベント）も #modal-root を空にする。
+//    - クレデンシャルダイアログの Esc はキャンセル扱い（[data-credential-cancel] をクリックして POST する）。
+//    - #credential-root は別の領域にし、先に開いているフォームの入力を壊さずに前面（top layer）へ重ねる。
+function bridgeModals(): void {
+  const modalRoot = document.getElementById("modal-root");
+  const credentialRoot = document.getElementById("credential-root");
+
+  for (const root of [modalRoot, credentialRoot]) {
+    if (!root) continue;
+    const openNew = () => root.querySelectorAll("dialog:not([open])").forEach((d) => (d as HTMLDialogElement).showModal());
+    new MutationObserver(openNew).observe(root, { childList: true });
+  }
+
+  const closeModal = () => {
+    restorePreviewedTheme();
+    modalRoot?.replaceChildren();
+  };
+  document.body.addEventListener("mp:close-modal", closeModal);
+  document.body.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("[data-close-modal]")) closeModal();
+  });
+  modalRoot?.addEventListener("close", closeModal, true);
+  credentialRoot?.addEventListener(
+    "cancel",
+    (e) => {
+      e.preventDefault();
+      credentialRoot.querySelector<HTMLElement>("[data-credential-cancel]")?.click();
+    },
+    true,
+  );
+}
+
+// /fragments/credential の再取得時に、表示中のダイアログの要求 ID を伝える（サーバーが同一要求なら差し替えない）。
+document.body.addEventListener("htmx:configRequest", (e) => {
+  const detail = (e as CustomEvent<HTMXConfigRequestDetail & { path: string }>).detail;
+  if (detail.path !== "/fragments/credential") return;
+  const shown = document.querySelector<HTMLElement>("#credential-root [data-request-id]")?.dataset.requestId;
+  if (shown) detail.headers["X-MolePort-Credential-Shown"] = shown;
+});
+
 bridgeWailsEvents();
+watchToastStack();
+bridgeModals();

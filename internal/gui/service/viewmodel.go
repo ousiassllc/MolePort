@@ -1,5 +1,7 @@
 package service
 
+import "github.com/ousiassllc/moleport/internal/core"
+
 // ViewModel は Core の型から組み立てる表示用の構造体。永続化しない。
 // 整形済み文字列とアクション可否を持ち、Templ 側に条件判断を持ち込まない。
 
@@ -57,6 +59,12 @@ type HeaderView struct {
 	ReleaseURL      string
 }
 
+// SettingsView は設定フォームの値（UC-34）。保存値の表示と入力値の再描画（422）の両方に使う。
+type SettingsView struct {
+	Language, ThemeBase, ThemeAccent string
+	UpdateCheckEnabled               bool
+}
+
 // FormErrors はフィールド名 → ローカライズ済みエラーメッセージ（"_form" は全体エラー）。
 type FormErrors map[string]string
 
@@ -74,3 +82,33 @@ type ToastView struct {
 	Kind    ToastKind
 	Message string // ローカライズ済み。クレデンシャル・内部パスを含めない
 }
+
+// ForwardFormInput は転送追加フォームの入力値。再描画（422・種別切り替え）用に文字列のまま保持する。
+type ForwardFormInput struct {
+	Host, Type, Name, LocalPort, RemoteHost, RemotePort, RemoteBindAddr string
+	AutoConnect                                                         bool
+}
+
+// CredentialView は待機中のクレデンシャル要求の表示内容。値（入力されたクレデンシャル）は持たない。
+type CredentialView struct {
+	RequestID string
+	Host      string
+	Type      string // core.CredentialType の文字列
+	Prompt    string
+	Prompts   []CredentialPromptView // keyboard-interactive 用
+	Remaining int                    // 待機中の他要求数
+}
+
+// CredentialPromptView は keyboard-interactive の個別プロンプト。
+type CredentialPromptView struct {
+	Label string
+	Echo  bool
+}
+
+// KeyboardInteractive は keyboard-interactive（複数プロンプト）の要求かを返す。
+func (v CredentialView) KeyboardInteractive() bool {
+	return v.Type == string(core.CredentialKeyboardInteractive)
+}
+
+// Passphrase は秘密鍵のパスフレーズ要求かを返す。
+func (v CredentialView) Passphrase() bool { return v.Type == string(core.CredentialPassphrase) }
