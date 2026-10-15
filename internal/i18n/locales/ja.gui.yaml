@@ -121,3 +121,30 @@ gui:
     submit: "送信"
     cancel: "キャンセル"
     expired: "入力の有効期限が切れました。"
+  settings:
+    open: "設定"
+    title: "設定"
+    language: "言語"
+    theme_base: "テーマ"
+    theme_accent: "アクセントカラー"
+    update_check: "新しいバージョンを確認する"
+    submit: "保存"
+    cancel: "キャンセル"
+    saved: "設定を保存しました。"
+    base:
+      system: "システム"
+      dark: "ダーク"
+      light: "ライト"
+    accent:
+      violet: "バイオレット"
+      blue: "ブルー"
+      green: "グリーン"
+      cyan: "シアン"
+      orange: "オレンジ"
+    error:
+      language: "対応している言語を選択してください。"
+      theme_base: "システム・ダーク・ライトのいずれかを選択してください。"
+      theme_accent: "アクセントカラーを選択してください。"
+  update:
+    badge: "{{.Version}} が利用可能"
+    none: "新しいバージョンはありません。"

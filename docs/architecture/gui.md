@@ -91,7 +91,7 @@ Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
 |---------|-----------|-----------|------|----------------|
 | Shell | `cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray` | `gui` | Wails 起動、ウィンドウ制御、トレイ、起動/引き継ぎ/終了の統括、Wails Events 送信 | Web, Service, daemon, Wails, systray |
 | Web | `internal/gui/web`（`handler/`, `middleware/`, `view/{atoms,molecules,organisms,pages,layout}`, `static/`） | なし | HTTP ルーティング、Templ レンダリング、トークン・CSP、静的アセット配信 | Service, i18n, Templ |
-| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
+| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker、`settings/`: 設定・更新バッジ、`servicetest/`: テスト用 Core フェイク） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
 | Core / Infra | 既存 | なし | 既存どおり | — |
 
 - `internal/gui/web` と `internal/gui/service` は Wails・トレイに依存しない。`go test ./...` で Linux CI 上でテストできる（NFR-41）
@@ -409,6 +409,10 @@ gui:
 
 TUI のテーマ（`tui.theme`）は独立して保持する。GUI のテーマは TUI と共有しない（TUI は 2 値のベーステーマ、GUI は `system` を含む 3 値であり、ターミナルとウィンドウで好みが異なる想定のため）。
 
+- `gui:` セクションのない既存の `config.yaml` はデフォルト値（`system` / `violet` / `false`）で読み込む。手で編集された不正な `gui.theme` の値は、使用時（設定画面・`GET /`）にデフォルトへ置き換える
+- `GET /` の `<html data-theme data-accent>` は保存値を出力する。内蔵デーモンの起動前（`ConfigManager` を参照できない間）は `cmd/moleport-gui` が起動時に読んだ値（`shell.Config.Theme`）を使う
+- 設定画面は `language`・`gui.theme`・`update_check.enabled` のみを変更する。`update_check.enabled` の変更は `VersionChecker.SetEnabled` で即時に反映する（無効化でチェック停止・バッジ非表示、有効化でチェック再開）
+
 ## セキュリティ設計
 
 | 脅威 | 対策 |
@@ -534,3 +538,4 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.2 | 2026-10-15 | `wails.json` を `cmd/moleport-gui/` に置く構成（`frontend:dir: .` / `-skipbindings`）、PoC の検証手順・縮退方針の実装状況・実機検証待ちの明記、トレイ・ビルドコマンドの記述を実装に合わせて更新 | #87 M2 Shell 層 + PoC |
 | 1.3 | 2026-10-15 | EventBridge の非表示中の抑止方法、トーストの自動消去（成功・情報 5 秒 / エラーは手動）を `app.ts` が担うことを明記 | #88 M3-1 ダッシュボード |
 | 1.4 | 2026-10-15 | クレデンシャルフローの実装反映: 接続アクションの応答を `200` に修正、`Activity`（進行中の接続・開始と直近の開始失敗の重ね合わせ）、`#credential-root`（他モーダルに重ねる）、Service のサブパッケージ（`bridge/` / `credential/`）を追記 | #89 M3-2 操作系 |
+| 1.5 | 2026-10-15 | 設定の拡張の実装反映: 既存 `config.yaml` の互換・値の補完、起動前ページのテーマ、`update_check` の即時反映を追記 | #90 M3-3 設定・更新バッジ |

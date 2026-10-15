@@ -98,8 +98,10 @@ function watchToastStack(): void {
 }
 
 // 4. テーマのプレビュー。サーバー往復なしで <html> の属性を書き換える（保存値はサーバーが次回レンダリングで出力）。
-//    mp:theme-preview … 設定フォームのスウォッチ選択（detail: {theme, accent}）
-//    mp:settings-applied … 保存成功時に HX-Trigger で受け取る確定値（detail: {lang, theme, accent}）
+//    - 設定フォームのスウォッチ（[data-theme-preview] のラジオ）を選ぶと data-theme / data-accent を即時に反映する。
+//      最初のプレビュー時に元の値を覚え、保存せずにモーダルを閉じたら（キャンセル・Esc）元に戻す。
+//    - mp:settings-applied … 保存成功時に HX-Trigger で受け取る確定値（detail: {lang, theme, accent}）。
+//    data-theme="system" の追従は CSS（prefers-color-scheme）のみで行う。
 interface ThemeDetail {
   lang?: string;
   theme: string;
@@ -112,9 +114,32 @@ function applyTheme({ lang, theme, accent }: ThemeDetail): void {
   root.dataset.theme = theme;
   root.dataset.accent = accent;
 }
-for (const name of ["mp:theme-preview", "mp:settings-applied"]) {
-  document.body.addEventListener(name, (e) => applyTheme((e as CustomEvent<ThemeDetail>).detail));
+
+let themeBeforePreview: ThemeDetail | null = null;
+
+function previewTheme(form: HTMLFormElement): void {
+  const root = document.documentElement;
+  themeBeforePreview ??= { theme: root.dataset.theme ?? "", accent: root.dataset.accent ?? "" };
+  const data = new FormData(form);
+  applyTheme({
+    theme: String(data.get("theme_base") ?? themeBeforePreview.theme),
+    accent: String(data.get("theme_accent") ?? themeBeforePreview.accent),
+  });
 }
+
+function restorePreviewedTheme(): void {
+  if (themeBeforePreview) applyTheme(themeBeforePreview);
+  themeBeforePreview = null;
+}
+
+document.body.addEventListener("change", (e) => {
+  const input = e.target as HTMLInputElement;
+  if (input.matches("[data-theme-preview]") && input.form) previewTheme(input.form);
+});
+document.body.addEventListener("mp:settings-applied", (e) => {
+  themeBeforePreview = null;
+  applyTheme((e as CustomEvent<ThemeDetail>).detail);
+});
 
 // 5. モーダル。#modal-root（転送追加フォーム・削除確認・設定）と #credential-root（クレデンシャルダイアログ）に
 //    差し込まれた <dialog> を showModal() で開く（フォーカストラップと Esc はネイティブ）。
@@ -132,7 +157,10 @@ function bridgeModals(): void {
     new MutationObserver(openNew).observe(root, { childList: true });
   }
 
-  const closeModal = () => modalRoot?.replaceChildren();
+  const closeModal = () => {
+    restorePreviewedTheme();
+    modalRoot?.replaceChildren();
+  };
   document.body.addEventListener("mp:close-modal", closeModal);
   document.body.addEventListener("click", (e) => {
     if ((e.target as Element).closest("[data-close-modal]")) closeModal();

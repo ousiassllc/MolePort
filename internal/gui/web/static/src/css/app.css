@@ -192,3 +192,40 @@
 .mp-btn:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 1px; }
 .mp-checkbox { width: 1rem; height: 1rem; accent-color: var(--mp-accent); }
 .mp-btn:disabled { opacity: 0.6; cursor: progress; }
+
+/* 設定フォームのテーマスウォッチ。色見本は保存値ではなく選択肢自体の色を示す */
+fieldset.mp-field { border: 0; padding: 0; min-width: 0; }
+.mp-swatches { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.mp-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--mp-border);
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+.mp-swatch:has(.mp-swatch-input:checked) { border-color: var(--mp-accent); }
+.mp-swatch:has(.mp-swatch-input:focus-visible) { outline: 2px solid var(--mp-accent); outline-offset: 1px; }
+.mp-swatch-input { position: absolute; opacity: 0; pointer-events: none; }
+.mp-swatch-chip { width: 1rem; height: 1rem; border-radius: 50%; border: 1px solid var(--mp-border); }
+.mp-swatch-chip[data-swatch="theme_base:system"] { background: linear-gradient(135deg, #0f1115 50%, #ffffff 50%); }
+.mp-swatch-chip[data-swatch="theme_base:dark"] { background: #0f1115; }
+.mp-swatch-chip[data-swatch="theme_base:light"] { background: #ffffff; }
+.mp-swatch-chip[data-swatch="theme_accent:violet"] { background: #8b5cf6; }
+.mp-swatch-chip[data-swatch="theme_accent:blue"] { background: #3b82f6; }
+.mp-swatch-chip[data-swatch="theme_accent:green"] { background: #22c55e; }
+.mp-swatch-chip[data-swatch="theme_accent:cyan"] { background: #06b6d4; }
+.mp-swatch-chip[data-swatch="theme_accent:orange"] { background: #f97316; }
+
+/* ヘッダーの新バージョンバッジ（update_check 有効かつ新版ありのときのみ描画される） */
+.mp-update-badge {
+  padding: 0 0.625rem;
+  border: 1px solid var(--mp-accent);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--mp-accent);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.mp-update-badge:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 1px; }

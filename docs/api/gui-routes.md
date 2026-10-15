@@ -220,18 +220,21 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | `theme_accent` | `violet` / `blue` / `green` / `cyan` / `orange` |
 | `update_check_enabled` | `on` / なし |
 
-処理: 検証 → `ConfigManager.UpdateConfig`（`language`、`gui.theme`、`update_check.enabled` のみ変更）→ `i18n.SetLang` → トレイメニュー再構築 → `VersionChecker` の有効/無効反映。
+処理: 検証 → `ConfigManager.UpdateConfig`（`language`、`gui.theme`、`update_check.enabled` のみ変更。`tui.theme` は変更しない）→ `i18n.SetLang` → `VersionChecker.SetEnabled`（有効/無効の反映）。トレイメニューの再構築は #91（トレイ）で `settings` トピックへの追従として行う。
 
 | 結果 | ステータス | 本文 |
 |------|-----------|------|
-| 成功 | `200` | `HX-Refresh` は使わず `HX-Trigger: mp:close-modal, mp:all`（全フラグメントを再取得し、`<html>` の `lang` / `data-theme` / `data-accent` は `app.ts` が `HX-Trigger-After-Swap` で受けた値で更新する）+ OOB トースト |
-| 検証エラー | `422` | `SettingsForm` の再描画（`FormErrors` 付き） |
+| 成功 | `200` | 本文は OOB トースト（success）のみ（フォームは `hx-swap="none"`）。`HX-Refresh` は使わず `HX-Trigger: {"mp:close-modal": "", "mp:all": "", "mp:settings-applied": {...}}`（全フラグメントを新しい言語で再取得し、`<html>` の `lang` / `data-theme` / `data-accent` は `app.ts` が `mp:settings-applied` の値で更新する） |
+| 検証エラー | `422` | `SettingsForm` の再描画（`FormErrors` 付き、入力値保持）。`HX-Retarget: #modal-root` |
+| 起動中 | `409` | OOB トースト（起動中です） |
 
-> `<html>` 属性の更新: レスポンスヘッダー `HX-Trigger: {"mp:settings-applied": {"lang": "ja", "theme": "dark", "accent": "violet"}}` を返し、`app.ts` が `document.documentElement` の属性を書き換える（全画面遷移・`HX-Refresh` を避けるため）。
+> `<html>` 属性の更新: `mp:settings-applied` の値は `{"lang": "ja", "theme": "dark", "accent": "violet"}`。`app.ts` が `document.documentElement` の属性を書き換える（全画面遷移・`HX-Refresh` を避けるため）。
+
+> テーマのプレビュー: 設定フォームのスウォッチ（`data-theme-preview` を持つラジオ）を選ぶと `app.ts` が `data-theme` / `data-accent` を即時に書き換える。保存せずにモーダルを閉じた（キャンセル・`Esc`）場合は元の値に戻す。`data-theme="system"` は CSS の `prefers-color-scheme` のみで追従する。
 
 ### `POST /actions/update/open`
 
-サーバーが `VersionChecker` のキャッシュからリリース URL を取得し、`https://github.com/ousiassllc/moleport/releases/` で始まる場合のみ `Opener`（Shell が `runtime.BrowserOpenURL` で実装）に渡す。URL はクライアントから受け取らない。成功 `204`、更新情報なし `409`。
+サーバーが `VersionChecker` のキャッシュ（`Cached()`。ネットワークアクセスしない）からリリース URL を取得し、`update_check` が有効かつ新版ありで、URL が `https://github.com/ousiassllc/moleport/releases/` で始まる場合のみ `Opener`（Shell が `runtime.BrowserOpenURL` で実装）に渡す。URL はクライアントから受け取らない。成功 `204`、更新情報なし `409`（OOB トースト + `HX-Trigger: mp:header` でバッジを取り直す）。
 
 ## Wails Events
 
@@ -281,3 +284,4 @@ Lit コンポーネントは初期リリースでは存在しない（D-10）。
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
 | 1.1 | 2026-10-15 | `#toast-stack` の取り込みトリガーと稼働状態時のパネル描画を実装に合わせて明記 | #88 M3-1 ダッシュボード |
 | 1.2 | 2026-10-15 | 操作系の実装反映: `#credential-root`（クレデンシャルダイアログを他モーダルに重ねる）、`X-MolePort-Credential-Shown` による差し替え抑止、クレデンシャルルートの `415` / `400`、422 の差し替え先指定（`HX-Retarget`）、転送追加時の開始失敗の通知経路、モーダルの開閉方法を追記 | #89 M3-2 操作系 |
+| 1.3 | 2026-10-15 | 設定・更新バッジの実装反映: `POST /actions/settings` の応答（`hx-swap="none"`、`HX-Trigger` の JSON 形式、`409`）、テーマのプレビュー/キャンセル、トレイ再構築を #91 に委譲、`/actions/update/open` のキャッシュ参照と `409` 時の `mp:header` | #90 M3-3 設定・更新バッジ |

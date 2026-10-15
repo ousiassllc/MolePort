@@ -88,12 +88,16 @@ func (l *Lifecycle) Backend() (service.Backend, bool) {
 
 func (l *Lifecycle) newBackend(host DaemonHost) service.Backend {
 	svc := host.Services()
-	return service.Backend{
+	b := service.Backend{
 		SSH:     svc.SSH,
 		Forward: svc.Forward,
 		Config:  svc.Config,
 		Info:    service.Info{Version: l.version, PID: os.Getpid()},
 	}
+	if svc.Version != nil { // nil の *VersionChecker を interface に入れない
+		b.Version = svc.Version
+	}
+	return b
 }
 
 // Quitting は終了処理中かを返す。OnBeforeClose がウィンドウを閉じるかの判定に使う。

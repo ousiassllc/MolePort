@@ -23,6 +23,7 @@ func newTestRouter(state service.LifecycleState) http.Handler {
 		Life:      fakeLife{state: state},
 		Dashboard: &fakeDashboard{},
 		Toasts:    service.NewNotificationQueue(),
+		Settings:  &fakeSettings{notReady: state != service.LifecycleReady},
 		Token:     testToken,
 		Static: fstest.MapFS{
 			"dist/js/app.js":   {Data: []byte("console.log('app')")},

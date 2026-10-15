@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"net/http"
 
+	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/service/credential"
+	"github.com/ousiassllc/moleport/internal/gui/service/settings"
 	"github.com/ousiassllc/moleport/internal/gui/web/handler"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
 )
@@ -21,6 +23,8 @@ type Deps struct {
 	Forwards  service.Forwards           // 転送の追加・開始・停止・削除
 	Hosts     service.Hosts              // ホストの接続・切断
 	Cred      credential.Prompter        // 待機中のクレデンシャル要求（CredentialBroker）
+	Settings  settings.Settings          // 設定画面・リリースページの起動
+	Theme     guiconfig.Theme            // 内蔵デーモンの起動前に描画するページのテーマ（起動時に読んだ gui.theme）
 	Token     string                     // 起動ごとのランダムトークン（middleware.NewToken）
 	Static    fs.FS                      // go:embed の dist 含む FS。テストでは fstest.MapFS
 }
@@ -31,7 +35,7 @@ type Deps struct {
 func NewRouter(deps Deps) http.Handler {
 	mux := http.NewServeMux()
 	frags := handler.NewFragments(deps.Life, deps.Dashboard, deps.Toasts)
-	mux.HandleFunc("GET /{$}", handler.NewPage(deps.Life, deps.Dashboard, deps.Token).Index)
+	mux.HandleFunc("GET /{$}", handler.NewPage(deps.Life, deps.Dashboard, deps.Settings, deps.Theme, deps.Token).Index)
 	mux.HandleFunc("GET /fragments/header", frags.Header)
 	mux.HandleFunc("GET /fragments/hosts", frags.Hosts)
 	mux.HandleFunc("GET /fragments/forwards", frags.Forwards)
@@ -45,6 +49,10 @@ func NewRouter(deps Deps) http.Handler {
 	mux.HandleFunc("GET /fragments/credential", cred.Dialog)
 	mux.HandleFunc("POST /actions/credential/{id}", cred.Resolve)
 	mux.HandleFunc("POST /actions/credential/{id}/cancel", cred.Cancel)
+	set := handler.NewSettings(deps.Settings)
+	mux.HandleFunc("GET /fragments/settings", set.Form)
+	mux.HandleFunc("POST /actions/settings", set.Save)
+	mux.HandleFunc("POST /actions/update/open", set.OpenUpdate)
 
 	fwd := handler.NewForwardActions(deps.Forwards, deps.Dashboard)
 	mux.HandleFunc("POST /actions/forwards", fwd.Add)

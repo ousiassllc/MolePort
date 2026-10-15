@@ -121,3 +121,30 @@ gui:
     submit: "Submit"
     cancel: "Cancel"
     expired: "The input has expired."
+  settings:
+    open: "Settings"
+    title: "Settings"
+    language: "Language"
+    theme_base: "Theme"
+    theme_accent: "Accent color"
+    update_check: "Check for new versions"
+    submit: "Save"
+    cancel: "Cancel"
+    saved: "Settings saved."
+    base:
+      system: "System"
+      dark: "Dark"
+      light: "Light"
+    accent:
+      violet: "Violet"
+      blue: "Blue"
+      green: "Green"
+      cyan: "Cyan"
+      orange: "Orange"
+    error:
+      language: "Select a supported language."
+      theme_base: "Select system, dark or light."
+      theme_accent: "Select one of the accent colors."
+  update:
+    badge: "{{.Version}} available"
+    none: "No new version is available."

@@ -36,13 +36,17 @@ func NewDashboardService(src BackendSource, act *Activity) *DashboardService {
 	return &DashboardService{src: src, act: act, now: time.Now}
 }
 
-// Header はヘッダーの ViewModel を返す。
+// Header はヘッダーの ViewModel を返す。新バージョンは update_check 有効かつ新版ありのときのみ載せる。
 func (d *DashboardService) Header() HeaderView {
 	b, ok := d.src.Backend()
 	if !ok {
 		return HeaderView{}
 	}
-	return HeaderView{Version: b.Info.Version, PID: b.Info.PID}
+	v := HeaderView{Version: b.Info.Version, PID: b.Info.PID}
+	if r, ok := AvailableUpdate(b); ok {
+		v.UpdateAvailable, v.LatestVersion, v.ReleaseURL = true, r.LatestVersion, r.ReleaseURL
+	}
+	return v
 }
 
 // Hosts はホスト行の ViewModel を返す。アクティブ転送数はセッションから数える。

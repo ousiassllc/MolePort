@@ -990,6 +990,13 @@ func (vc *VersionChecker) Stop()
 func (vc *VersionChecker) LatestVersion(ctx context.Context) (*VersionCheckResult, error)
 
 // UpdateAvailable は更新が利用可能かどうかを返す。
+
+// SetEnabled はチェックの有効/無効を実行中に切り替える（GUI の設定画面、UC-34）。
+// 無効化でバックグラウンドチェックを停止し、有効化で Start 済みなら直ちに再開する。
+func (vc *VersionChecker) SetEnabled(enabled bool)
+
+// Cached はキャッシュ済みの結果を返す（ネットワークアクセスしない）。無効・"dev"・未チェックは ok=false。
+func (vc *VersionChecker) Cached() (core.VersionCheckResult, bool)
 func (vc *VersionChecker) UpdateAvailable() bool
 ```
 
@@ -1710,11 +1717,11 @@ type Deps struct {
     Dashboard service.Dashboard
     Forwards  service.Forwards
     Hosts     service.Hosts
-    Settings  service.Settings
+    Settings  settings.Settings   // settings.New(BackendSource, Opener)
     Cred      credential.Prompter // *credential.Broker
     Toasts    *service.NotificationQueue
     Life      LifecycleState   // State() のみ
-    Opener    service.Opener
+    Theme     guiconfig.Theme  // 内蔵デーモンの起動前に描画する GET / のテーマ（起動時に読んだ gui.theme）
     Token     string           // 起動ごとのランダムトークン
     Static    fs.FS            // go:embed。テストでは fstest.MapFS
 }
@@ -1729,7 +1736,9 @@ Core の型から ViewModel を組み立て、操作を実行する。Wails・HT
 
 ```go
 // 内蔵デーモン起動後の Core 参照。Shell の Lifecycle が BackendSource を実装する（ready 前は ok=false）
-type Backend struct { SSH core.SSHManager; Forward core.ForwardManager; Config core.ConfigManager; Info Info }
+type Backend struct { SSH core.SSHManager; Forward core.ForwardManager; Config core.ConfigManager; Version VersionSource; Info Info }
+type VersionSource interface { Cached() (core.VersionCheckResult, bool); SetEnabled(bool) } // update.VersionChecker
+func AvailableUpdate(b Backend) (core.VersionCheckResult, bool) // update_check 有効・新版あり・URL が ReleaseURLPrefix で始まるときのみ ok
 type BackendSource interface{ Backend() (Backend, bool) }
 
 type Dashboard interface { // 実装は NewDashboardService(BackendSource, *Activity)。ready 前は空の ViewModel を返す
@@ -1755,13 +1764,15 @@ type Hosts interface { // 実装は NewHostService（引数は NewForwardService
 
 type CallbackProvider interface{ Callback() core.CredentialCallback } // credential.Broker が実装
 
+// gui/service/settings（Linterly の行数制限によりサブパッケージ）
 type Settings interface {
-    View() SettingsView
-    Apply(in SettingsView) (FormErrors, error)          // UpdateConfig → i18n.SetLang → Notifier
+    View() (SettingsView, error)                         // language（解決済み）・gui.theme・update_check.enabled
+    Save(in SettingsView) (FormErrors, error)            // 検証 → UpdateConfig → i18n.SetLang → VersionSource.SetEnabled
+    OpenUpdate() error                                   // AvailableUpdate の URL を Opener に渡す。なければ ErrNoUpdate
 }
+type Opener interface{ OpenURL(url string) }             // Shell が runtime.BrowserOpenURL で実装
 
 type Notifier interface{ Notify(topics ...Topic) }
-type Opener interface{ OpenURL(url string) error }
 ```
 
 - `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼ぶ。呼び出し側のレスポンスは即時に返る。転送開始の失敗は `NotificationQueue` に積み（ポート競合は空きポート候補付き）、接続の失敗は Core の `SSHEventError` を EventBridge がトーストにする
@@ -1839,7 +1850,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 
 ### 設定・i18n の拡張
 
-- `Config.GUI`（`GUIConfig`）をデフォルト値付きで追加（`DefaultConfig`: `base: system`、`accent: violet`）。`ConfigManager.LoadConfig` は未指定の値をデフォルトで補完する
+- `Config.GUI`（`guiconfig.Config`。`core/guiconfig` サブパッケージ: `core` のディレクトリ行数制限のため）をデフォルト値付きで追加（`DefaultConfig` が `guiconfig.Default()` = `base: system`、`accent: violet` を入れてから読み込むため、`gui:` のない既存ファイルは既定値になる）。選択肢と検証は `guiconfig.Bases` / `Accents` / `ValidBase` / `ValidAccent`。手で編集された不正値は使用時に `Theme.Normalized()` で既定値に置き換える（設定画面・`GET /`）
 - 翻訳ファイルは言語ごとに `locales/<lang>.yaml`（基本）と `locales/<lang>.gui.yaml`（`gui:` 名前空間）に分け、ロード時にマージする（ファイルあたり 300 行の制限のため）。`gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
 - GUI が表示するエラー文字列は Core のエラー型から `i18n` キーへ変換する（Core の英語エラー文字列を画面に直接出さない）
 
@@ -1851,7 +1862,8 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
 | `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
-| `core.Config` | `GUI GUIConfig` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない |
+| `core.Config` | `GUI guiconfig.Config` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない。`tui.theme` は GUI から変更しない |
+| `update.VersionChecker` | `SetEnabled`（実行中の有効/無効切り替え）と `Cached`（キャッシュのみ参照）を追加。`Start` は無効時も再開用にコンテキストを保持する |
 
 ### GUI のテスト方針
 
@@ -1958,3 +1970,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.2 | 2026-10-15 | M1 基盤整備の実装反映: PID ファイル管理を `daemon/pidfile` サブパッケージに分離（NFR-24〜26）、Windows ロック範囲、`TakeoverTimeout` を追記 | #85 M1 基盤整備 |
 | 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |
 | 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |
+| 6.5 | 2026-10-15 | M3-3 の実装反映: `Settings`（`gui/service/settings`。`View` / `Save` / `OpenUpdate`）、`Opener`、`Backend.Version`（`VersionSource`）と `AvailableUpdate`、`Deps.Theme`、`VersionChecker.SetEnabled` / `Cached`、`gui:` セクションの型を `core/guiconfig` サブパッケージ（`Config` / `Theme` / `Normalized`）に置くことを追記 | #90 M3-3 設定・更新バッジ |

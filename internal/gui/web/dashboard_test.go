@@ -31,6 +31,7 @@ func dashboardRouter(state service.LifecycleState, d *fakeDashboard, q *service.
 		Life:      fakeLife{state: state},
 		Dashboard: d,
 		Toasts:    q,
+		Settings:  &fakeSettings{notReady: state != service.LifecycleReady},
 		Token:     testToken,
 		Static:    fstest.MapFS{"dist/.gitkeep": {}},
 	})

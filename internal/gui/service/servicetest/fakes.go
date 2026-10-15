@@ -226,15 +226,25 @@ func (f *Forward) Stopped() []string {
 	return append([]string(nil), f.stops...)
 }
 
-// Config は core.ConfigManager のフェイク。UpdateConfig で保存された転送ルールを記録する。
-// Err を設定すると UpdateConfig がそのエラーを返す。
+// Config は core.ConfigManager のフェイク。メモリ上の Config を GetConfig / UpdateConfig で読み書きする。
+// Err を設定すると UpdateConfig がそのエラーを返し、Config を変更しない。
 type Config struct {
 	core.ConfigManager
 	Err error
 
 	mu    sync.Mutex
-	saved []core.ForwardRule
+	cfg   core.Config
 	saves int
+}
+
+// NewConfig は cfg を保存済みの値として持つ Config を返す。
+func NewConfig(cfg core.Config) *Config { return &Config{cfg: cfg} }
+
+func (c *Config) GetConfig() *core.Config {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cfg := c.cfg
+	return &cfg
 }
 
 func (c *Config) UpdateConfig(fn func(*core.Config)) error {
@@ -243,18 +253,16 @@ func (c *Config) UpdateConfig(fn func(*core.Config)) error {
 	if c.Err != nil {
 		return c.Err
 	}
-	var cfg core.Config
+	cfg := c.cfg
 	fn(&cfg)
-	c.saved = cfg.Forwards
+	c.cfg = cfg
 	c.saves++
 	return nil
 }
 
-// SavedRules は最後に保存された転送ルールを返す。
+// SavedRules は保存された転送ルールを返す。
 func (c *Config) SavedRules() []core.ForwardRule {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]core.ForwardRule(nil), c.saved...)
+	return c.GetConfig().Forwards
 }
 
 // Saves は UpdateConfig が成功した回数を返す。

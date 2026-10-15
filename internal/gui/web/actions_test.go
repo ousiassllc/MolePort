@@ -79,6 +79,7 @@ func newActionEnv(state service.LifecycleState) *actionEnv {
 		Forwards:  e.fwd,
 		Hosts:     e.hosts,
 		Cred:      e.cred,
+		Settings:  &fakeSettings{notReady: state != service.LifecycleReady},
 		Token:     testToken,
 		Static:    fstest.MapFS{"dist/.gitkeep": {}},
 	})

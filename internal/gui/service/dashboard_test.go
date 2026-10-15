@@ -48,6 +48,36 @@ func TestDashboard_Header(t *testing.T) {
 	}
 }
 
+func TestDashboard_HeaderUpdateBadge(t *testing.T) {
+	const release = ReleaseURLPrefix + "tag/v2.0.0"
+	newer := &servicetest.Version{OK: true, Result: core.VersionCheckResult{UpdateAvailable: true, LatestVersion: "v2.0.0", ReleaseURL: release}}
+	tests := []struct {
+		name    string
+		enabled bool
+		ver     VersionSource
+		want    bool
+	}{
+		{"有効かつ新版あり", true, newer, true},
+		{"update_check 無効", false, newer, false},
+		{"新版なし", true, &servicetest.Version{OK: true}, false},
+		{"VersionChecker なし", true, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := core.DefaultConfig()
+			cfg.UpdateCheck.Enabled = tt.enabled
+			b := Backend{Config: servicetest.NewConfig(cfg), Version: tt.ver, Info: Info{Version: "1.0.0"}}
+			got := NewDashboardService(staticBackend{ok: true, b: b}, nil).Header()
+			if got.UpdateAvailable != tt.want {
+				t.Fatalf("UpdateAvailable = %v, want %v", got.UpdateAvailable, tt.want)
+			}
+			if tt.want && (got.LatestVersion != "v2.0.0" || got.ReleaseURL != release) {
+				t.Errorf("Header = %+v", got)
+			}
+		})
+	}
+}
+
 func TestDashboard_HostsActionsByState(t *testing.T) {
 	useEnglish(t)
 	hosts := []core.SSHHost{

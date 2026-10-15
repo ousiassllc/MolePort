@@ -147,7 +147,7 @@ type Config struct {
     Language      string                    `yaml:"language"`
     UpdateCheck   UpdateCheckConfig         `yaml:"update_check"`
     TUI           TUIConfig                 `yaml:"tui"`
-    GUI           GUIConfig                 `yaml:"gui"`
+    GUI           guiconfig.Config          `yaml:"gui"` // internal/core/guiconfig
 }
 
 type UpdateCheckConfig struct {
@@ -159,12 +159,13 @@ type TUIConfig struct {
     Theme ThemeConfig `yaml:"theme"`
 }
 
-type GUIConfig struct {
-    Theme           GUIThemeConfig `yaml:"theme"`
-    TrayNoticeShown bool           `yaml:"tray_notice_shown"`
+// package guiconfig（internal/core/guiconfig。core のディレクトリ行数制限のためサブパッケージ）
+type Config struct {
+    Theme           Theme `yaml:"theme"`
+    TrayNoticeShown bool  `yaml:"tray_notice_shown"`
 }
 
-type GUIThemeConfig struct {
+type Theme struct {
     Base   string `yaml:"base"`   // "system" | "dark" | "light"（デフォルト: "system"）
     Accent string `yaml:"accent"` // "violet" | "blue" | "green" | "cyan" | "orange"（デフォルト: "violet"）
 }
@@ -1076,3 +1077,4 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.3 | 2026-10-15 | ファイル構成図: GUI 内蔵デーモンと Sock / config / state / log / SSH config の関係を追加 | レビュー指摘対応 #84 |
 | 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |
 | 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
+| 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |

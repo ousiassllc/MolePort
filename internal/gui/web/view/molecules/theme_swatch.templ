@@ -1,0 +1,27 @@
+package molecules
+
+// ThemeSwatchProps は ThemeSwatch の引数。Name は "theme_base" または "theme_accent"、
+// Value は送信値（"dark" / "violet" 等）。見本の色は CSS が data-swatch（Name と Value）で決める。
+type ThemeSwatchProps struct {
+	Name    string
+	Value   string
+	Label   string
+	Checked bool
+}
+
+// ThemeSwatch はテーマの選択肢 1 件（ラジオボタン + 色見本 + ラベル）。
+// data-theme-preview を持つ入力の変更で app.ts が <html> の data-theme / data-accent を即時にプレビューする。
+templ ThemeSwatch(p ThemeSwatchProps) {
+	<label class="mp-swatch">
+		<input
+			class="mp-swatch-input"
+			type="radio"
+			name={ p.Name }
+			value={ p.Value }
+			checked?={ p.Checked }
+			data-theme-preview
+		/>
+		<span class="mp-swatch-chip" data-swatch={ p.Name + ":" + p.Value } aria-hidden="true"></span>
+		<span>{ p.Label }</span>
+	</label>
+}

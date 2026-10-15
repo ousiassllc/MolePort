@@ -4,15 +4,38 @@ import (
 	"strconv"
 
 	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
 	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
-// Header は #header の内容（アプリ名・稼働表示・バージョン・PID）。
+// Header は #header の内容（アプリ名・稼働表示・バージョン・PID・更新バッジ・設定ボタン）。
+// 更新バッジは UpdateAvailable のときのみ描画し、クリックで POST /actions/update/open
+// （URL はサーバーが保持し、クライアントからは送らない）。稼働前（Version が空）は操作を描画しない。
 templ Header(v service.HeaderView) {
 	<h1 class="mp-app-title">MolePort</h1>
 	if v.Version != "" {
 		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.running") }</span>
 		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.version") }: { v.Version }</span>
 		<span class="mp-row-sub">{ i18n.T("gui.dashboard.header.pid") }: { strconv.Itoa(v.PID) }</span>
+		if v.UpdateAvailable {
+			<button
+				type="button"
+				class="mp-update-badge"
+				id="header-update"
+				hx-post="/actions/update/open"
+				hx-swap="none"
+				hx-disabled-elt="this"
+			>{ i18n.T("gui.update.badge", map[string]any{"Version": v.LatestVersion}) }</button>
+		}
+		@atoms.Button(atoms.ButtonProps{
+			Label:   i18n.T("gui.settings.open"),
+			Variant: atoms.ButtonSecondary,
+			Attrs: templ.Attributes{
+				"id":        "header-settings",
+				"hx-get":    "/fragments/settings",
+				"hx-target": "#modal-root",
+				"hx-swap":   "innerHTML",
+			},
+		})
 	}
 }

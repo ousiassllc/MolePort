@@ -19,10 +19,12 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	trayassets "github.com/ousiassllc/moleport/assets/tray"
+	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/service/bridge"
 	"github.com/ousiassllc/moleport/internal/gui/service/credential"
+	"github.com/ousiassllc/moleport/internal/gui/service/settings"
 	"github.com/ousiassllc/moleport/internal/gui/tray"
 	"github.com/ousiassllc/moleport/internal/gui/web"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
@@ -39,7 +41,8 @@ const (
 type Config struct {
 	ConfigDir string
 	Version   string
-	Static    fs.FS // go:embed の dist 含む FS
+	Static    fs.FS           // go:embed の dist 含む FS
+	Theme     guiconfig.Theme // 起動時に読んだ gui.theme（内蔵デーモンの起動前に描画するページで使う）
 }
 
 // Run は Wails を起動し、ウィンドウが閉じて終了するまでブロックする。
@@ -73,6 +76,8 @@ func Run(cfg Config) error {
 		Forwards:  service.NewForwardService(a.life, broker, a.activity, a.queue, a.notifier),
 		Hosts:     service.NewHostService(a.life, broker, a.activity, a.queue, a.notifier),
 		Cred:      broker,
+		Settings:  settings.New(a.life, a),
+		Theme:     cfg.Theme,
 		Token:     token,
 		Static:    cfg.Static,
 	})
@@ -207,6 +212,11 @@ func (a *app) showWindow() {
 	wailsruntime.WindowUnminimise(ctx)
 	wailsruntime.WindowShow(ctx)
 	a.notifier.SetVisible(true)
+}
+
+// OpenURL は settings.Opener の実装。既定のブラウザで url を開く（URL の検証は Service 側で行う）。
+func (a *app) OpenURL(url string) {
+	wailsruntime.BrowserOpenURL(a.context(), url)
 }
 
 // HideWindow は CloseHost の実装。

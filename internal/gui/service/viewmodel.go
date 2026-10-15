@@ -59,6 +59,12 @@ type HeaderView struct {
 	ReleaseURL      string
 }
 
+// SettingsView は設定フォームの値（UC-34）。保存値の表示と入力値の再描画（422）の両方に使う。
+type SettingsView struct {
+	Language, ThemeBase, ThemeAccent string
+	UpdateCheckEnabled               bool
+}
+
 // FormErrors はフィールド名 → ローカライズ済みエラーメッセージ（"_form" は全体エラー）。
 type FormErrors map[string]string
 
