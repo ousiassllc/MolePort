@@ -270,8 +270,22 @@ tui:
   prompt:
     placeholder: "Enter command..."
 gui:
+  tray:
+    show: "Show MolePort"
+    quit: "Quit"
   banner:
     starting: "Starting the daemon..."
     failed: "Failed to start the daemon."
   error:
     generic: "An error occurred. Please try again."
+  dialog:
+    startup_failed_title: "MolePort failed to start"
+    startup_failed: "Failed to start the built-in daemon: {{.Error}}"
+    takeover_unresponsive: "Another moleport daemon holds the PID lock but does not respond. Stop it with `moleport daemon kill`, then start MolePort again."
+    takeover_timeout: "The running moleport daemon did not stop in time. Stop it with `moleport daemon kill`, then start MolePort again."
+    quit_confirm_title: "Quit MolePort"
+    quit_confirm: "The system tray is not available, so closing the window quits MolePort. Quit now?"
+    quit_confirm_active: "The system tray is not available, so closing the window quits MolePort. {{.Count}} active forward(s) will be stopped. Quit now?"
+    quit_active_confirm: "{{.Count}} active forward(s) will be stopped. Quit MolePort?"
+    yes: "Yes"
+    no: "No"

@@ -1637,9 +1637,9 @@ return border.
 > 構成・設計判断・シーケンスは [gui.md](../architecture/gui.md)、ルートは [gui-routes.md](../api/gui-routes.md)、ビューモデルは [data-model.md](../architecture/data-model.md#gui-ビューモデル) を参照。
 > パッケージ: `cmd/moleport-gui`、`internal/gui/{shell,tray}`（`gui` ビルドタグ）、`internal/gui/{web,service}`（タグなし）。Web / Service は Wails・トレイに依存しない。
 
-### Lifecycle（`gui/shell/lifecycle.go`、`gui` タグ）
+### Lifecycle（`gui/shell/lifecycle.go`、タグなし）
 
-GUI プロセスの起動・引き継ぎ・終了を統括する。
+GUI プロセスの起動・引き継ぎ・終了を統括する。Wails・実デーモンは `LifecycleDeps` / `DaemonHost` で注入するため、`gui` タグなしでユニットテストできる。
 
 #### 責務
 
@@ -1651,29 +1651,34 @@ GUI プロセスの起動・引き継ぎ・終了を統括する。
 - OS シグナル（Unix: SIGTERM/SIGINT）の受信と `RequestQuit(false)` への変換
 
 ```go
-type Lifecycle struct { /* daemon *daemon.Daemon, state atomic, quitting atomic.Bool, ... */ }
+type Lifecycle struct { /* host DaemonHost, state, quitting atomic.Bool, ... */ }
 
 func NewLifecycle(configDir, version string, deps LifecycleDeps) *Lifecycle
 func (l *Lifecycle) Start(ctx context.Context) error // Takeover → daemon.Start → Bridge/Tray 起動
-func (l *Lifecycle) State() State                     // starting | ready | failed
+func (l *Lifecycle) State() service.LifecycleState    // starting | ready | failed
+func (l *Lifecycle) Quitting() bool
 func (l *Lifecycle) RequestQuit(confirm bool)
-func (l *Lifecycle) BeforeClose(ctx context.Context) (prevent bool) // ウィンドウ閉じる操作の扱い
+func (l *Lifecycle) Shutdown()                        // OnShutdown でのデーモン停止の保証
 ```
 
-### Wails App（`gui/shell/app.go`、`gui` タグ）
+ウィンドウ閉じる操作の分岐は `gui/shell/close.go`（タグなし）の `DecideClose`（決定表）と `CloseController.BeforeClose() (prevent bool)` が担い、ウィンドウ側の操作は `CloseHost` interface（`HideWindow` / `ConfirmQuit` / `RequestQuit`）で注入する。
+
+### Wails App（`gui/shell/app.go`、`gui` タグ。`cmd/moleport-gui` が `shell.Run` を呼ぶ）
 
 `wails.Run` に渡す `options.App` を組み立てる。
 
 - `AssetServer.Handler` に `web.Router` を設定、`Assets` は `nil`
 - `SingleInstanceLock`（`UniqueId` 固定、`OnSecondInstanceLaunch` でウィンドウ前面化）
-- `OnStartup` → `Lifecycle.Start`、`OnBeforeClose` → `Lifecycle.BeforeClose`、`OnShutdown` → デーモン停止の保証
+- `OnStartup` → `Lifecycle.Start`、`OnBeforeClose` → `CloseController.BeforeClose`、`OnShutdown` → デーモン停止の保証
 - `Bind` は使わない（D-5）。`HideWindowOnClose` は使わない（`OnBeforeClose` で制御）
 - ウィンドウ: 初期 1000×700、最小 800×560、`StartHidden: false`
 - `Notifier`（`service.Notifier`）の実装: `Notify(topics...)` はウィンドウ表示中のみ `runtime.EventsEmit(ctx, "moleport:changed", {topics})`。`Opener` の実装: `runtime.BrowserOpenURL`
 
-### Tray（`gui/tray/tray.go`、`gui` タグ）
+### Tray（`gui/tray`）
 
-`fyne.io/systray` のラッパー。
+`fyne.io/systray` のラッパー。`tray.go` / `host_*.go` は `gui` タグ、トレイ利用可否の判定（`availability.go` の `Available` / `Detect`）はタグなしでユニットテストされる。
+
+M2 の PoC 実装は `tray.Start(Config) (*Tray, available bool)` / `(*Tray).Stop()` と最小メニュー（「表示」「終了」）のみ。以下は M3 で完成させる API。
 
 ```go
 type Tray struct { /* items [20]*systray.MenuItem, ... */ }

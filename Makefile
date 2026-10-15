@@ -47,14 +47,14 @@ gui-assets: ## GUI アセットを生成 (templ generate + npm run build)
 	@test -d node_modules || npm ci
 	npm run build
 
-gui-dev: ## GUI 開発モード (templ watch + アセット watch + wails dev -tags gui)
+gui-dev: ## GUI 開発モード (templ watch + アセット watch + wails dev -tags gui -skipbindings。wails.json は cmd/moleport-gui)
 	@trap 'kill 0' EXIT; \
 	templ generate --watch & \
 	npm run watch & \
-	wails dev -tags gui
+	cd cmd/moleport-gui && wails dev -tags gui -skipbindings
 
-gui-build: gui-assets ## GUI をビルド (wails build -tags gui。OS ネイティブ環境が必要)
-	wails build -tags gui
+gui-build: ## GUI をビルド (wails build -tags gui。frontend:build が gui-assets を実行。OS ネイティブ環境が必要)
+	cd cmd/moleport-gui && wails build -tags gui -skipbindings
 
 setup-tools: ## 開発ツールをインストール
 	go install github.com/ousiassllc/linterly/cmd/linterly@latest

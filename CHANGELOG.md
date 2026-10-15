@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### ✨ New Features / 新機能
+- Add GUI Shell layer (`cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray`; `gui` build tag) with built-in daemon startup, Router wiring to the Wails AssetServer, system tray wrapper and window-close handling / GUI の Shell 層（`gui` タグ）を追加。内蔵デーモン起動、Wails AssetServer への Router 接続、トレイのラッパー、ウィンドウ閉じる操作の分岐を実装 (#87)
+- Document PoC procedures (R-1 to R-8) and fallback policies; real-device results are pending / PoC の検証手順（R-1〜R-8）と縮退方針を仕様書に記載（実機検証結果は待ち） (#87)
+
 ## [v1.0.0] - 2026-03-15
 
 ### ⚠️ Breaking Changes / 破壊的変更
