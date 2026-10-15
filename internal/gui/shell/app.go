@@ -25,10 +25,10 @@ import (
 	"github.com/ousiassllc/moleport/internal/gui/service/bridge"
 	"github.com/ousiassllc/moleport/internal/gui/service/credential"
 	"github.com/ousiassllc/moleport/internal/gui/service/settings"
+	"github.com/ousiassllc/moleport/internal/gui/service/trayops"
 	"github.com/ousiassllc/moleport/internal/gui/tray"
 	"github.com/ousiassllc/moleport/internal/gui/web"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
-	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
 const (
@@ -55,28 +55,32 @@ func Run(cfg Config) error {
 	}
 	a := &app{cfg: cfg, queue: service.NewNotificationQueue(), activity: service.NewActivity()}
 	a.notifier = NewVisibilityNotifier(a.emit)
-	broker := credential.NewBroker(a.notifier, windowShower(a.showWindow))
+	broker := credential.NewBroker(a.notifier, windowShower(a.Show))
 	a.life = NewLifecycle(cfg.ConfigDir, cfg.Version, LifecycleDeps{
-		Takeover:    daemon.Takeover,
-		NewDaemon:   func(dir, ver string) (DaemonHost, error) { return daemon.New(dir, ver) },
-		Notifier:    a.notifier,
-		Quit:        a.quit,
-		ConfirmQuit: a.confirmActiveQuit,
-		Queue:       a.queue,
-		OnReady: func(ctx context.Context, b service.Backend) {
-			bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
-		},
+		Takeover:  daemon.Takeover,
+		NewDaemon: func(dir, ver string) (DaemonHost, error) { return daemon.New(dir, ver) },
+		Notifier:  a.notifier,
+		Window:    a,
+		Dialog:    a,
+		Queue:     a.queue,
+		OnReady:   a.onDaemonReady,
 	})
-	a.closer = NewCloseController(a, a.life.Quitting, a.trayAvailable.Load)
+	a.notice = NewTrayNotice(a.life, a)
+	a.closer = NewCloseController(a, a, a.life, a.trayAvailable.Load, a.notice.Show)
+
+	dash := service.NewDashboardService(a.life, a.activity)
+	forwards := service.NewForwardService(a.life, broker, a.activity, a.queue, a.notifier)
+	a.trayMenu = func() tray.Menu { return tray.BuildFrom(dash) }
+	a.trayOps = trayops.New(dash, forwards, a.queue, a.notifier)
 
 	handler := web.NewRouter(web.Deps{
 		Life:      a.life,
-		Dashboard: service.NewDashboardService(a.life, a.activity),
+		Dashboard: dash,
 		Toasts:    a.queue,
-		Forwards:  service.NewForwardService(a.life, broker, a.activity, a.queue, a.notifier),
+		Forwards:  forwards,
 		Hosts:     service.NewHostService(a.life, broker, a.activity, a.queue, a.notifier),
 		Cred:      broker,
-		Settings:  settings.New(a.life, a),
+		Settings:  settingsHook{Settings: settings.New(a.life, a), onSaved: a.refreshTrayNow},
 		Theme:     cfg.Theme,
 		Token:     token,
 		Static:    cfg.Static,
@@ -92,7 +96,7 @@ func Run(cfg Config) error {
 		AssetServer: &assetserver.Options{Handler: handler},
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               singleInstanceID,
-			OnSecondInstanceLaunch: func(options.SecondInstanceData) { a.showWindow() },
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) { a.Show() },
 		},
 		OnStartup:     a.onStartup,
 		OnDomReady:    func(context.Context) { a.notifier.SetVisible(true) },
@@ -114,16 +118,18 @@ type app struct {
 	activity *service.Activity
 	life     *Lifecycle
 	closer   *CloseController
+	notice   *TrayNotice
+	trayMenu func() tray.Menu
+	trayOps  *trayops.Actions
 
 	ctxMu sync.RWMutex
 	ctx   context.Context
 
 	trayAvailable atomic.Bool
+	notifyOK      atomic.Bool
 	trayMu        sync.Mutex
 	trayHandle    *tray.Tray
 }
-
-var _ CloseHost = (*app)(nil)
 
 func (a *app) context() context.Context {
 	a.ctxMu.RLock()
@@ -138,8 +144,9 @@ func (a *app) onStartup(ctx context.Context) {
 	a.ctx = ctx
 	a.ctxMu.Unlock()
 
+	a.initNotifications()
 	go a.startTray()
-	go a.startDaemon(ctx)
+	go a.life.Run(ctx)
 	go a.watchSignals(ctx)
 }
 
@@ -155,12 +162,12 @@ func (a *app) watchSignals(ctx context.Context) {
 	}
 }
 
-func (a *app) startDaemon(ctx context.Context) {
-	if err := a.life.Start(ctx); err != nil {
-		// 起動失敗: エラーダイアログを出してプロセスを終了する。
-		a.showError(StartupErrorKey(err), err)
-		a.life.RequestQuit(false)
-	}
+// onDaemonReady は内蔵デーモンの起動完了時に EventBridge とトレイの追従を開始する。
+func (a *app) onDaemonReady(ctx context.Context, b service.Backend) {
+	bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
+	// 非表示中は EventBridge が通知を止めるため、トレイは独自に購読して追従する（NFR-33）。
+	go tray.Watch(ctx, b.SSH, b.Forward, tray.ReconcileInterval, a.refreshTray)
+	a.refreshTrayNow()
 }
 
 func (a *app) startTray() {
@@ -172,9 +179,10 @@ func (a *app) startTray() {
 		TemplateIcon: trayassets.MacTemplate,
 		Icon:         icon,
 		Tooltip:      windowTitle,
-		ShowLabel:    i18n.T("gui.tray.show"),
-		QuitLabel:    i18n.T("gui.tray.quit"),
-		OnShow:       a.showWindow,
+		Build:        a.trayMenu,
+		OnShow:       a.Show,
+		OnToggle:     a.trayOps.ToggleForward,
+		OnStopAll:    a.trayOps.StopAll,
 		OnQuit:       func() { a.life.RequestQuit(true) },
 	})
 	a.trayMu.Lock()
@@ -183,11 +191,28 @@ func (a *app) startTray() {
 	a.trayAvailable.Store(ok)
 }
 
-func (a *app) stopTray() {
+// refreshTray はトレイメニューの更新を予約する（500ms デバウンス）。トレイ起動前は何もしない。
+func (a *app) refreshTray() {
+	if t := a.tray(); t != nil {
+		t.Refresh()
+	}
+}
+
+// refreshTrayNow はトレイメニューを即時に更新する（起動完了・言語変更）。トレイ起動前は何もしない。
+func (a *app) refreshTrayNow() {
+	if t := a.tray(); t != nil {
+		t.RefreshNow()
+	}
+}
+
+func (a *app) tray() *tray.Tray {
 	a.trayMu.Lock()
-	t := a.trayHandle
-	a.trayMu.Unlock()
-	if t != nil {
+	defer a.trayMu.Unlock()
+	return a.trayHandle
+}
+
+func (a *app) stopTray() {
+	if t := a.tray(); t != nil {
 		t.Stop()
 	}
 }
@@ -197,73 +222,6 @@ func (a *app) onShutdown(context.Context) {
 	a.stopTray()
 }
 
-// quit は Lifecycle の Quit 依存。トレイを閉じてから Wails の終了フローを起動する。
-func (a *app) quit() {
-	a.stopTray()
-	wailsruntime.Quit(a.context())
-}
-
 func (a *app) emit(topics []string) {
 	wailsruntime.EventsEmit(a.context(), ChangedEvent, map[string][]string{"topics": topics})
-}
-
-func (a *app) showWindow() {
-	ctx := a.context()
-	wailsruntime.WindowUnminimise(ctx)
-	wailsruntime.WindowShow(ctx)
-	a.notifier.SetVisible(true)
-}
-
-// OpenURL は settings.Opener の実装。既定のブラウザで url を開く（URL の検証は Service 側で行う）。
-func (a *app) OpenURL(url string) {
-	wailsruntime.BrowserOpenURL(a.context(), url)
-}
-
-// HideWindow は CloseHost の実装。
-func (a *app) HideWindow() {
-	wailsruntime.WindowHide(a.context())
-	a.notifier.SetVisible(false)
-}
-
-// ConfirmQuit は CloseHost の実装。トレイがない環境で閉じる操作を終了確認に倒す。
-func (a *app) ConfirmQuit() bool {
-	key := "gui.dialog.quit_confirm"
-	data := map[string]any{}
-	if n := a.life.ActiveForwards(); n > 0 {
-		key = "gui.dialog.quit_confirm_active"
-		data["Count"] = n
-	}
-	return a.askYesNo(i18n.T("gui.dialog.quit_confirm_title"), i18n.T(key, data))
-}
-
-// RequestQuit は CloseHost の実装。ダイアログで確認済みのため再確認しない。
-func (a *app) RequestQuit() { a.life.RequestQuit(false) }
-
-// confirmActiveQuit は Lifecycle の ConfirmQuit 依存（トレイ「終了」）。
-func (a *app) confirmActiveQuit(active int) bool {
-	return a.askYesNo(
-		i18n.T("gui.dialog.quit_confirm_title"),
-		i18n.T("gui.dialog.quit_active_confirm", map[string]any{"Count": active}),
-	)
-}
-
-func (a *app) askYesNo(title, message string) bool {
-	yes, no := i18n.T("gui.dialog.yes"), i18n.T("gui.dialog.no")
-	result, err := wailsruntime.MessageDialog(a.context(), wailsruntime.MessageDialogOptions{
-		Type:          wailsruntime.QuestionDialog,
-		Title:         title,
-		Message:       message,
-		Buttons:       []string{yes, no},
-		DefaultButton: no,
-		CancelButton:  no,
-	})
-	return err == nil && IsAffirmative(result, yes)
-}
-
-func (a *app) showError(key string, cause error) {
-	_, _ = wailsruntime.MessageDialog(a.context(), wailsruntime.MessageDialogOptions{
-		Type:    wailsruntime.ErrorDialog,
-		Title:   i18n.T("gui.dialog.startup_failed_title"),
-		Message: i18n.T(key, map[string]any{"Error": cause.Error()}),
-	})
 }

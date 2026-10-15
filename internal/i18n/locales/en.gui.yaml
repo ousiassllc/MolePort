@@ -1,7 +1,15 @@
 gui:
   tray:
-    show: "Show MolePort"
+    show: "Show window"
     quit: "Quit"
+    summary: "{{.Active}} forward(s) active / {{.Hosts}} host(s) connected"
+    stop_all: "Stop all forwards"
+    more: "Show all in the window…"
+    toast:
+      failed: "Failed to operate on forward \"{{.Name}}\": {{.Error}}"
+  lifecycle:
+    tray_notice_title: "MolePort"
+    tray_notice: "MolePort is running in the system tray."
   banner:
     starting: "Starting the daemon..."
     failed: "Failed to start the daemon."
@@ -74,7 +82,8 @@ gui:
   toast:
     ssh_error: "Error on host \"{{.Host}}\": {{.Error}}"
     forward_error: "Error on forward \"{{.Name}}\": {{.Error}}"
-    takeover: "Took over the running daemon."
+    takeover: "Took over the running daemon (PID: {{.PID}})."
+    takeover_no_restore: "Took over the running daemon (PID: {{.PID}}). Forwards saved at shutdown are not restored because session.auto_restore is disabled."
     dismiss: "Dismiss"
   forward:
     form:

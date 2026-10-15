@@ -1658,17 +1658,32 @@ GUI プロセスの起動・引き継ぎ・終了を統括する。Wails・実�
 - OS シグナル（Unix: SIGTERM/SIGINT）の受信と `RequestQuit(false)` への変換
 
 ```go
-type Lifecycle struct { /* host DaemonHost, state, quitting atomic.Bool, ... */ }
+type Lifecycle struct { /* host DaemonHost, state, quitting atomic.Bool, stopOnce sync.Once, ... */ }
 
 func NewLifecycle(configDir, version string, deps LifecycleDeps) *Lifecycle
-func (l *Lifecycle) Start(ctx context.Context) error // Takeover → daemon.Start → Bridge/Tray 起動
+func (l *Lifecycle) Start(ctx context.Context) error // Takeover → daemon.Start → OnReady（Bridge/Tray 追従）→ 引き継ぎトースト
+func (l *Lifecycle) Run(ctx context.Context)         // Start し、失敗なら Dialog.ShowError → RequestQuit(false)
 func (l *Lifecycle) State() service.LifecycleState    // starting | ready | failed
 func (l *Lifecycle) Quitting() bool
+func (l *Lifecycle) ActiveForwards() int
 func (l *Lifecycle) RequestQuit(confirm bool)
 func (l *Lifecycle) Shutdown()                        // OnShutdown でのデーモン停止の保証
+
+// Wails 型に依存しない interface（gui/shell/ports.go）。Shell（app.go）が runtime.* で実装し、テストはフェイクを注入する。
+type DaemonHost interface { Start(ctx) error; Stop() error; Done() <-chan struct{}; Services() daemon.Services }
+type Window interface { Show(); Hide(); Quit() }
+type Dialog interface {
+    ConfirmQuit(active int) bool  // トレイ「終了」等。アクティブ転送が 1 件以上のときのみ呼ばれる
+    ConfirmClose(active int) bool // トレイ不可環境での閉じる操作（UC-32）
+    ShowError(key string, cause error)
+}
+type TrayNoticeSender interface { Send(title, body string) bool } // OS 通知。利用不可なら false
 ```
 
-ウィンドウ閉じる操作の分岐は `gui/shell/close.go`（タグなし）の `DecideClose`（決定表）と `CloseController.BeforeClose() (prevent bool)` が担い、ウィンドウ側の操作は `CloseHost` interface（`HideWindow` / `ConfirmQuit` / `RequestQuit`）で注入する。
+- `RequestQuit` / `Shutdown` / `Done()` 監視は `sync.Once` で `Daemon.Stop()` を 1 度だけ実行する（競合しても二重停止しない）。確認ダイアログの表示中の再要求は無視する（ダイアログを重ねない）
+- 引き継ぎ完了トーストは `NotificationQueue.Push` で積み、旧 PID を含む。`session.auto_restore: false` なら復元されない旨を併記する（UC-26）
+
+ウィンドウ閉じる操作の分岐は `gui/shell/close.go`（タグなし）の `DecideClose`（決定表）と `CloseController.BeforeClose() (prevent bool)` が担い、`Window` / `Dialog` / `QuitController`（`*Lifecycle`）を注入して使う。トレイへ非表示にした直後に `TrayNotice.Show`（`trayhint.go`）が、初回のみ OS 通知を送り `gui.tray_notice_shown` を保存する（UC-32）。
 
 ### Wails App（`gui/shell/app.go`、`gui` タグ。`cmd/moleport-gui` が `shell.Run` を呼ぶ）
 
@@ -1679,34 +1694,31 @@ func (l *Lifecycle) Shutdown()                        // OnShutdown でのデー
 - `OnStartup` → `Lifecycle.Start`、`OnBeforeClose` → `CloseController.BeforeClose`、`OnShutdown` → デーモン停止の保証
 - `Bind` は使わない（D-5）。`HideWindowOnClose` は使わない（`OnBeforeClose` で制御）
 - ウィンドウ: 初期 1000×700、最小 800×560、`StartHidden: false`
-- `Notifier`（`service.Notifier`）の実装: `Notify(topics...)` はウィンドウ表示中のみ `runtime.EventsEmit(ctx, "moleport:changed", {topics})`。`Opener` の実装: `runtime.BrowserOpenURL`
+- `Notifier`（`service.Notifier`）の実装: `Notify(topics...)` はウィンドウ表示中のみ `runtime.EventsEmit(ctx, "moleport:changed", {topics})`。`Opener` の実装: `runtime.BrowserOpenURL`。`Window` / `Dialog` / `TrayNoticeSender` の実装（`wails_ports.go`）: `runtime.WindowShow` / `WindowHide` / `Quit`、`MessageDialog`、`SendNotification`
 
 ### Tray（`gui/tray`）
 
-`fyne.io/systray` のラッパー。`tray.go` / `host_*.go` は `gui` タグ、トレイ利用可否の判定（`availability.go` の `Available` / `Detect`）はタグなしでユニットテストされる。
-
-M2 の PoC 実装は `tray.Start(Config) (*Tray, available bool)` / `(*Tray).Stop()` と最小メニュー（「表示」「終了」）のみ。以下は M3 で完成させる API。
+`fyne.io/systray` のラッパー。`tray.go` / `host_*.go` は `gui` タグ、トレイ利用可否の判定（`availability.go`）、メニューの項目モデル（`menu.go`）、デバウンス（`debounce.go`）、イベント購読（`watch.go`）はタグなしでユニットテストされる。
 
 ```go
-type Tray struct { /* items [20]*systray.MenuItem, ... */ }
+// menu.go（タグなし）。ViewModel → 項目モデルの純粋関数
+const MaxForwardItems = 20
+func BuildMenu(status service.StatusView, forwards []service.ForwardView) Menu
+func BuildFrom(src Source) Menu // Source = Status() + Forwards()（service.Dashboard の一部）
 
-func New(svc TrayServices, win WindowController, quit func()) *Tray
-func (t *Tray) Start() (available <-chan bool) // RunWithExternalLoop。onReady 到達で available=true
-func (t *Tray) Refresh()                       // 500ms デバウンス。変化時のみ項目を更新
-func (t *Tray) SetLanguage()                   // 全項目のタイトルを再設定
+// tray.go（gui タグ）
+func Start(cfg Config) (*Tray, available bool) // Config: Build / OnShow / OnToggle / OnStopAll / OnQuit
+func (t *Tray) Refresh()                       // 500ms デバウンス。変化時のみ SetTitle / Check / Show / Hide
+func (t *Tray) RefreshNow()                    // 即時更新。起動完了・言語変更時に全項目のタイトルを再設定
 func (t *Tray) Stop()
 
-type WindowController interface { Show(); Hide(); IsVisible() bool }
-type TrayServices interface { // Service 層のサブセット
-    Summary() StatusView
-    Forwards() []ForwardView
-    Toggle(name string) error // CanStart なら Start、CanStop なら Stop
-    StopAll() error
-}
+// watch.go（タグなし）。非表示中は EventBridge が止まるため、トレイが SSH / 転送イベントと 5 秒ティッカーを独自に購読する
+func Watch(ctx, ssh, fwd, interval, trigger func())
 ```
 
-- メニュー構成は UC-33。転送項目は 20 件のプールを再利用する（`ResetMenu` は使わない）
-- `available` が `false` のままの環境ではトレイ無しとして扱い、`Lifecycle.BeforeClose` が終了確認に切り替える（NFR-37）
+- メニュー構成は UC-33。転送項目は 20 件のプールを再利用する（`ResetMenu` は使わない）。超過分は「ウィンドウで全て表示…」項目に集約し、「すべての転送を停止」は表示件数に関わらず停止可能な転送があれば有効
+- 転送のトグル・全停止は `service/trayops.Actions`（`Dashboard` で開始 / 停止を判定し `Forwards` を呼ぶ。認証が必要な開始は `CredentialBroker` がウィンドウを前面化する）
+- `available` が `false` のままの環境ではトレイ無しとして扱い、`CloseController` が終了確認に切り替える（NFR-37）
 
 ### Router / Middleware（`gui/web`）
 

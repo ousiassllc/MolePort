@@ -1,7 +1,15 @@
 gui:
   tray:
-    show: "MolePort を表示"
+    show: "ウィンドウを表示"
     quit: "終了"
+    summary: "{{.Active}} 転送がアクティブ / {{.Hosts}} ホスト接続中"
+    stop_all: "すべての転送を停止"
+    more: "ウィンドウで全て表示…"
+    toast:
+      failed: "転送「{{.Name}}」の操作に失敗しました: {{.Error}}"
+  lifecycle:
+    tray_notice_title: "MolePort"
+    tray_notice: "MolePort はトレイで稼働しています。"
   banner:
     starting: "デーモンを起動しています..."
     failed: "デーモンの起動に失敗しました。"
@@ -74,7 +82,8 @@ gui:
   toast:
     ssh_error: "ホスト「{{.Host}}」でエラー: {{.Error}}"
     forward_error: "転送「{{.Name}}」でエラー: {{.Error}}"
-    takeover: "稼働中のデーモンを引き継ぎました。"
+    takeover: "稼働中のデーモン (PID: {{.PID}}) を引き継ぎました。"
+    takeover_no_restore: "稼働中のデーモン (PID: {{.PID}}) を引き継ぎました。session.auto_restore が無効のため、停止時の転送は復元されません。"
     dismiss: "閉じる"
   forward:
     form:

@@ -31,10 +31,10 @@ type LifecycleDeps struct {
 	NewDaemon func(configDir, version string) (DaemonHost, error)
 	// Notifier は更新トピックの通知先。ready 遷移時に all を送る。
 	Notifier service.Notifier
-	// Quit は Wails の終了フロー（runtime.Quit）を起動する。
-	Quit func()
-	// ConfirmQuit はアクティブな転送が active 件ある場合の終了確認。承認されたら true。
-	ConfirmQuit func(active int) bool
+	// Window は終了フロー（Quit）の起動に使う。
+	Window Window
+	// Dialog は終了確認と起動失敗のエラー表示に使う。
+	Dialog Dialog
 	// Queue は非同期通知の積み先。引き継ぎ完了トーストに使う（nil なら積まない）。
 	Queue *service.NotificationQueue
 	// OnReady は内蔵デーモンの起動完了直後（ready 遷移前）に呼ばれる。EventBridge の開始に使う。
@@ -49,7 +49,9 @@ type Lifecycle struct {
 	version   string
 	deps      LifecycleDeps
 
-	quitting atomic.Bool
+	quitting   atomic.Bool
+	confirming atomic.Bool
+	stopOnce   sync.Once
 
 	mu    sync.Mutex
 	state service.LifecycleState
@@ -125,7 +127,7 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 		l.deps.OnReady(ctx, back)
 	}
 	if prevPID > 0 && l.deps.Queue != nil {
-		l.deps.Queue.Push(service.ToastView{Kind: service.ToastInfo, Message: i18n.T("gui.toast.takeover")})
+		l.deps.Queue.Push(service.ToastView{Kind: service.ToastInfo, Message: takeoverMessage(prevPID, back)})
 	}
 
 	l.mu.Lock()
@@ -137,6 +139,24 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 	go l.watchDone(host)
 	l.deps.Notifier.Notify(service.TopicAll)
 	return nil
+}
+
+// Run は Start を実行し、失敗したらエラーダイアログを表示してプロセスを終了する（UC-25 代替フロー）。
+// PID ロック取得失敗（SingleInstanceLock を使えない環境での二重起動）もここでダイアログになる（UC-38）。
+func (l *Lifecycle) Run(ctx context.Context) {
+	if err := l.Start(ctx); err != nil {
+		l.deps.Dialog.ShowError(StartupErrorKey(err), err)
+		l.RequestQuit(false)
+	}
+}
+
+// takeoverMessage は引き継ぎ完了トーストの本文。session.auto_restore が無効なら復元されない旨を併記する（UC-26）。
+func takeoverMessage(prevPID int, b service.Backend) string {
+	key := "gui.toast.takeover"
+	if b.Config != nil && !b.Config.GetConfig().Session.AutoRestore {
+		key = "gui.toast.takeover_no_restore"
+	}
+	return i18n.T(key, map[string]any{"PID": prevPID})
 }
 
 func (l *Lifecycle) fail(err error) error {
@@ -157,16 +177,28 @@ func (l *Lifecycle) watchDone(host DaemonHost) {
 // 拒否されたら何もしない。承認（または confirm=false）後は quitting を立て、
 // デーモンを停止してから Wails の終了フローを起動する。2 回目以降の呼び出しは無視する。
 func (l *Lifecycle) RequestQuit(confirm bool) {
-	if confirm && l.deps.ConfirmQuit != nil {
-		if n := l.ActiveForwards(); n > 0 && !l.deps.ConfirmQuit(n) {
-			return
-		}
+	if confirm && !l.quitting.Load() && !l.confirmQuit() {
+		return
 	}
 	if !l.quitting.CompareAndSwap(false, true) {
 		return
 	}
 	l.stopDaemon()
-	l.deps.Quit()
+	l.deps.Window.Quit()
+}
+
+// confirmQuit はアクティブな転送が 1 件以上ある場合に終了確認を出す。確認中の再要求は拒否として扱う
+// （トレイ「終了」の連打でダイアログを重ねない）。
+func (l *Lifecycle) confirmQuit() bool {
+	n := l.ActiveForwards()
+	if n == 0 {
+		return true
+	}
+	if !l.confirming.CompareAndSwap(false, true) {
+		return false
+	}
+	defer l.confirming.Store(false)
+	return l.deps.Dialog.ConfirmQuit(n)
 }
 
 // Shutdown は OnShutdown でデーモン停止を保証する。Quit を再度呼ばない。Stop は冪等。
@@ -175,6 +207,8 @@ func (l *Lifecycle) Shutdown() {
 	l.stopDaemon()
 }
 
+// stopDaemon はデーモンを 1 度だけ停止する。RequestQuit・Shutdown・Done 監視が競合しても Stop は 1 回で、
+// 後続の呼び出しは停止の完了まで待つ（state.yaml 保存・PID / ソケット解放の完了後に Wails を終了させるため）。
 func (l *Lifecycle) stopDaemon() {
 	l.mu.Lock()
 	host := l.host
@@ -182,7 +216,9 @@ func (l *Lifecycle) stopDaemon() {
 	if host == nil {
 		return
 	}
-	_ = host.Stop() // daemon.Stop は失敗してもログのみで常に nil を返す。冪等。
+	l.stopOnce.Do(func() {
+		_ = host.Stop() // daemon.Stop は失敗してもログのみで常に nil を返す
+	})
 }
 
 // ActiveForwards はアクティブな転送の件数を返す。デーモン未起動なら 0。

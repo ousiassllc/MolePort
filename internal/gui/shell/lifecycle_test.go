@@ -171,8 +171,8 @@ func TestLifecycle_DaemonDoneTriggersQuitWithoutConfirm(t *testing.T) {
 	if !h.life.Quitting() {
 		t.Error("Quitting = false, want true")
 	}
-	if len(h.confirms) != 0 {
-		t.Errorf("Done 起因の終了で確認した: %v", h.confirms)
+	if len(h.dialog.quitAsks) != 0 {
+		t.Errorf("Done 起因の終了で確認した: %v", h.dialog.quitAsks)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestLifecycle_RequestQuit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := newFakeDaemon(tt.sessions...)
 			h := newHarness(t, d)
-			h.confirm = tt.confirm
+			h.dialog.confirm = tt.confirm
 			if err := h.life.Start(context.Background()); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
@@ -218,8 +218,8 @@ func TestLifecycle_RequestQuit(t *testing.T) {
 					t.Error("拒否されたのに終了処理が進んだ")
 				}
 			}
-			if fmt.Sprint(h.confirms) != fmt.Sprint(tt.wantConfirms) {
-				t.Errorf("confirms = %v, want %v", h.confirms, tt.wantConfirms)
+			if fmt.Sprint(h.dialog.quitAsks) != fmt.Sprint(tt.wantConfirms) {
+				t.Errorf("confirms = %v, want %v", h.dialog.quitAsks, tt.wantConfirms)
 			}
 		})
 	}
