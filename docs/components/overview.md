@@ -12,6 +12,29 @@ graph TD
         Main["main.go<br/>CLI Router"]
     end
 
+    subgraph "GUI Layer (cmd/moleport-gui)"
+        subgraph "Shell (gui タグ)"
+            Lifecycle["Lifecycle<br/>起動・引き継ぎ・終了"]
+            WailsApp["Wails App<br/>OnStartup / OnBeforeClose"]
+            TrayC["Tray<br/>fyne.io/systray"]
+            NotifierImpl["Notifier 実装<br/>EventsEmit"]
+        end
+        subgraph "Web (gui/web)"
+            WebRouter["Router + Middleware<br/>Token / CSP"]
+            GHandlers["Handlers<br/>page / fragment / action"]
+            GView["Templ View<br/>atoms〜pages"]
+        end
+        subgraph "Service (gui/service)"
+            DashSvc["DashboardService"]
+            OpSvc["Host / Forward / Settings Service"]
+            CredBroker["CredentialBroker"]
+            NotifQ["NotificationQueue"]
+            EvBridge["EventBridge"]
+        end
+    end
+
+    GUIMain["cmd/moleport-gui"]
+
     subgraph "Daemon Layer"
         DaemonProc["Daemon<br/>ライフサイクル管理"]
         PIDFile["PIDFile<br/>PID ファイル管理"]
@@ -154,6 +177,32 @@ graph TD
     Fwd --> Types
     Cfg --> Store
     Cfg --> Types
+
+    GUIMain["cmd/moleport-gui"] --> Lifecycle
+    Lifecycle --> DaemonProc
+    Lifecycle --> WailsApp
+    Lifecycle --> TrayC
+    WailsApp --> WebRouter
+    WebRouter --> GHandlers
+    GHandlers --> GView
+    GHandlers --> DashSvc
+    GHandlers --> OpSvc
+    GHandlers --> CredBroker
+    GHandlers --> NotifQ
+    DashSvc --> SSH
+    DashSvc --> Fwd
+    OpSvc --> SSH
+    OpSvc --> Fwd
+    OpSvc --> Cfg
+    CredBroker -.->|"CredentialCallback"| SSH
+    SSH -->|"Subscribe"| EvBridge
+    Fwd -->|"Subscribe"| EvBridge
+    EvBridge --> NotifQ
+    EvBridge --> NotifierImpl
+    TrayC --> OpSvc
+    TrayC --> DashSvc
+    GView --> I18n
+    DashSvc --> I18n
 ```
 
 ## Daemon Layer コンポーネント
@@ -170,7 +219,7 @@ graph TD
 - セッション復元の実行
 - config.yaml の `auto_connect` ルールの自動開始
 - **SSH イベントルーティング**: SSH 接続断検知時にフォワードを `SessionReconnecting` に更新し、再接続成功時にフォワード復元を実行する（`daemon_state.go` の `startEventRouting`）
-- シグナルハンドリング（SIGTERM/SIGINT）
+- シグナルハンドリング（SIGTERM/SIGINT。`Wait()` 使用時のみ。GUI 内蔵時は Shell が受ける）
 - グレースフルシャットダウンの制御
 
 #### インターフェース
@@ -192,9 +241,17 @@ type Daemon struct {
 
 func New(configDir string, version string) (*Daemon, error)
 func (d *Daemon) Start(ctx context.Context) error     // 初期化 + IPC Server 起動 + セッション復元
-func (d *Daemon) Stop() error      // グレースフルシャットダウン
+func (d *Daemon) Stop() error      // グレースフルシャットダウン（冪等）
 func (d *Daemon) Shutdown(purge bool) error  // シャットダウン（purge=true で設定も削除）
-func (d *Daemon) Wait() error      // 終了シグナルを待機
+func (d *Daemon) Wait() error      // 終了シグナルを待機（headless 用。GUI は使わない）
+
+// GUI 内蔵用の追加 API
+func (d *Daemon) Services() Services       // Core マネージャーの参照（Config / SSH / Forward / Version）。Start 後に有効
+func (d *Daemon) Done() <-chan struct{}    // コンテキスト終了（daemon.shutdown / Shutdown）で close
+func (d *Daemon) Info() Info               // Version / PID / StartedAt
+
+// headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
+func Takeover(configDir string, timeout time.Duration) (prevPID int, err error)
 ```
 
 #### 起動シーケンス
@@ -224,10 +281,11 @@ type PIDFile struct {
 }
 
 func NewPIDFile(path string) *PIDFile
-func (p *PIDFile) Acquire() error     // PID ファイル作成 + flock
-func (p *PIDFile) Release() error     // PID ファイル削除 + flock 解放
+func (p *PIDFile) Acquire() error     // PID ファイル作成 + 排他ロック（Unix: flock / Windows: LockFileEx）
+func (p *PIDFile) Release() error     // PID ファイル削除 + ロック解放
 func IsRunning(path string) (bool, int)  // 既存デーモンの稼働確認（PID + プロセス生存チェック）
-func KillProcess(pidPath string) error   // PID ファイルからプロセスを特定して停止
+func KillProcess(pidPath string) error   // PID ファイルからプロセスを特定して停止（Unix のみ）
+func IsLocked(path string) (locked bool, pid int) // 排他ロックを他プロセスが保持しているか（ロックを試行して即解放）。Takeover が使用する
 ```
 
 ### Fork
@@ -1569,6 +1627,217 @@ return border.
 - Update ロジック（全 organism の Update メソッド）
 - ForwardRow / HostRow の行レンダリングロジック（色・シンボルはそのまま）
 
+## GUI Layer コンポーネント
+
+> 構成・設計判断・シーケンスは [gui.md](../architecture/gui.md)、ルートは [gui-routes.md](../api/gui-routes.md)、ビューモデルは [data-model.md](../architecture/data-model.md#gui-ビューモデル) を参照。
+> パッケージ: `cmd/moleport-gui`、`internal/gui/{shell,tray}`（`gui` ビルドタグ）、`internal/gui/{web,service}`（タグなし）。Web / Service は Wails・トレイに依存しない。
+
+### Lifecycle（`gui/shell/lifecycle.go`、`gui` タグ）
+
+GUI プロセスの起動・引き継ぎ・終了を統括する。
+
+#### 責務
+
+- 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `~/.config/moleport`）と i18n 言語の解決
+- `daemon.Takeover` による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
+- `Daemon.Done()` の監視（`daemon.shutdown` 起因の終了を Wails の終了フローへ接続）
+- 状態（`starting` / `ready` / `failed`）の保持と、`ready` 遷移時の全トピック通知
+- `RequestQuit(confirm bool)` による終了処理（確認ダイアログ → `Daemon.Stop()` → トレイ破棄 → `runtime.Quit`）。`quitting` フラグで `OnBeforeClose` を素通しにする
+- OS シグナル（Unix: SIGTERM/SIGINT）の受信と `RequestQuit(false)` への変換
+
+```go
+type Lifecycle struct { /* daemon *daemon.Daemon, state atomic, quitting atomic.Bool, ... */ }
+
+func NewLifecycle(configDir, version string, deps LifecycleDeps) *Lifecycle
+func (l *Lifecycle) Start(ctx context.Context) error // Takeover → daemon.Start → Bridge/Tray 起動
+func (l *Lifecycle) State() State                     // starting | ready | failed
+func (l *Lifecycle) RequestQuit(confirm bool)
+func (l *Lifecycle) BeforeClose(ctx context.Context) (prevent bool) // ウィンドウ閉じる操作の扱い
+```
+
+### Wails App（`gui/shell/app.go`、`gui` タグ）
+
+`wails.Run` に渡す `options.App` を組み立てる。
+
+- `AssetServer.Handler` に `web.Router` を設定、`Assets` は `nil`
+- `SingleInstanceLock`（`UniqueId` 固定、`OnSecondInstanceLaunch` でウィンドウ前面化）
+- `OnStartup` → `Lifecycle.Start`、`OnBeforeClose` → `Lifecycle.BeforeClose`、`OnShutdown` → デーモン停止の保証
+- `Bind` は使わない（D-5）。`HideWindowOnClose` は使わない（`OnBeforeClose` で制御）
+- ウィンドウ: 初期 1000×700、最小 800×560、`StartHidden: false`
+- `Notifier`（`service.Notifier`）の実装: `Notify(topics...)` はウィンドウ表示中のみ `runtime.EventsEmit(ctx, "moleport:changed", {topics})`。`Opener` の実装: `runtime.BrowserOpenURL`
+
+### Tray（`gui/tray/tray.go`、`gui` タグ）
+
+`fyne.io/systray` のラッパー。
+
+```go
+type Tray struct { /* items [20]*systray.MenuItem, ... */ }
+
+func New(svc TrayServices, win WindowController, quit func()) *Tray
+func (t *Tray) Start() (available <-chan bool) // RunWithExternalLoop。onReady 到達で available=true
+func (t *Tray) Refresh()                       // 500ms デバウンス。変化時のみ項目を更新
+func (t *Tray) SetLanguage()                   // 全項目のタイトルを再設定
+func (t *Tray) Stop()
+
+type WindowController interface { Show(); Hide(); IsVisible() bool }
+type TrayServices interface { // Service 層のサブセット
+    Summary() StatusView
+    Forwards() []ForwardView
+    Toggle(name string) error // CanStart なら Start、CanStop なら Stop
+    StopAll() error
+}
+```
+
+- メニュー構成は UC-33。転送項目は 20 件のプールを再利用する（`ResetMenu` は使わない）
+- `available` が `false` のままの環境ではトレイ無しとして扱い、`Lifecycle.BeforeClose` が終了確認に切り替える（NFR-37）
+
+### Router / Middleware（`gui/web`）
+
+```go
+func NewRouter(deps Deps) http.Handler // net/http の ServeMux + ミドルウェアチェーン
+
+type Deps struct {
+    Dashboard service.Dashboard
+    Forwards  service.Forwards
+    Hosts     service.Hosts
+    Settings  service.Settings
+    Cred      *service.CredentialBroker
+    Toasts    *service.NotificationQueue
+    Life      LifecycleState   // State() のみ
+    Opener    service.Opener
+    Token     string           // 起動ごとのランダムトークン
+    Static    fs.FS            // go:embed。テストでは fstest.MapFS
+}
+```
+
+- ミドルウェアチェーン（外側から）: `Recover`（panic → 500、内部情報を含めない）→ `SecurityHeaders`（CSP 等）→ `Logging`（クレデンシャルルートは本文・URL を記録しない）→ `Token`（`POST` / `DELETE` のみ）→ `HXRequired`（`/fragments/*`）
+- ハンドラは `handler/page.go`、`handler/fragment_*.go`、`handler/action_*.go` に分割する（Linterly の行数制限）。ハンドラは Service のみを呼び、`internal/core` を直接参照しない
+
+### Service 層（`gui/service`）
+
+Core の型から ViewModel を組み立て、操作を実行する。Wails・HTTP に依存しない。
+
+```go
+type Dashboard interface {
+    Header() HeaderView
+    Hosts() []HostView
+    Forwards() []ForwardView
+    Status() StatusView
+}
+
+type Forwards interface {
+    Form(host string) ForwardFormInput                  // 初期値（placeholder 方針は F-50）
+    Add(in ForwardFormInput) (FormErrors, error)        // 検証 → AddRule → 永続化 → 開始（非同期）
+    Start(name string) error                            // 非同期。cb は CredentialBroker
+    Stop(name string) error
+    Delete(name string) error                           // 停止 + 削除 + 永続化
+}
+
+type Hosts interface {
+    Connect(name string) error                          // ConnectWithCallback（非同期）
+    Disconnect(name string) error
+}
+
+type Settings interface {
+    View() SettingsView
+    Apply(in SettingsView) (FormErrors, error)          // UpdateConfig → i18n.SetLang → Notifier
+}
+
+type Notifier interface{ Notify(topics ...Topic) }
+type Opener interface{ OpenURL(url string) error }
+```
+
+- `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼び、失敗は `NotificationQueue` に積む。呼び出し側のレスポンスは即時に返る
+- 状態不一致（`Start` が `CanStart=false` の行等）は `ErrStateConflict`（ハンドラが `409` に変換）。存在しない対象は `core.NotFoundError`（`404`）
+- `Forwards.Add` の検証は `core.ValidatePort`、名前重複（`core.AlreadyExistsError`）、ホスト存在確認を行い、フィールド別の `FormErrors` に変換する
+- ルール永続化は `core.PersistForwardRules`（IPC ハンドラと共有。後述「既存コンポーネントの変更」）
+- 表示文字列（稼働時間・データ量）は `internal/format` を使用する。ラベルは `i18n.T` をレンダリング時に呼ぶ（言語切り替えの即時反映のため）
+
+### CredentialBroker（`gui/service/credential.go`）
+
+`core.CredentialCallback` を実装し、WebView を介してクレデンシャルを要求する。IPC ハンドラの `buildCredentialCallback` と同じ契約。
+
+```go
+type CredentialBroker struct { /* mu sync.Mutex, pending []*pendingReq, notifier Notifier, win WindowController */ }
+
+func (b *CredentialBroker) Callback() core.CredentialCallback
+func (b *CredentialBroker) Pending() (CredentialView, bool)       // 先頭の要求（FIFO）
+func (b *CredentialBroker) Resolve(id string, r core.CredentialResponse) error // 未知/解決済みは ErrUnknownRequest
+func (b *CredentialBroker) Cancel(id string) error
+```
+
+- 要求ごとに `core.CredentialTimeout` のタイマーを持ち、満了時は `core.ErrCredentialTimeout` を返して `pending` から除く
+- 要求発生時に `WindowController.Show()`（非表示なら前面化）と `Notify(TopicCredential)`。解決・キャンセル・タイムアウトでも `Notify(TopicCredential)`
+- 解決後、`CredentialResponse` の `Value` / `Answers` を保持するバッファはゼロ化する
+
+### NotificationQueue（`gui/service/notification.go`）
+
+非同期通知（接続・転送開始の失敗、引き継ぎ完了、新バージョン検出）のメモリ上 FIFO（最大 50 件）。`Push(ToastView)` と `Drain() []ToastView`（`/fragments/toasts` が使用）。ウィンドウ非表示中も溜め、表示時に `all` トピックで取り出す。
+
+### EventBridge（`gui/service/bridge.go`）
+
+Core のイベントとティッカーをトピックに変換する。
+
+```go
+type Topic string // hosts | forwards | status | header | credential | toast | settings | all
+
+func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowController) *EventBridge
+func (e *EventBridge) Start(ctx context.Context) // SSH/Forward の Subscribe + ライブ（1s）/照合（5s）ティッカー
+```
+
+- イベント → トピックの写像、100ms コアレス、ティッカーの条件は [gui.md](../architecture/gui.md#eventbridge) に従う
+- 照合ティッカーは `GetRules` / `GetAllSessions` の名前+状態のシグネチャを比較し、変化があるときのみ通知する
+- Core のイベントチャネル（バッファ 16）を詰まらせないため、受信ゴルーチンはイベントをトピック集合へ写像してコアレス用の内部チャネルへ渡すだけにする
+
+### Templ View（`gui/web/view`）
+
+Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポーネントは ViewModel と型付き Props のみを受け取り、`i18n.T` と `Actions` フラグで描画を決める。Templ は Core を import しない。
+
+| 階層 | コンポーネント | 引数 |
+|------|---------------|------|
+| atoms | `StatusBadge` | `kind string, label string` |
+| atoms | `Button` | `ButtonProps{Label, Variant, Attrs templ.Attributes}`（`ButtonPrimary` / `ButtonSecondary` / `ButtonDanger`） |
+| molecules | `HostRow` | `HostView`（`Actions` に応じて接続 / 切断 / 転送追加を描画） |
+| molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
+| molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
+| organisms | `HostPanel` / `ForwardPanel` / `StatusBar` / `Header` | 対応する ViewModel のスライス・構造体 |
+| organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
+| organisms | `CredentialDialog` | `CredentialView` |
+| organisms | `SettingsForm` | `SettingsView, FormErrors` |
+| pages | `DashboardPage` | 全 ViewModel + `LifecycleState` |
+| layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |
+
+### 設定・i18n の拡張
+
+- `Config.GUI`（`GUIConfig`）をデフォルト値付きで追加（`DefaultConfig`: `base: system`、`accent: violet`）。`ConfigManager.LoadConfig` は未指定の値をデフォルトで補完する
+- 翻訳ファイルに `gui:` 名前空間（`gui.header.*`、`gui.hosts.*`、`gui.forwards.*`、`gui.form.*`、`gui.credential.*`、`gui.settings.*`、`gui.tray.*`、`gui.toast.*`、`gui.error.*`）を追加する。ja / en の両方を追加し、既存の欠落キー検査テストの対象に含める
+- GUI が表示するエラー文字列は Core のエラー型から `i18n` キーへ変換する（Core の英語エラー文字列を画面に直接出さない）
+
+### 既存コンポーネントの変更
+
+| コンポーネント | 変更内容 |
+|---------------|---------|
+| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `PIDFile.IsLocked` 追加 |
+| `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
+| `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
+| `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
+| `core.Config` | `GUI GUIConfig` を追加（`yaml:"gui"`）。IPC の `config.get` / `config.update` には含めない |
+
+### GUI のテスト方針
+
+| 対象 | 手法 | 実行環境 |
+|------|------|---------|
+| Service | Core の fake（`forwardtest` 等）を使い、ViewModel・`Actions` の出し分け・検証エラー・状態不一致・クレデンシャルのタイムアウト/キャンセルを検証 | `go test ./...`（Linux CI） |
+| Web ハンドラ | `httptest` + HTML アサーション（フラグメントに `<html>` がない、トークンなしは 403、`HX-Request` なしは 400、`422` でフォーム再描画、OOB トースト） | `go test ./...` |
+| Templ | `Render()` → HTML 文字列のアサーション（ボタンの有無、エスケープ） | `go test ./...` |
+| EventBridge | 疑似時計でコアレス・ティッカー・非表示中の抑止を検証 | `go test ./...` |
+| Shell / Tray | 手動確認（OS ごと）と CI のビルド確認（`-tags gui`）。PoC（gui.md R-1〜R-8）の結果を記録する | CI ビルド / 手動 |
+| E2E | 初期リリースでは行わない（WebView 自動化の導入コストが高いため）。手動確認項目を PR に記載する | — |
+
+### GUI ファイル分割方針
+
+`gui/web/handler/`、`gui/web/view/`、`gui/service/` は Linterly の制限（300 行/ファイル、2000 行/ディレクトリ）に従い、ルート種別・ドメイン単位でファイルを分ける。`view/` は階層ごとのサブパッケージ（`atoms` / `molecules` / `organisms` / `pages` / `layout`）で分割する。
+
 ## i18n 対応に伴う既存コンポーネントの変更
 
 各コンポーネントのハードコードされた日本語テキストを `i18n.T()` 呼び出しに置き換える。
@@ -1629,6 +1898,7 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | `tui/app/` | `app.go` | 470 | 9 (`app.go`, `app_forward.go`, `app_help.go`, `app_ipc.go`, `app_lang.go`, `app_lifecycle.go`, `app_theme.go`, `app_version.go`, `convert.go`) |
 | `tui/organisms/` | `setuppanel.go` | 534 | 3 (`setuppanel.go`, `setuppanel_update.go`, `setuppanel_view.go`) |
 | `daemon/` | `daemon.go` | 321 | 3 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `ensure.go`) |
+| `gui/service/` | （新規） | — | 8 (`dashboard.go`, `host.go`, `forward.go`, `settings.go`, `credential.go`, `notification.go`, `bridge.go`, `viewmodel.go`) |
 
 ## 改訂履歴
 
@@ -1653,3 +1923,5 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 5.2 | 2026-03-09 | CLI Layer: CLIRouter に update ルーティング追加、DaemonCall ヘルパー記載、UpdateCommand 詳細記述追加、共通パターン例を DaemonCall 使用に更新 | #62 ドキュメント乖離修正 |
 | 5.3 | 2026-03-14 | SetupPanel ウィザードの placeholder 自動入力セクション追加: 全テキスト入力ステップで空 Enter 時に placeholder 採用、リモートポート placeholder をローカルポートと同じ値に変更 | #66 ウィザード placeholder 自動入力 |
 | 5.4 | 2026-03-14 | SSH 互換性改善: SSHConnection.RemoteForward に bindAddr 引数追加、buildAuthMethods を IdentityFiles 複数鍵対応に更新（for range ループ化、デフォルト鍵フォールバック条件を IdentityFiles 空時に限定） | #74 SSH 互換性改善 |
+| 6.0 | 2026-10-15 | GUI Layer コンポーネント追加（Lifecycle / Wails App / Tray / Router / Service / CredentialBroker / NotificationQueue / EventBridge / Templ View）、Daemon に Services/Done/Info/Takeover、PIDFile に IsLocked を追加、依存関係図に GUI Layer を追加、既存コンポーネントの変更一覧とテスト方針を追加 | #84 Wails 版 GUI アプリケーション |
+| 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |

@@ -120,8 +120,8 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 
 ### NFR-19: 対応 OS
 
-- **要件**: Linux、macOS で動作すること
-- **備考**: Go のクロスコンパイルを活用し、シングルバイナリで配布する
+- **要件**: CLI / TUI / headless デーモンは Linux、macOS で動作すること。デスクトップ GUI（`moleport-gui`）は Linux、macOS、Windows で動作すること
+- **備考**: CLI/TUI は Go のクロスコンパイルによるシングルバイナリ（CGO 無効）で配布する。GUI は WebView（Linux: WebKitGTK 4.1、macOS: WKWebView、Windows: WebView2）に依存するため OS ごとのネイティブビルドで配布する（NFR-39, NFR-40）
 
 ### NFR-20: 依存関係
 
@@ -141,8 +141,8 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 
 ### NFR-23: バイナリ配布
 
-- **要件**: `moleport` のシングルバイナリを配布すること
-- **備考**: `go install` または `make install` で `$(go env GOPATH)/bin` にインストールする
+- **要件**: `moleport` のシングルバイナリを配布すること。`moleport-gui` は OS 別アーカイブとして GitHub Releases で配布すること
+- **備考**: `moleport` は `go install` または `make install` で `$(go env GOPATH)/bin` にインストールする。GUI の配布形態は NFR-40 を参照
 
 ## アップデートチェック要件
 
@@ -194,6 +194,69 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 - **要件**: Linterly による行数検査を lefthook の pre-commit で自動実行する
 - **備考**: 違反がある場合はコミットを拒否する。`linterly check` コマンドで手動実行も可能
 
+## GUI 要件
+
+### NFR-32: GUI 起動時間
+
+- **要件**: `moleport-gui` の起動からメインウィンドウの初回描画までを 3 秒以内（デーモン引き継ぎを除く）とすること
+- **備考**: 引き継ぎ時は旧デーモンの停止待ち（最大 10 秒）が加わる。内蔵デーモンの初期化（SSH config 読み込み、state 復元）はウィンドウ描画をブロックせず、復元結果はイベントで反映する
+
+### NFR-33: GUI の資源使用量
+
+- **要件**: ウィンドウ非表示（トレイ常駐）時の GUI プロセスのアイドル時 CPU 使用率は 1% 未満とすること
+- **備考**: 非表示中は WebView へのイベント送信とライブティッカー（1 秒周期）を停止し、5 秒周期の照合（メモリ参照のみ）とトレイ更新のみ行う。ウィンドウ表示復帰時に全体を再取得する。トレイメニュー更新は変化時のみ、最短 500ms 間隔にデバウンスする
+
+### NFR-34: GUI 通信のローカル限定
+
+- **要件**: GUI は TCP/UDP のリッスンポートを一切開かないこと
+- **備考**: フロントエンドとの通信は Wails の AssetServer（プロセス内）と Wails Events のみとする。Gin/HTTP サーバーを `127.0.0.1` でも公開しない。デーモンの IPC は従来どおり `0600` の Unix ソケット（NFR-12）のみ
+
+### NFR-35: GUI の Web セキュリティ
+
+- **要件**: HTML 出力は Templ の自動エスケープを使用し、ユーザー入力・SSH config 由来の値（ホスト名、ルール名、エラー文字列）を未エスケープで出力しないこと
+- **要件**: レスポンスに `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'` を付与し、インラインスクリプト・外部リソース読み込みを禁止すること（Wails ランタイムの注入が CSP と両立しない場合は PoC で検証した最小限の例外のみ許可）
+- **要件**: 状態変更を伴うアクションルートは `POST` / `DELETE` のみとし、WebView 内から発行されたリクエスト（Wails 起動時に生成した起動ごとのランダムトークンを `X-MolePort-Token` ヘッダーで照合）のみ受け付けること
+- **備考**: AssetServer は他プロセスから到達できないが、WebView 内で表示される外部コンテンツ（ホスト名等に含まれる文字列）から意図しない状態変更が行われることを防ぐ多層防御として導入する
+
+### NFR-36: GUI でのクレデンシャル取り扱い
+
+- **要件**: パスワード・パスフレーズ・OTP は WebView ↔ 内蔵デーモン間でメモリ上のみで受け渡し、ログ・config.yaml・state.yaml・URL・Wails イベントペイロードに含めないこと
+- **備考**: 入力フォームは `type="password"`（`Echo: true` の keyboard-interactive を除く）、`autocomplete="off"` とする。クレデンシャルの送信は `POST` ボディのみ。認証コールバック完了（成功・失敗・キャンセル・タイムアウト）後に保持バッファをゼロ化・参照を破棄する。リクエストペイロードをログ出力するミドルウェアはクレデンシャルルートを除外する（NFR-08 と同等）
+
+### NFR-37: トレイ常駐の耐障害性
+
+- **要件**: トレイの初期化失敗・トレイホストの不在・トレイの途中消失があっても、転送とウィンドウ操作が継続できること。トレイが利用できない間は、ウィンドウを閉じる操作を「非表示」ではなく「終了確認」にすること
+- **備考**: ウィンドウが非表示で復帰手段（トレイ・Dock）がない状態を作らない。トレイ利用可否はトレイライブラリの登録完了コールバックで判定する
+
+### NFR-38: デーモン引き継ぎの安全性
+
+- **要件**: 引き継ぎは `daemon.shutdown`（グレースフル停止）のみで行い、強制終了（SIGKILL）を自動実行しないこと。PID ファイルの排他ロックが取得できるまで内蔵デーモンを起動しないこと
+- **備考**: 引き継ぎ失敗時はエラーを明示して終了する（UC-26）。同時に 2 つのデーモンが SSH 接続・ポート Listen を行う状態を作らない
+
+### NFR-39: GUI の対応環境
+
+- **要件**: 以下を動作保証環境とする
+
+| OS | 要件 |
+|----|------|
+| Linux | x64 / arm64。WebKitGTK 4.1（`libwebkit2gtk-4.1`）、GTK3。トレイは StatusNotifierItem（D-Bus）対応環境（GNOME は AppIndicator 拡張、KDE/XFCE 等は標準） |
+| macOS | 11 以降。universal バイナリ（arm64 + amd64） |
+| Windows | 10 1803 以降 / 11、x64。WebView2 ランタイム（Windows 11 は標準、Windows 10 は Wails ブートストラッパーで導入）。Unix ドメインソケット（AF_UNIX）対応のため 1803 以降が必須 |
+
+- **備考**: Windows での内蔵デーモンは AF_UNIX ソケット（`%USERPROFILE%\.config\moleport\moleport.sock`）、LockFileEx による PID ロック、OpenSSH agent の named pipe（`\\.\pipe\openssh-ssh-agent`）に対応する。ファイルパーミッション（`0600` / `0700`）は Windows では ACL に委ね、ユーザープロファイル配下の既定 ACL（本人のみ）に依存する
+
+### NFR-40: GUI の配布
+
+- **要件**: GitHub Releases の同一タグに、GUI 用の OS 別アセットと SHA-256 チェックサムを添付すること
+- **アセット**: `moleport-gui_<version>_linux_amd64.tar.gz` / `_linux_arm64.tar.gz`、`moleport-gui_<version>_darwin_universal.zip`（`MolePort.app` を含む）、`moleport-gui_<version>_windows_amd64.zip`、`checksums_gui.txt`
+- **備考**: Wails は CGO と OS ネイティブの WebView を必要とするため、GoReleaser（CGO 無効のクロスビルド）では生成せず、GitHub Actions の OS 別ランナー（ubuntu-24.04 / ubuntu-24.04-arm / macos / windows）で `wails build` する。既存の `moleport` アーカイブとチェックサム（`checksums.txt`）は変更しない。初期リリースはコード署名・公証なし（OS の警告が表示されうることを README に明記する）
+
+### NFR-41: GUI のテスト容易性とビルド分離
+
+- **要件**: Wails・トレイ・WebView に依存しないコード（サービス層、HTTP ハンドラ、Templ コンポーネント、イベントブリッジ）は通常の `go test ./...` でテストでき、WebKitGTK 等のネイティブ依存なしに CI（ubuntu-latest）で実行できること
+- **要件**: Wails / トレイに直接依存するパッケージはビルドタグ `gui` で分離し、既定の `go build ./...` / `go vet ./...` / golangci-lint の対象外とすること。GUI のビルド確認は専用 CI ジョブ（`-tags gui`）で OS 別に行う
+- **備考**: 既存の CLI/TUI の配布ビルド（CGO 無効）が GUI 依存の影響を受けないこと。Templ の生成物（`*_templ.go`）はリポジトリにコミットし、CI で `templ generate` 後の差分がないことを検査する。生成物は Linterly の行数制限（NFR-24〜NFR-26）を超えるため、`.linterlyignore` に `*_templ.go` を追加して検査対象から除外する
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -206,3 +269,5 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 | 2.3 | 2026-02-27 | NFR-15 拡張（ジッター付きバックオフ、KeepAlive 設定、フォワード復元、ホスト別ポリシー、ReconnectCount 追跡） | #27 自動再接続機能の改善・拡張 |
 | 3.0 | 2026-03-04 | NFR-27〜NFR-31 追加: アップデートチェック要件（レスポンス時間、キャッシュ、プライバシー、無効化、API レート制限） | #44 最新バージョンチェック機能 |
 | 3.1 | 2026-03-14 | NFR-14a（RemoteForward デフォルトバインドアドレス）追加: リモート転送のデフォルトを `127.0.0.1` に変更し、外部公開リスクを防止 | #74 SSH 互換性改善 |
+| 4.0 | 2026-10-15 | NFR-32〜NFR-41 追加: GUI 要件（起動時間、資源使用量、ローカル限定通信、Web セキュリティ、クレデンシャル取り扱い、トレイ耐障害性、引き継ぎ安全性、対応環境、配布、ビルド分離）。NFR-19 / NFR-23 を GUI（Windows 含む）に合わせて更新 | #84 Wails 版 GUI アプリケーション |
+| 4.1 | 2026-10-15 | NFR-41: Templ 生成物を `.linterlyignore` で Linterly 対象外にする旨を追記 | レビュー指摘対応 #84 |

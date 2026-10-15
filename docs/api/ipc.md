@@ -5,6 +5,20 @@
 デーモンとクライアント（CLI/TUI）間の通信プロトコルを定義する。
 Unix ドメインソケット上で JSON-RPC 2.0 を使用する。
 
+このプロトコルは headless デーモン（`moleport daemon`）と GUI 内蔵デーモン（`moleport-gui`）で共通である。クライアントから見た違いはない（次節）。GUI プロセス内のウィンドウ・トレイは IPC を使わず Core を直接呼び出す（[gui.md](../architecture/gui.md)）。
+
+## GUI 内蔵デーモン稼働時の挙動
+
+| 項目 | 挙動 |
+|------|------|
+| 接続先 | headless デーモンと同じ `moleport.sock`（同時に存在するのはどちらか一方） |
+| `daemon.status` | `version` に GUI のビルドバージョンを返す。`pid` は GUI プロセスの PID |
+| `daemon.shutdown` | GUI プロセス全体を終了する（ウィンドウ・トレイを含む）。確認ダイアログは出さない（UC-36）。GUI 側の引き継ぎ（UC-26）も同じメソッドを旧デーモンに送る |
+| `config.get` / `config.update` | `gui` セクション（`gui.theme` / `gui.tray_notice_shown`）は公開しない。`config.update` は他のセクションを保持したまま更新する（`ConfigManager.UpdateConfig`）ため、GUI の設定は IPC 経由の更新で失われない |
+| `credential.request` | IPC クライアントが開始した接続・転送開始の認証要求は要求元クライアントに通知される。GUI 起点の操作の認証要求は GUI 内で処理され、IPC 通知は発生しない |
+| `events.subscribe` / `event.*` | GUI 内蔵デーモンでも従来どおり配信される。GUI ウィンドウは IPC のサブスクリプションを使わず、Core のイベントを直接購読する |
+| 他クライアントによる変更 | CLI/TUI からの `forward.add` / `forward.delete` は GUI のウィンドウに次回の再取得時に反映される（UC-27） |
+
 ## 接続情報
 
 | 項目 | 値 |
@@ -1161,3 +1175,4 @@ SSH 接続状態の変化。
 | 1.6 | 2026-03-01 | config.get/update に `language` フィールド追加、event.metrics に未実装注記追加 | ドキュメント乖離修正 (#40) |
 | 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |
 | 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |
+| 2.2 | 2026-10-15 | GUI 内蔵デーモン稼働時の挙動セクションを追加（接続先共通、`daemon.shutdown`、`config` の `gui` 非公開、認証要求の扱い）。プロトコル自体の変更なし | #84 Wails 版 GUI アプリケーション |

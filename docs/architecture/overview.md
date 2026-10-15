@@ -6,6 +6,8 @@ MolePort は Go で実装される SSH ポートフォワーディング管理�
 バックグラウンドデーモンが SSH 接続とポートフォワーディングを永続管理し、CLI サブコマンドおよび TUI ダッシュボードがデーモンのクライアントとして動作する。
 デーモンとクライアント間は Unix ドメインソケット上の JSON-RPC 2.0 プロトコルで通信する。
 
+これに加え、Wails v2 製デスクトップ GUI `moleport-gui` を提供する。GUI は Core Layer と IPC サーバーを同一プロセスに内蔵し（内蔵デーモン）、ウィンドウを閉じてもトレイ常駐で転送を維持する。GUI の詳細は [gui.md](gui.md) を参照する。
+
 ## 技術選定
 
 | カテゴリ | 技術 | バージョン | 選定理由 |
@@ -22,6 +24,12 @@ MolePort は Go で実装される SSH ポートフォワーディング管理�
 | i18n | [embed](https://pkg.go.dev/embed) + [text/template](https://pkg.go.dev/text/template) | stdlib | 翻訳ファイルの埋め込みと動的テキスト生成（外部依存なし） |
 | バージョン比較 | [semver](https://pkg.go.dev/golang.org/x/mod/semver) | latest | Go 標準拡張のセマンティックバージョニング比較。外部依存最小限 |
 | IPC | JSON-RPC 2.0 over Unix Domain Socket | — | 標準化された RPC プロトコル。リクエスト/レスポンス/通知の明確な区別。デバッグ容易 |
+| GUI シェル | [Wails](https://wails.io/) | v2 | ネイティブウィンドウ + OS の WebView。AssetServer に `http.Handler` を直接渡せる。GUI のみ（`gui` ビルドタグ） |
+| GUI テンプレート | [Templ](https://templ.guide/) | latest | 型安全な Go HTML テンプレート（HALT）。生成物 `*_templ.go` をコミット |
+| GUI インタラクション | [HTMX](https://htmx.org/) | 2.x | サーバー駆動の DOM 差し替え（HALT）。SSE/WebSocket 非依存 |
+| GUI スタイリング / ビルド | Tailwind CSS + esbuild | latest | ユーティリティ CSS と TS バンドル（HALT）。成果物は `go:embed` |
+| GUI トレイ | [fyne.io/systray](https://github.com/fyne-io/systray) | latest | Wails v2 が非対応のシステムトレイ。Linux は D-Bus（GTK 非依存） |
+| Windows 向け OS API | [x/sys/windows](https://pkg.go.dev/golang.org/x/sys/windows)、[go-winio](https://github.com/Microsoft/go-winio) | latest | PID ロック（LockFileEx）、OpenSSH agent（named pipe）。Windows ビルドのみ |
 
 ## 全体構成図
 
@@ -64,6 +72,28 @@ graph TB
     TUI --> Socket
     Socket --> IPCServer
 ```
+
+### GUI 構成との関係
+
+`moleport-gui` は上図の「デーモンプロセス」と同じコンポーネント（IPC Server / Core Layer / Infrastructure Layer）を内蔵し、クライアント（CLI/TUI）にとっては headless デーモンと区別がつかない。GUI 自身のユーザーインターフェース（ウィンドウ・トレイ）はデーモンと同一プロセスのため IPC を経由せず Core を直接呼び出す。
+
+```mermaid
+graph LR
+    subgraph Headless["headless 構成"]
+        HD["moleport daemon"]
+    end
+    subgraph GUI["GUI 構成"]
+        ED["moleport-gui<br/>(内蔵デーモン + ウィンドウ + トレイ)"]
+    end
+    Sock["moleport.sock / moleport.pid<br/>(共有・排他)"]
+    CLI["CLI / TUI"] --> Sock
+    HD --- Sock
+    ED --- Sock
+```
+
+- どちらか一方のみが稼働する（PID ファイルの排他ロック）
+- GUI 起動時に headless デーモンが稼働中であれば引き継ぐ（`daemon.shutdown` → 内蔵デーモン起動。[gui.md](gui.md#引き継ぎtakeover)）
+- GUI 稼働中の CLI/TUI は `moleport daemon start` を除き従来どおり使える（`daemon stop` は GUI ごと終了する）
 
 ## アーキテクチャの変更点（v1 → v2）
 
@@ -479,15 +509,21 @@ Linterly によるコード行数制限を適用する（NFR-24〜NFR-26 参照�
 ```
 moleport/
 ├── cmd/
-│   └── moleport/
-│       └── main.go                    # エントリポイント（CLI ルーター）
+│   ├── moleport/
+│   │   └── main.go                    # エントリポイント（CLI ルーター）
+│   └── moleport-gui/                  # GUI エントリポイント（build tag: gui）
+│       └── main.go                    # wails.Run、フラグ解析、Shell 初期化
 ├── internal/
 │   ├── daemon/                        # デーモンプロセス
-│   │   ├── daemon.go                  # Daemon（起動・停止）
+│   │   ├── daemon.go                  # Daemon（起動・停止・Services/Done/Info）
 │   │   ├── daemon_state.go            # 状態保存・復元
 │   │   ├── ensure.go                  # デーモン起動確認・IPC 接続ヘルパー
-│   │   ├── fork.go                    # フォーク処理（self-fork）
-│   │   └── pidfile.go                 # PID ファイル管理
+│   │   ├── takeover.go                # headless デーモンの引き継ぎ（GUI 用）
+│   │   ├── fork_unix.go               # フォーク処理（self-fork）。Unix のみ
+│   │   ├── fork_windows.go            # フォーク非対応スタブ
+│   │   ├── pidfile.go                 # PID ファイル管理（共通）
+│   │   ├── pidfile_unix.go            # flock / kill(2)
+│   │   └── pidfile_windows.go         # LockFileEx / OpenProcess
 │   ├── ipc/                           # IPC 通信層（ベース）
 │   │   ├── server.go                  # IPCServer（JSON-RPC サーバー）
 │   │   ├── broker.go                  # EventBroker（イベント配信）
@@ -606,20 +642,50 @@ moleport/
 │   │       └── updater.go            # Updater（ダウンロード・検証・バイナリ置換）
 │   ├── format/                        # フォーマットユーティリティ
 │   │   └── bytes.go                   # バイト数フォーマット関数
-│   └── infra/                         # Infrastructure Layer
-│       ├── sshconn.go                 # SSHConnection（x/crypto/ssh ラッパー）
-│       ├── auth.go                    # SSH 認証メソッド構築
-│       ├── proxycommand/              # ProxyCommand 経由接続（サブパッケージ）
-│       │   └── proxycommand.go
-│       ├── util.go                    # ユーティリティ
-│       ├── sshconfig/                 # SSH config 解析（サブパッケージ）
-│       │   └── sshconfig.go           # SSHConfigParser
-│       └── yamlstore/                 # YAML ファイル I/O（サブパッケージ）
-│           └── yamlstore.go           # YAMLStore
+│   ├── infra/                         # Infrastructure Layer
+│   │   ├── sshconn.go                 # SSHConnection（x/crypto/ssh ラッパー）
+│   │   ├── auth.go                    # SSH 認証メソッド構築
+│   │   ├── agent_unix.go              # SSH_AUTH_SOCK（Unix ソケット）
+│   │   ├── agent_windows.go           # OpenSSH agent（named pipe）
+│   │   ├── proxycommand/              # ProxyCommand 経由接続（サブパッケージ）
+│   │   │   ├── proxycommand.go
+│   │   │   ├── proc_unix.go           # sh -c / プロセスグループ kill
+│   │   │   └── proc_windows.go        # cmd /C / Job Object
+│   │   ├── util.go                    # ユーティリティ
+│   │   ├── sshconfig/                 # SSH config 解析（サブパッケージ）
+│   │   │   └── sshconfig.go           # SSHConfigParser
+│   │   └── yamlstore/                 # YAML ファイル I/O（サブパッケージ）
+│   │       └── yamlstore.go           # YAMLStore
+│   ├── gui/                           # GUI（デスクトップ）。詳細は gui.md
+│   │   ├── service/                   # GUI Service Layer（Wails 非依存）
+│   │   │   ├── dashboard.go           # DashboardService（ViewModel 組み立て）
+│   │   │   ├── host.go                # HostService（接続・切断）
+│   │   │   ├── forward.go             # ForwardService（追加・開始・停止・削除）
+│   │   │   ├── settings.go            # SettingsService（言語・テーマ・update_check）
+│   │   │   ├── credential.go          # CredentialBroker
+│   │   │   ├── bridge.go              # EventBridge（Core イベント → トピック、コアレス、ティッカー）
+│   │   │   ├── notification.go        # NotificationQueue（非同期通知の FIFO）
+│   │   │   └── viewmodel.go           # ViewModel 型（Actions フラグ含む）
+│   │   ├── web/                       # Web Layer（Wails 非依存）
+│   │   │   ├── router.go              # net/http ServeMux、ルート登録
+│   │   │   ├── handler/               # page / fragment / action ハンドラ
+│   │   │   ├── middleware/            # token.go / csp.go / logging.go
+│   │   │   ├── view/                  # Templ コンポーネント
+│   │   │   │   ├── atoms/ molecules/ organisms/ pages/ layout/
+│   │   │   └── static/                # src/（TS・CSS）・dist/（go:embed、git 管理外）
+│   │   ├── shell/                     # Shell Layer（build tag: gui）
+│   │   │   ├── app.go                 # Wails オプション・OnStartup/OnBeforeClose
+│   │   │   ├── lifecycle.go           # 起動・引き継ぎ・終了
+│   │   │   └── notifier.go            # EventsEmit 実装
+│   │   └── tray/                      # トレイ（build tag: gui）
+│   │       └── tray.go                # fyne.io/systray ラッパー、メニュー更新
+│   └── version/                       # ビルド時バージョン変数（CLI / GUI 共通）
+│       └── version.go                 # Version（ldflags -X で設定）
 ├── .linterly.yml                      # Linterly 設定（デフォルト）
 ├── .linterlyignore                    # Linterly 除外設定
 ├── go.mod
 ├── go.sum
+├── wails.json                         # Wails 設定（GUI ビルド）
 └── docs/
 ```
 
@@ -1002,6 +1068,7 @@ graph TD
 - TUI 側はメトリクス表示のために `session.list` を 2 秒間隔でポーリングする（専用の Metrics Collector goroutine は存在しない）
 - `context.Context` でキャンセルを伝播し、グレースフルシャットダウンを実現
 - Core Layer / Infra Layer の並行処理モデルは v1 から変更なし
+- **GUI 構成の追加ゴルーチン**: EventBridge（Core の SSH / Forward イベントを購読し 100ms でコアレスして Wails Events に変換）、トレイのメニュー更新、`Daemon.Done()` 監視（`daemon.shutdown` による終了を Wails に伝える）。ウィンドウ（WebView からの HTTP リクエスト）は AssetServer のゴルーチンで処理される。GUI Service は Core のマネージャーと同じ並行安全性の下で呼び出される（追加のロックは `CredentialBroker` の pending マップのみ）
 
 ## ファイルレイアウト
 
@@ -1031,6 +1098,8 @@ graph LR
     CLI["CLI"] --> |接続| Sock
     TUI["TUI"] --> |接続| Sock
 ```
+
+GUI 構成では上記「デーモン」を `moleport-gui` プロセスに読み替える。`config.yaml` に `gui:` セクションが追加される（[data-model.md](data-model.md)）。
 
 ## リリース・配布
 
@@ -1076,6 +1145,10 @@ flowchart LR
 |-----------|------|
 | `update` | `go install github.com/ousiassllc/moleport/cmd/moleport@latest` で最新版をインストール（開発者向け） |
 
+### GUI のリリース
+
+GUI（`moleport-gui`）は CGO と OS ネイティブの WebView を必要とするため GoReleaser では生成せず、同じタグ push をトリガーに OS 別ネイティブランナーの GitHub Actions ジョブで `wails build` し、GitHub Release にアセットを追加する。アセット名・対象環境・ワークフロー構成は [gui.md](gui.md#ビルドと配布) と NFR-40 を参照する。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -1094,3 +1167,4 @@ flowchart LR
 | 4.0 | 2026-03-04 | VersionChecker 追加: 技術選定に golang.org/x/mod/semver 追加、全体構成図に VersionChecker・GitHub API 追加、Core Layer に core/update/ サブパッケージ追加、JSON-RPC メソッドに version.check 追加、TUI 起動時最新バージョンチェックフロー追加、並行処理モデルに VersionChecker goroutine 追加、ディレクトリ構成に core/update/・handler_version.go・protocol_version.go 追加 | #44 最新バージョンチェック機能 |
 | 4.1 | 2026-03-08 | リリース・配布セクション追加: GoReleaser 設定（4プラットフォーム）、GitHub Actions リリースワークフロー、Makefile update ターゲット | #58 セルフアップデート機能 |
 | 4.2 | 2026-03-09 | ドキュメント乖離修正: ディレクトリ構成に updatecmd/ サブパッケージ・updater.go・errors.go・panel_helper.go を追加、ipc/protocol/ ファイル数を 11 に修正 | #62 ドキュメント乖離修正 |
+| 5.0 | 2026-10-15 | GUI 構成を追加: 概要・技術選定（Wails / Templ / HTMX / Tailwind / systray / Windows API）、GUI 構成との関係、ディレクトリ構成（`cmd/moleport-gui`、`internal/gui/*`、`internal/version`、`daemon` / `infra` の OS 別ファイル分割）、並行処理モデル、ファイルレイアウト、GUI のリリース | #84 Wails 版 GUI アプリケーション |
