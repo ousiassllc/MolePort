@@ -1,12 +1,20 @@
 name: Release
 
+# main への push: コミット種別から次バージョンを判定し、タグ付けしてリリースする。
+# v*.*.* タグの手動 push: そのタグでリリースする (バージョンを手動指定したい場合)。
+# GITHUB_TOKEN で push したタグは他のワークフローを起動しないため、タグ付けと GoReleaser は同一ジョブで実行する。
 on:
   push:
+    branches: [main]
     tags:
       - "v*.*.*"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -21,10 +29,37 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Determine version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            next="$GITHUB_REF_NAME"
+          else
+            next="$(scripts/next-version.sh "$GITHUB_SHA")"
+          fi
+          echo "next=${next}" >> "$GITHUB_OUTPUT"
+          echo "Next version: ${next:-<none>}"
+
+      - name: Run tests
+        if: steps.version.outputs.next != ''
+        run: go test -race -count=1 ./...
+
+      - name: Create tag
+        if: github.ref_type == 'branch' && steps.version.outputs.next != ''
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT" -m "$NEXT" "$GITHUB_SHA"
+          git push origin "refs/tags/$NEXT"
+
       - name: Run GoReleaser
+        if: steps.version.outputs.next != ''
         uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.next }}
