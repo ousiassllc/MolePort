@@ -5,6 +5,8 @@ BUILD_DIR := bin
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GOFLAGS := -trimpath
 LDFLAGS := -s -w -X github.com/ousiassllc/moleport/internal/version.Version=$(VERSION)
+# GUI ビルドタグ。Linux で libwebkit2gtk-4.1 を使う場合は make gui-build GUI_TAGS=gui,webkit2_41
+GUI_TAGS ?= gui
 
 .PHONY: help build run clean test test-race vet fmt lint linterly install update setup-tools gui-assets gui-dev gui-build
 
@@ -53,8 +55,8 @@ gui-dev: ## GUI 開発モード (templ watch + アセット watch + wails dev -t
 	npm run watch & \
 	cd cmd/moleport-gui && wails dev -tags gui -skipbindings
 
-gui-build: ## GUI をビルド (wails build -tags gui。frontend:build が gui-assets を実行。OS ネイティブ環境が必要)
-	cd cmd/moleport-gui && wails build -tags gui -skipbindings
+gui-build: ## GUI をビルド (wails build -tags gui。GUI_TAGS で変更可。frontend:build が gui-assets を実行。OS ネイティブ環境が必要)
+	cd cmd/moleport-gui && wails build -tags "$(GUI_TAGS)" -skipbindings -ldflags "$(LDFLAGS)"
 
 setup-tools: ## 開発ツールをインストール
 	go install github.com/ousiassllc/linterly/cmd/linterly@latest

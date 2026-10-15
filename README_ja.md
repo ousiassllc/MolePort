@@ -17,11 +17,13 @@ graph LR
 - **自動再接続** --- 指数バックオフで自動リトライ
 - **セッション復元** --- 前回のアクティブ転送を起動時に自動復元
 - **daemon+client** --- バックグラウンドデーモンが SSH 接続を管理、CLI/TUI はクライアントとして操作
+- **デスクトップ GUI** --- `moleport-gui`（Linux / macOS / Windows）。デーモンを内蔵し、システムトレイに常駐
 
 ## 必要環境
 
 - Go 1.25+
-- Linux / macOS
+- Linux / macOS（CLI / TUI）
+- Linux / macOS / Windows（GUI。[デスクトップ GUI](#デスクトップ-gui) を参照）
 
 ## インストール
 
@@ -42,6 +44,38 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 
 ```bash
 make build
+```
+
+## デスクトップ GUI
+
+`moleport-gui` はデーモンを内蔵したデスクトップアプリで、ダッシュボードをネイティブウィンドウに表示します。ウィンドウを閉じてもシステムトレイに常駐します。[GitHub Releases](https://github.com/ousiassllc/MolePort/releases) に別アセットとして配布されます（`moleport`（CLI/TUI）のアセットは変更ありません）。
+
+| アセット | 対象 |
+|---------|------|
+| `moleport-gui_<version>_linux_amd64.tar.gz` / `moleport-gui_<version>_linux_arm64.tar.gz` | Linux x64 / arm64 |
+| `moleport-gui_<version>_darwin_universal.zip` | macOS 11 以降（Apple Silicon / Intel） |
+| `moleport-gui_<version>_windows_amd64.zip` | Windows 10（1803 以降）/ 11、x64 |
+| `checksums_gui.txt` | 上記アセットの SHA-256 チェックサム |
+
+ダウンロードしたアセットは `sha256sum -c --ignore-missing checksums_gui.txt`（Linux）または `shasum -a 256 -c --ignore-missing checksums_gui.txt`（macOS）で検証できます。アーカイブを展開し、`moleport-gui`（Linux）、`MolePort.app`（macOS）、`moleport-gui.exe`（Windows）を実行してください。
+
+### Linux の要件
+
+- GTK 3 と WebKitGTK 4.1（`libgtk-3-0`、`libwebkit2gtk-4.1-0`。例: `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0`）
+- **システムトレイ**: StatusNotifierItem（D-Bus）対応の環境が必要です。KDE Plasma、XFCE などは標準で対応しています。GNOME は [AppIndicator / KStatusNotifierItem 拡張](https://extensions.gnome.org/extension/615/appindicator-support/)が必要です。トレイが使えない環境では、ウィンドウを閉じると（トレイに隠れず）終了確認が表示されます。
+
+### 未署名ビルドの警告（初回起動時）
+
+初期リリースはコード署名・公証を行っていないため、OS が警告を表示することがあります。
+
+- **macOS** --- 「開発元を確認できないため開けません」と表示された場合: Finder で `MolePort.app` を右クリック（または Control + クリック）して **開く** を選び、ダイアログで再度 **開く** をクリックします。初回のみ必要です。それでも開けない場合は `xattr -dr com.apple.quarantine MolePort.app` を実行してください。
+- **Windows** --- SmartScreen が「Windows によって PC が保護されました」と表示した場合: **詳細情報** をクリックし、**実行** を選びます。WebView2 ランタイムがない Windows 10 では、初回起動時に導入されます。
+
+### GUI をソースからビルドする
+
+```bash
+make gui-build                           # Wails CLI v2 と OS ネイティブの WebView 環境が必要
+make gui-build GUI_TAGS=gui,webkit2_41   # Linux（libwebkit2gtk-4.1-dev）の場合
 ```
 
 ## クイックスタート
@@ -186,6 +220,8 @@ make vet         # go vet
 make fmt         # go fmt
 make lint        # golangci-lint を実行
 make linterly    # linterly でファイル行数チェック
+make gui-assets  # GUI アセットを生成（templ generate + npm run build）
+make gui-build   # GUI をビルド（-tags gui。Wails CLI と OS ネイティブの WebView 環境が必要）
 make setup-tools # 開発ツールをインストール（linterly, golangci-lint）
 make clean       # ビルド成果物を削除
 ```

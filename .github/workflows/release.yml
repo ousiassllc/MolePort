@@ -3,6 +3,8 @@ name: Release
 # main への push: コミット種別から次バージョンを判定し、タグ付けしてリリースする。
 # v*.*.* タグの手動 push: そのタグでリリースする (バージョンを手動指定したい場合)。
 # GITHUB_TOKEN で push したタグは他のワークフローを起動しないため、タグ付けと GoReleaser は同一ジョブで実行する。
+# GUI (moleport-gui) は CGO と OS ネイティブの WebView が必要で GoReleaser では生成できないため、
+# release ジョブ完了後に OS 別ランナーで wails build し、同じタグの Release へ gh release upload で追加する。
 on:
   push:
     branches: [main]
@@ -20,6 +22,8 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.next }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,3 +67,194 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.next }}
+
+  gui-linux:
+    name: GUI (linux/${{ matrix.arch }})
+    needs: release
+    if: needs.release.outputs.tag != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install templ and wails
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Build assets
+        run: |
+          templ generate
+          npm ci
+          npm run build
+
+      - name: Build GUI
+        working-directory: cmd/moleport-gui
+        run: >
+          wails build -tags gui,webkit2_41 -skipbindings -s -nosyncgomod
+          -ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=${TAG#v}"
+
+      - name: Archive
+        run: |
+          mkdir -p dist-gui
+          tar -czf "dist-gui/moleport-gui_${TAG#v}_linux_${{ matrix.arch }}.tar.gz" \
+            -C cmd/moleport-gui/build/bin moleport-gui
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-linux-${{ matrix.arch }}
+          path: dist-gui/*
+          if-no-files-found: error
+
+  gui-macos:
+    name: GUI (darwin/universal)
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: macos-latest
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install templ and wails
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Build assets
+        run: |
+          templ generate
+          npm ci
+          npm run build
+
+      - name: Build GUI
+        working-directory: cmd/moleport-gui
+        run: >
+          wails build -platform darwin/universal -tags gui -skipbindings -s -nosyncgomod
+          -ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=${TAG#v}"
+
+      - name: Archive
+        run: |
+          mkdir -p dist-gui
+          cd cmd/moleport-gui/build/bin
+          app="$(find . -maxdepth 1 -name '*.app' -print -quit)"
+          [ -n "$app" ] || { echo "no .app bundle was built"; exit 1; }
+          [ "$app" = "./MolePort.app" ] || mv "$app" MolePort.app
+          ditto -c -k --keepParent MolePort.app "$GITHUB_WORKSPACE/dist-gui/moleport-gui_${TAG#v}_darwin_universal.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-darwin-universal
+          path: dist-gui/*
+          if-no-files-found: error
+
+  gui-windows:
+    name: GUI (windows/amd64)
+    needs: release
+    if: needs.release.outputs.tag != ''
+    runs-on: windows-latest
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.release.outputs.tag }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install templ and wails
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Build assets
+        run: |
+          templ generate
+          npm ci
+          npm run build
+
+      - name: Build GUI
+        working-directory: cmd/moleport-gui
+        run: >
+          wails build -platform windows/amd64 -tags gui -skipbindings -s -nosyncgomod
+          -ldflags "-X github.com/ousiassllc/moleport/internal/version.Version=${TAG#v}"
+
+      - name: Archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist-gui | Out-Null
+          $version = $env:TAG -replace '^v', ''
+          Compress-Archive -Path cmd/moleport-gui/build/bin/moleport-gui.exe -DestinationPath "dist-gui/moleport-gui_${version}_windows_amd64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-windows-amd64
+          path: dist-gui/*
+          if-no-files-found: error
+
+  gui-publish:
+    name: Publish GUI assets
+    needs: [release, gui-linux, gui-macos, gui-windows]
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gui-*
+          path: dist-gui
+          merge-multiple: true
+
+      - name: Generate checksums_gui.txt
+        working-directory: dist-gui
+        run: sha256sum moleport-gui_* > checksums_gui.txt
+
+      - name: Upload to GitHub Release
+        run: gh release upload "$TAG" dist-gui/* --clobber --repo "$GITHUB_REPOSITORY"

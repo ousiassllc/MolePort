@@ -19,11 +19,13 @@ graph LR
 - **Auto-reconnect** --- Automatic retry with exponential backoff
 - **Session restore** --- Automatically restores previous active forwarding on startup
 - **Daemon+client** --- Background daemon manages SSH connections; CLI/TUI operates as a client
+- **Desktop GUI** --- `moleport-gui` (Linux / macOS / Windows) with system tray residency and an embedded daemon
 
 ## Requirements
 
 - Go 1.25+
-- Linux / macOS
+- Linux / macOS (CLI / TUI)
+- Linux / macOS / Windows (GUI, see [Desktop GUI](#desktop-gui))
 
 ## Installation
 
@@ -44,6 +46,38 @@ To build only (outputs to `./bin/moleport`):
 
 ```bash
 make build
+```
+
+## Desktop GUI
+
+`moleport-gui` is a desktop app that embeds the daemon and shows the dashboard in a native window. It keeps running in the system tray when the window is closed. It is distributed as separate assets on the [GitHub Releases](https://github.com/ousiassllc/MolePort/releases) page (the `moleport` CLI/TUI assets are unchanged).
+
+| Asset | Platform |
+|-------|----------|
+| `moleport-gui_<version>_linux_amd64.tar.gz` / `moleport-gui_<version>_linux_arm64.tar.gz` | Linux x64 / arm64 |
+| `moleport-gui_<version>_darwin_universal.zip` | macOS 11+ (Apple Silicon / Intel) |
+| `moleport-gui_<version>_windows_amd64.zip` | Windows 10 (1803+) / 11, x64 |
+| `checksums_gui.txt` | SHA-256 checksums of the assets above |
+
+Verify a downloaded asset with `sha256sum -c --ignore-missing checksums_gui.txt` (Linux) or `shasum -a 256 -c --ignore-missing checksums_gui.txt` (macOS). Then extract the archive and run `moleport-gui` (Linux), `MolePort.app` (macOS) or `moleport-gui.exe` (Windows).
+
+### Linux requirements
+
+- GTK 3 and WebKitGTK 4.1 (`libgtk-3-0` and `libwebkit2gtk-4.1-0`; e.g. `sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0`)
+- **System tray**: a StatusNotifierItem (D-Bus) host is required. KDE Plasma, XFCE and similar desktops support it out of the box; GNOME needs the [AppIndicator / KStatusNotifierItem extension](https://extensions.gnome.org/extension/615/appindicator-support/). Without a tray host, closing the window asks for quit confirmation instead of hiding to the tray.
+
+### Unsigned builds (warnings on first launch)
+
+The initial releases are not code-signed or notarized, so your OS may show a warning.
+
+- **macOS** --- "MolePort.app cannot be opened because the developer cannot be verified": right-click (or Control-click) `MolePort.app` in Finder, choose **Open**, then click **Open** in the dialog. This is needed only the first time. If the app is still blocked, run `xattr -dr com.apple.quarantine MolePort.app`.
+- **Windows** --- SmartScreen shows "Windows protected your PC": click **More info**, then **Run anyway**. Windows 10 installs the WebView2 runtime on first launch if it is missing.
+
+### Building the GUI from source
+
+```bash
+make gui-build                           # Requires Wails CLI v2 and the native WebView environment
+make gui-build GUI_TAGS=gui,webkit2_41   # Linux with libwebkit2gtk-4.1-dev
 ```
 
 ## Quick Start
@@ -188,6 +222,8 @@ make vet         # Run go vet
 make fmt         # Run go fmt
 make lint        # Run golangci-lint
 make linterly    # Run linterly (file line count check)
+make gui-assets  # Generate GUI assets (templ generate + npm run build)
+make gui-build   # Build the GUI (-tags gui; requires Wails CLI and a native WebView environment)
 make setup-tools # Install development tools (linterly, golangci-lint)
 make clean       # Remove build artifacts
 ```
