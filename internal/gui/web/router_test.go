@@ -169,14 +169,14 @@ func TestRouter_StateChangingRequestsNeedToken(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			if got := serve(h, method, "/actions/forwards/x", nil).Code; got != http.StatusForbidden {
+			if got := serve(h, method, "/actions/unknown", nil).Code; got != http.StatusForbidden {
 				t.Errorf("トークンなし: status = %d, want 403", got)
 			}
-			if got := serve(h, method, "/actions/forwards/x", map[string]string{middleware.TokenHeader: "wrong"}).Code; got != http.StatusForbidden {
+			if got := serve(h, method, "/actions/unknown", map[string]string{middleware.TokenHeader: "wrong"}).Code; got != http.StatusForbidden {
 				t.Errorf("不一致トークン: status = %d, want 403", got)
 			}
 			// トークンが一致すればミドルウェアを通過し、未定義ルートとして 404 になる。
-			if got := serve(h, method, "/actions/forwards/x", map[string]string{middleware.TokenHeader: testToken}).Code; got != http.StatusNotFound {
+			if got := serve(h, method, "/actions/unknown", map[string]string{middleware.TokenHeader: testToken}).Code; got != http.StatusNotFound {
 				t.Errorf("一致トークン: status = %d, want 404（未定義ルート）", got)
 			}
 		})

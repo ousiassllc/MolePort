@@ -1,4 +1,4 @@
-package service
+package bridge
 
 import (
 	"context"
@@ -12,21 +12,24 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/service/servicetest"
+	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
 // batchNotifier は Notify の呼び出しを 1 回 1 要素で記録する。
 type batchNotifier struct {
 	mu      sync.Mutex
-	batches [][]Topic
+	batches [][]service.Topic
 }
 
-func (n *batchNotifier) Notify(topics ...Topic) {
+func (n *batchNotifier) Notify(topics ...service.Topic) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.batches = append(n.batches, append([]Topic(nil), topics...))
+	n.batches = append(n.batches, append([]service.Topic(nil), topics...))
 }
 
-func (n *batchNotifier) take() [][]Topic {
+func (n *batchNotifier) take() [][]service.Topic {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	b := n.batches
@@ -34,15 +37,24 @@ func (n *batchNotifier) take() [][]Topic {
 	return b
 }
 
+func useEnglish(t *testing.T) {
+	t.Helper()
+	prev := i18n.CurrentLang()
+	t.Cleanup(func() { _ = i18n.SetLang(prev) })
+	if err := i18n.SetLang(i18n.LangEN); err != nil {
+		t.Fatalf("SetLang: %v", err)
+	}
+}
+
 type fakeVisibility struct{ visible atomic.Bool }
 
 func (f *fakeVisibility) Visible() bool { return f.visible.Load() }
 
 type bridgeEnv struct {
-	ssh    *fakeSSH
-	fwd    *fakeForward
+	ssh    *servicetest.SSH
+	fwd    *servicetest.Forward
 	n      *batchNotifier
-	q      *NotificationQueue
+	q      *service.NotificationQueue
 	vis    *fakeVisibility
 	cancel context.CancelFunc
 }
@@ -52,13 +64,13 @@ type bridgeEnv struct {
 func newBridgeEnv(t *testing.T, visible bool, sessions ...core.ForwardSession) *bridgeEnv {
 	t.Helper()
 	e := &bridgeEnv{
-		ssh: newFakeSSH(), fwd: newFakeForward(sessions...),
-		n: &batchNotifier{}, q: NewNotificationQueue(), vis: &fakeVisibility{},
+		ssh: servicetest.NewSSH(), fwd: servicetest.NewForward(sessions...),
+		n: &batchNotifier{}, q: service.NewNotificationQueue(), vis: &fakeVisibility{},
 	}
 	e.vis.visible.Store(visible)
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
-	NewEventBridge(e.ssh, e.fwd, e.n, e.q, e.vis).Start(ctx)
+	New(e.ssh, e.fwd, e.n, e.q, e.vis).Start(ctx)
 	t.Cleanup(cancel)
 	return e
 }
@@ -75,12 +87,12 @@ func activeSession(name string) core.ForwardSession {
 func TestEventBridge_SSHEventMapsToHostsAndStatus(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, true)
-		e.ssh.ch <- core.SSHEvent{Type: core.SSHEventConnected, HostName: "h"}
+		e.ssh.Events <- core.SSHEvent{Type: core.SSHEventConnected, HostName: "h"}
 
 		time.Sleep(coalesceWindow)
 		synctest.Wait()
 
-		want := [][]Topic{{TopicHosts, TopicStatus}}
+		want := [][]service.Topic{{service.TopicHosts, service.TopicStatus}}
 		if got := e.n.take(); !reflect.DeepEqual(got, want) {
 			t.Errorf("Notify = %v, want %v", got, want)
 		}
@@ -95,12 +107,12 @@ func TestEventBridge_ForwardEventsMapToForwardsHostsStatus(t *testing.T) {
 		t.Run(typ.String(), func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				e := newBridgeEnv(t, true)
-				e.fwd.ch <- core.ForwardEvent{Type: typ, RuleName: "web"}
+				e.fwd.Events <- core.ForwardEvent{Type: typ, RuleName: "web"}
 
 				time.Sleep(coalesceWindow)
 				synctest.Wait()
 
-				want := [][]Topic{{TopicHosts, TopicForwards, TopicStatus}}
+				want := [][]service.Topic{{service.TopicHosts, service.TopicForwards, service.TopicStatus}}
 				if got := e.n.take(); !reflect.DeepEqual(got, want) {
 					t.Errorf("Notify = %v, want %v", got, want)
 				}
@@ -117,8 +129,8 @@ func TestEventBridge_CoalescesBurstIntoSingleNotify(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, true)
 		for range 5 {
-			e.ssh.ch <- core.SSHEvent{Type: core.SSHEventConnected, HostName: "h"}
-			e.fwd.ch <- core.ForwardEvent{Type: core.ForwardEventStarted, RuleName: "web"}
+			e.ssh.Events <- core.SSHEvent{Type: core.SSHEventConnected, HostName: "h"}
+			e.fwd.Events <- core.ForwardEvent{Type: core.ForwardEventStarted, RuleName: "web"}
 			time.Sleep(10 * time.Millisecond)
 		}
 		synctest.Wait()
@@ -129,7 +141,7 @@ func TestEventBridge_CoalescesBurstIntoSingleNotify(t *testing.T) {
 		time.Sleep(coalesceWindow)
 		synctest.Wait()
 
-		want := [][]Topic{{TopicHosts, TopicForwards, TopicStatus}}
+		want := [][]service.Topic{{service.TopicHosts, service.TopicForwards, service.TopicStatus}}
 		if got := e.n.take(); !reflect.DeepEqual(got, want) {
 			t.Errorf("Notify = %v, want %v（1 回にまとめる）", got, want)
 		}
@@ -141,13 +153,13 @@ func TestEventBridge_ErrorsPushToastAndNotifyToastTopic(t *testing.T) {
 	useEnglish(t)
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, true)
-		e.ssh.ch <- core.SSHEvent{Type: core.SSHEventError, HostName: "h", Error: errors.New("ssh: unable to authenticate")}
-		e.fwd.ch <- core.ForwardEvent{Type: core.ForwardEventError, RuleName: "web", Error: errors.New("listen tcp :80: bind: address already in use")}
+		e.ssh.Events <- core.SSHEvent{Type: core.SSHEventError, HostName: "h", Error: errors.New("ssh: unable to authenticate")}
+		e.fwd.Events <- core.ForwardEvent{Type: core.ForwardEventError, RuleName: "web", Error: errors.New("listen tcp :80: bind: address already in use")}
 
 		time.Sleep(coalesceWindow)
 		synctest.Wait()
 
-		want := [][]Topic{{TopicHosts, TopicForwards, TopicStatus, TopicToast}}
+		want := [][]service.Topic{{service.TopicHosts, service.TopicForwards, service.TopicStatus, service.TopicToast}}
 		if got := e.n.take(); !reflect.DeepEqual(got, want) {
 			t.Errorf("Notify = %v, want %v", got, want)
 		}
@@ -156,7 +168,7 @@ func TestEventBridge_ErrorsPushToastAndNotifyToastTopic(t *testing.T) {
 			t.Fatalf("toasts = %+v, want 2 件", toasts)
 		}
 		// 2 つの購読チャネルの受信順は不定のため、集合として比較する。
-		got := map[string]ToastKind{}
+		got := map[string]service.ToastKind{}
 		for _, toast := range toasts {
 			got[toast.Message] = toast.Kind
 		}
@@ -164,7 +176,7 @@ func TestEventBridge_ErrorsPushToastAndNotifyToastTopic(t *testing.T) {
 			`Error on host "h": Authentication failed.`,
 			`Error on forward "web": The port is already in use.`,
 		} {
-			if got[msg] != ToastError {
+			if got[msg] != service.ToastError {
 				t.Errorf("エラートースト %q がない: %+v", msg, toasts)
 			}
 		}
@@ -175,12 +187,12 @@ func TestEventBridge_ErrorsPushToastAndNotifyToastTopic(t *testing.T) {
 func TestEventBridge_NotifyCarriesOnlyTopicNames(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, true)
-		e.ssh.ch <- core.SSHEvent{Type: core.SSHEventError, HostName: "secret-host", Error: errors.New("password=hunter2")}
+		e.ssh.Events <- core.SSHEvent{Type: core.SSHEventError, HostName: "secret-host", Error: errors.New("password=hunter2")}
 
 		time.Sleep(coalesceWindow)
 		synctest.Wait()
 
-		valid := map[Topic]bool{}
+		valid := map[service.Topic]bool{}
 		for _, topic := range topicOrder {
 			valid[topic] = true
 		}

@@ -91,7 +91,7 @@ Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
 |---------|-----------|-----------|------|----------------|
 | Shell | `cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray` | `gui` | Wails 起動、ウィンドウ制御、トレイ、起動/引き継ぎ/終了の統括、Wails Events 送信 | Web, Service, daemon, Wails, systray |
 | Web | `internal/gui/web`（`handler/`, `middleware/`, `view/{atoms,molecules,organisms,pages,layout}`, `static/`） | なし | HTTP ルーティング、Templ レンダリング、トークン・CSP、静的アセット配信 | Service, i18n, Templ |
-| GUI Service | `internal/gui/service` | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
+| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
 | Core / Infra | 既存 | なし | 既存どおり | — |
 
 - `internal/gui/web` と `internal/gui/service` は Wails・トレイに依存しない。`go test ./...` で Linux CI 上でテストできる（NFR-41）
@@ -359,7 +359,7 @@ sequenceDiagram
     User->>UI: [接続] をクリック
     UI->>H: POST /actions/hosts/{name}/connect
     H->>Core: ConnectWithCallback(host, cb) (非同期)
-    H-->>UI: 202 + 接続中バッジのフラグメント
+    H-->>UI: 200 + 接続中バッジのフラグメント
     Core->>Cred: cb(CredentialRequest)
     Cred->>Cred: pending[id] を登録（30 秒タイマー）
     Cred->>Shell: Notify({credential}) + ウィンドウ前面化要求
@@ -375,11 +375,13 @@ sequenceDiagram
 ```
 
 - 接続・転送開始アクションは認証待ちでブロックしないよう、ハンドラは非同期で Core を呼び、即座にフラグメントを返す（結果は EventBridge 経由で反映される。失敗は `Error` 状態とトーストで通知）
+- アクション直後のレスポンス時点では Core がまだ `Connecting` / `Starting` に遷移していないため、Service は進行中の接続・開始を `Activity` に記録して ViewModel に重ねる（「接続中…」「開始中…」バッジと 409 判定に使う）。Core は転送開始の失敗でセッションを `Stopped` に戻すだけなので、直近の開始失敗も `Activity` に保持して `Error` 表示（`LastError`）にする（停止・削除・再開始で消える）
 - `CredentialBroker` は `requestID` 単位の待機チャネルを保持し、`Resolve` / `Cancel` / 30 秒タイムアウト（`core.CredentialTimeout`）のいずれかで解放する。キャンセルは `core.ErrCredentialCancelled`、タイムアウトは `core.ErrCredentialTimeout` を返す
 - 複数要求が同時に発生した場合は FIFO で 1 件ずつダイアログに表示する
-- 入力値は `POST` ボディ（`application/x-www-form-urlencoded`）のみで受け渡し、URL・ログ・イベントに含めない。解決後にバッファをゼロ化する（NFR-36）
-- ウィンドウ非表示時は Shell がウィンドウを前面表示してからダイアログを表示する（UC-31）
-- トレイからの転送開始も同じ `CredentialBroker` を使う（UC-33）
+- 入力値は `POST` ボディ（`application/x-www-form-urlencoded`）のみで受け渡し、URL・ログ・イベントに含めない。ハンドラはボディを文字列化せずバイト列のまま解析し、`Resolve` が Core へ渡した後にバッファをゼロ化する（NFR-36）
+- ウィンドウ非表示時は Shell がウィンドウを前面表示してからダイアログを表示する（UC-31）。Broker は要求発生時に `WindowController.Show()` を呼ぶ
+- クレデンシャルダイアログは `#modal-root` とは別の `#credential-root` に差し込み、先に開いているモーダル（転送追加フォーム等）の上に重ねて表示する（入力途中の値を失わない）
+- トレイからの転送開始も同じ `CredentialBroker` を使う（UC-33）。`Callback()` を公開 API とする
 - CLI/TUI（IPC 経由）の認証要求は従来の `buildCredentialCallback` が処理し、GUI には出ない
 
 ## システムトレイ
@@ -531,3 +533,4 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.1 | 2026-10-15 | `*_templ.go` を `.linterlyignore` に追加する旨、EventBridge 受信ループの規律（常時全件デキュー、emit 側で抑止）を追記 | レビュー指摘対応 #84 |
 | 1.2 | 2026-10-15 | `wails.json` を `cmd/moleport-gui/` に置く構成（`frontend:dir: .` / `-skipbindings`）、PoC の検証手順・縮退方針の実装状況・実機検証待ちの明記、トレイ・ビルドコマンドの記述を実装に合わせて更新 | #87 M2 Shell 層 + PoC |
 | 1.3 | 2026-10-15 | EventBridge の非表示中の抑止方法、トーストの自動消去（成功・情報 5 秒 / エラーは手動）を `app.ts` が担うことを明記 | #88 M3-1 ダッシュボード |
+| 1.4 | 2026-10-15 | クレデンシャルフローの実装反映: 接続アクションの応答を `200` に修正、`Activity`（進行中の接続・開始と直近の開始失敗の重ね合わせ）、`#credential-root`（他モーダルに重ねる）、Service のサブパッケージ（`bridge/` / `credential/`）を追記 | #89 M3-2 操作系 |

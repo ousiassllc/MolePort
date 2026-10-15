@@ -1711,7 +1711,7 @@ type Deps struct {
     Forwards  service.Forwards
     Hosts     service.Hosts
     Settings  service.Settings
-    Cred      *service.CredentialBroker
+    Cred      credential.Prompter // *credential.Broker
     Toasts    *service.NotificationQueue
     Life      LifecycleState   // State() のみ
     Opener    service.Opener
@@ -1732,25 +1732,28 @@ Core の型から ViewModel を組み立て、操作を実行する。Wails・HT
 type Backend struct { SSH core.SSHManager; Forward core.ForwardManager; Config core.ConfigManager; Info Info }
 type BackendSource interface{ Backend() (Backend, bool) }
 
-type Dashboard interface { // 実装は NewDashboardService(BackendSource)。ready 前は空の ViewModel を返す
+type Dashboard interface { // 実装は NewDashboardService(BackendSource, *Activity)。ready 前は空の ViewModel を返す
     Header() HeaderView
     Hosts() []HostView
     Forwards() []ForwardView
     Status() StatusView
 }
 
-type Forwards interface {
+type Forwards interface { // 実装は NewForwardService(BackendSource, CallbackProvider, *Activity, *NotificationQueue, Notifier)
+    HostNames() []string                                // フォームのホスト選択肢
     Form(host string) ForwardFormInput                  // 初期値（placeholder 方針は F-50）
-    Add(in ForwardFormInput) (FormErrors, error)        // 検証 → AddRule → 永続化 → 開始（非同期）
-    Start(name string) error                            // 非同期。cb は CredentialBroker
+    Add(in ForwardFormInput) (name string, errs FormErrors, err error) // 検証 → AddRule → 永続化 → 開始（非同期）
+    Start(name string) error                            // 非同期。cb は credential.Broker
     Stop(name string) error
     Delete(name string) error                           // 停止 + 削除 + 永続化
 }
 
-type Hosts interface {
+type Hosts interface { // 実装は NewHostService（引数は NewForwardService と同じ）
     Connect(name string) error                          // ConnectWithCallback（非同期）
-    Disconnect(name string) error
+    Disconnect(name string) error                       // 当該ホストのアクティブ転送を停止してから切断
 }
+
+type CallbackProvider interface{ Callback() core.CredentialCallback } // credential.Broker が実装
 
 type Settings interface {
     View() SettingsView
@@ -1761,41 +1764,46 @@ type Notifier interface{ Notify(topics ...Topic) }
 type Opener interface{ OpenURL(url string) error }
 ```
 
-- `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼び、失敗は `NotificationQueue` に積む。呼び出し側のレスポンスは即時に返る
-- 状態不一致（`Start` が `CanStart=false` の行等）は `ErrStateConflict`（ハンドラが `409` に変換）。存在しない対象は `core.NotFoundError`（`404`）
-- `Forwards.Add` の検証は `core.ValidatePort`、名前重複（`core.AlreadyExistsError`）、ホスト存在確認を行い、フィールド別の `FormErrors` に変換する
+- `Start` / `Connect` は認証待ちでブロックしないよう goroutine で Core を呼ぶ。呼び出し側のレスポンスは即時に返る。転送開始の失敗は `NotificationQueue` に積み（ポート競合は空きポート候補付き）、接続の失敗は Core の `SSHEventError` を EventBridge がトーストにする
+- 進行中の接続・開始と直近の転送開始失敗は `Activity`（`DashboardService` と共有）に記録し、ViewModel の `Connecting` / `Starting` / `Error` 表示と状態判定に重ねる（Core はアクション直後にまだ遷移しておらず、開始失敗後はセッションを `Stopped` に戻すため）
+- 状態不一致（`Start` が `CanStart=false` の行等）は `ErrStateConflict`（ハンドラが `409` に変換）。存在しない対象は `core.NotFoundError`（`404`）、ready 前は `ErrNotReady`（`409`）
+- `Forwards.Add` の検証は `core.ParseForwardType` / `core.ValidatePort`、名前重複（`core.AlreadyExistsError`）、ホスト存在確認を行い、フィールド別の `FormErrors` に変換する
 - ルール永続化は `core.PersistForwardRules`（IPC ハンドラと共有。後述「既存コンポーネントの変更」）
 - 表示文字列（稼働時間・データ量）は `internal/format` を使用する。ラベルは `i18n.T` をレンダリング時に呼ぶ（言語切り替えの即時反映のため）
 
-### CredentialBroker（`gui/service/credential.go`）
+### CredentialBroker（`gui/service/credential/broker.go`）
 
-`core.CredentialCallback` を実装し、WebView を介してクレデンシャルを要求する。IPC ハンドラの `buildCredentialCallback` と同じ契約。
+`core.CredentialCallback` を実装し、WebView を介してクレデンシャルを要求する。IPC ハンドラの `buildCredentialCallback` と同じ契約。`gui/service` のディレクトリ行数制限（Linterly）のためサブパッケージに置く（`credential` → `service` の一方向依存）。
 
 ```go
-type CredentialBroker struct { /* mu sync.Mutex, pending []*pendingReq, notifier Notifier, win WindowController */ }
+type Broker struct { /* mu sync.Mutex, pending []*pendingRequest, notifier service.Notifier, win WindowController */ }
+type Input struct { Value []byte; Answers [][]byte } // POST ボディから取り出した値。Zero() でゼロ化
+type Prompter interface { Pending() (service.CredentialView, bool); Resolve(id string, in Input) error; Cancel(id string) error }
+type WindowController interface{ Show() }            // Shell が実装（非表示なら前面化）
 
-func (b *CredentialBroker) Callback() core.CredentialCallback
-func (b *CredentialBroker) Pending() (CredentialView, bool)       // 先頭の要求（FIFO）
-func (b *CredentialBroker) Resolve(id string, r core.CredentialResponse) error // 未知/解決済みは ErrUnknownRequest
-func (b *CredentialBroker) Cancel(id string) error
+func NewBroker(n service.Notifier, win WindowController) *Broker
+func (b *Broker) Callback() core.CredentialCallback // ダッシュボード・トレイ（UC-33）共通の公開 API
+func (b *Broker) Pending() (service.CredentialView, bool)  // 先頭の要求（FIFO）
+func (b *Broker) Resolve(id string, in Input) error        // 未知/解決済み/タイムアウト済みは ErrUnknownRequest
+func (b *Broker) Cancel(id string) error
 ```
 
 - 要求ごとに `core.CredentialTimeout` のタイマーを持ち、満了時は `core.ErrCredentialTimeout` を返して `pending` から除く
 - 要求発生時に `WindowController.Show()`（非表示なら前面化）と `Notify(TopicCredential)`。解決・キャンセル・タイムアウトでも `Notify(TopicCredential)`
-- 解決後、`CredentialResponse` の `Value` / `Answers` を保持するバッファはゼロ化する
+- `Resolve` は戻る時点で `Input` のバッファをゼロ化する（成功・失敗とも）。keyboard-interactive の回答数はプロンプト数に揃える
 
 ### NotificationQueue（`gui/service/notification.go`）
 
 非同期通知（接続・転送開始の失敗、引き継ぎ完了、新バージョン検出）のメモリ上 FIFO（最大 50 件）。`Push(ToastView)` と `Drain() []ToastView`（`/fragments/toasts` が使用）。ウィンドウ非表示中も溜め、表示時に `all` トピックで取り出す。
 
-### EventBridge（`gui/service/bridge.go`）
+### EventBridge（`gui/service/bridge/bridge.go`）
 
 Core のイベントとティッカーをトピックに変換する。
 
 ```go
 type Topic string // hosts | forwards | status | header | credential | toast | settings | all
 
-func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowVisibility) *EventBridge
+func New(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility) *EventBridge
 type WindowVisibility interface{ Visible() bool } // Shell の VisibilityNotifier が満たす
 func (e *EventBridge) Start(ctx context.Context) // SSH/Forward の Subscribe + ライブ（1s）/照合（5s）ティッカー
 ```
@@ -1818,10 +1826,13 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
 | molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
 | atoms | `PortLabel` / `DataSize` / `Duration` | 整形済み文字列（`DataSize` / `Duration` はラベル付き。`Duration` は空なら何も描画しない）。`atoms.ElementID(prefix, name)` が安定した `id` を作る（英数字以外は `_` + 16 進） |
+| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid`）/ `name, checked` |
+| molecules | `ConfirmDialog` | `ConfirmDialogProps{ID, Title, Message, ConfirmLabel, CancelLabel, ConfirmVariant, ConfirmAttrs}` |
+| molecules | `CredentialPrompt` | `CredentialPromptProps{Label, Name, Echo, Autofocus}`（`Echo=false` は `type="password"`、値を描画しない） |
 | organisms | `HostPanel` / `ForwardPanel` | `[]HostView` / `[]ForwardView`, `ready bool`（`ready` でない間は一覧・ボタンを描画しない） |
 | organisms | `StatusBar` / `Header` / `Toasts`（`/fragments/toasts` の OOB 本文） | 対応する ViewModel |
 | organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
-| organisms | `CredentialDialog` | `CredentialView` |
+| organisms | `CredentialDialog` / `ForwardDeleteDialog` | `CredentialView` / ルール名 |
 | organisms | `SettingsForm` | `SettingsView, FormErrors` |
 | pages | `DashboardPage` | `DashboardProps{Layout, State, Header, Hosts, Forwards, Status}` |
 | layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |
@@ -1846,7 +1857,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 
 | 対象 | 手法 | 実行環境 |
 |------|------|---------|
-| Service | Core の fake（`forwardtest` 等）を使い、ViewModel・`Actions` の出し分け・検証エラー・状態不一致・クレデンシャルのタイムアウト/キャンセルを検証 | `go test ./...`（Linux CI） |
+| Service | Core の fake（`gui/service/servicetest` の `SSH` / `Forward` / `Config`）を使い、ViewModel・`Actions` の出し分け・検証エラー・状態不一致・クレデンシャルのタイムアウト/キャンセルを検証 | `go test ./...`（Linux CI） |
 | Web ハンドラ | `httptest` + HTML アサーション（フラグメントに `<html>` がない、トークンなしは 403、`HX-Request` なしは 400、`422` でフォーム再描画、OOB トースト） | `go test ./...` |
 | Templ | `Render()` → HTML 文字列のアサーション（ボタンの有無、エスケープ） | `go test ./...` |
 | EventBridge | 疑似時計でコアレス・ティッカー・非表示中の抑止を検証 | `go test ./...` |
@@ -1946,3 +1957,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.1 | 2026-10-15 | 既存コンポーネントの変更: `ipc/handler` の責務分担（業務ロジックは Core、プロトコル変換は handler、フォーム/HTML 変換は GUI）を追記 | レビュー指摘対応 #84 |
 | 6.2 | 2026-10-15 | M1 基盤整備の実装反映: PID ファイル管理を `daemon/pidfile` サブパッケージに分離（NFR-24〜26）、Windows ロック範囲、`TakeoverTimeout` を追記 | #85 M1 基盤整備 |
 | 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |
+| 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |

@@ -1,4 +1,5 @@
-package service
+// Package bridge は Core のイベントとティッカーを WebView への更新トピックに変換する EventBridge。
+package bridge
 
 import (
 	"context"
@@ -7,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
@@ -28,9 +30,9 @@ type bridgeTiming struct {
 }
 
 // topicOrder は通知するトピックの出力順（出力を決定的にする）。
-var topicOrder = []Topic{
-	TopicHosts, TopicForwards, TopicStatus, TopicHeader,
-	TopicCredential, TopicToast, TopicSettings, TopicAll,
+var topicOrder = []service.Topic{
+	service.TopicHosts, service.TopicForwards, service.TopicStatus, service.TopicHeader,
+	service.TopicCredential, service.TopicToast, service.TopicSettings, service.TopicAll,
 }
 
 // EventBridge は Core のイベントとティッカーをトピックに変換し、Notifier へ通知する。
@@ -41,25 +43,25 @@ var topicOrder = []Topic{
 type EventBridge struct {
 	ssh      core.SSHManager
 	fwd      core.ForwardManager
-	notifier Notifier
-	queue    *NotificationQueue
+	notifier service.Notifier
+	queue    *service.NotificationQueue
 	win      WindowVisibility
 	timing   bridgeTiming
 
 	mu      sync.Mutex
-	pending map[Topic]struct{}
+	pending map[service.Topic]struct{}
 	wake    chan struct{} // pending が空から非空になったことを emit ループへ知らせる（容量 1）
 }
 
-// NewEventBridge は EventBridge を返す。Start するまで何も購読しない。
-func NewEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowVisibility) *EventBridge {
+// New は EventBridge を返す。Start するまで何も購読しない。
+func New(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility) *EventBridge {
 	return newEventBridge(ssh, fwd, n, q, win, bridgeTiming{coalesceWindow, liveInterval, reconcileInterval})
 }
 
-func newEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n Notifier, q *NotificationQueue, win WindowVisibility, t bridgeTiming) *EventBridge {
+func newEventBridge(ssh core.SSHManager, fwd core.ForwardManager, n service.Notifier, q *service.NotificationQueue, win WindowVisibility, t bridgeTiming) *EventBridge {
 	return &EventBridge{
 		ssh: ssh, fwd: fwd, notifier: n, queue: q, win: win, timing: t,
-		pending: make(map[Topic]struct{}),
+		pending: make(map[service.Topic]struct{}),
 		wake:    make(chan struct{}, 1),
 	}
 }
@@ -98,43 +100,43 @@ func (e *EventBridge) receive(ctx context.Context, sshCh <-chan core.SSHEvent, f
 
 // handleSSH は SSHEvent（全種別）を hosts / status に写像する。エラーは通知キューにも積む。
 func (e *EventBridge) handleSSH(ev core.SSHEvent) {
-	e.add(TopicHosts, TopicStatus)
+	e.add(service.TopicHosts, service.TopicStatus)
 	if ev.Type != core.SSHEventError {
 		return
 	}
-	e.queue.Push(ToastView{
-		Kind: ToastError,
+	e.queue.Push(service.ToastView{
+		Kind: service.ToastError,
 		Message: i18n.T("gui.toast.ssh_error", map[string]any{
 			"Host":  ev.HostName,
-			"Error": LocalizeError(ev.Error),
+			"Error": service.LocalizeError(ev.Error),
 		}),
 	})
-	e.add(TopicToast)
+	e.add(service.TopicToast)
 }
 
 // handleForward は ForwardEvent を forwards / hosts（アクティブ転送数）/ status に写像する。
 // エラーは通知キューにも積む。
 func (e *EventBridge) handleForward(ev core.ForwardEvent) {
-	e.add(TopicForwards, TopicHosts, TopicStatus)
+	e.add(service.TopicForwards, service.TopicHosts, service.TopicStatus)
 	if ev.Type != core.ForwardEventError {
 		return
 	}
-	detail := LocalizeError(ev.Error)
+	detail := service.LocalizeError(ev.Error)
 	if detail == "" && ev.Session != nil {
 		detail = ev.Session.LastError
 	}
-	e.queue.Push(ToastView{
-		Kind: ToastError,
+	e.queue.Push(service.ToastView{
+		Kind: service.ToastError,
 		Message: i18n.T("gui.toast.forward_error", map[string]any{
 			"Name":  ev.RuleName,
 			"Error": detail,
 		}),
 	})
-	e.add(TopicToast)
+	e.add(service.TopicToast)
 }
 
 // add はトピックを送信待ちに追加し、emit ループを起こす。ブロックしない。
-func (e *EventBridge) add(topics ...Topic) {
+func (e *EventBridge) add(topics ...service.Topic) {
 	e.mu.Lock()
 	for _, t := range topics {
 		e.pending[t] = struct{}{}
@@ -147,13 +149,13 @@ func (e *EventBridge) add(topics ...Topic) {
 }
 
 // take は送信待ちのトピックを出力順に取り出して空にする。
-func (e *EventBridge) take() []Topic {
+func (e *EventBridge) take() []service.Topic {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if len(e.pending) == 0 {
 		return nil
 	}
-	topics := make([]Topic, 0, len(e.pending))
+	topics := make([]service.Topic, 0, len(e.pending))
 	for _, t := range topicOrder {
 		if _, ok := e.pending[t]; ok {
 			topics = append(topics, t)
@@ -192,12 +194,12 @@ func (e *EventBridge) emit(ctx context.Context, lastSig uint64) {
 			e.flush()
 		case <-live.C:
 			if e.win.Visible() && e.hasActiveForward() {
-				e.add(TopicForwards, TopicStatus)
+				e.add(service.TopicForwards, service.TopicStatus)
 			}
 		case <-reconcile.C:
 			if sig := e.signature(); sig != lastSig {
 				lastSig = sig
-				e.add(TopicForwards, TopicHosts, TopicStatus)
+				e.add(service.TopicForwards, service.TopicHosts, service.TopicStatus)
 			}
 		}
 	}

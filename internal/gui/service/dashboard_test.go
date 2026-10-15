@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/gui/service/servicetest"
 	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
@@ -18,13 +19,13 @@ func useEnglish(t *testing.T) {
 }
 
 func newDashboard(ssh core.SSHManager, fwd core.ForwardManager, now time.Time) *DashboardService {
-	d := NewDashboardService(staticBackend{ok: true, b: Backend{SSH: ssh, Forward: fwd, Info: Info{Version: "1.2.3", PID: 99}}})
+	d := NewDashboardService(staticBackend{ok: true, b: Backend{SSH: ssh, Forward: fwd, Info: Info{Version: "1.2.3", PID: 99}}}, NewActivity())
 	d.now = func() time.Time { return now }
 	return d
 }
 
 func TestDashboard_NotReadyReturnsEmpty(t *testing.T) {
-	d := NewDashboardService(staticBackend{})
+	d := NewDashboardService(staticBackend{}, nil)
 
 	if got := d.Header(); got != (HeaderView{}) {
 		t.Errorf("Header() = %+v, want zero", got)
@@ -41,7 +42,7 @@ func TestDashboard_NotReadyReturnsEmpty(t *testing.T) {
 }
 
 func TestDashboard_Header(t *testing.T) {
-	d := newDashboard(newFakeSSH(), newFakeForward(), time.Now())
+	d := newDashboard(servicetest.NewSSH(), servicetest.NewForward(), time.Now())
 	if got, want := d.Header(), (HeaderView{Version: "1.2.3", PID: 99}); got != want {
 		t.Errorf("Header() = %+v, want %+v", got, want)
 	}
@@ -62,7 +63,7 @@ func TestDashboard_HostsActionsByState(t *testing.T) {
 		{Rule: core.ForwardRule{Name: "r2", Host: "c"}, Status: core.Active},
 		{Rule: core.ForwardRule{Name: "r3", Host: "c"}, Status: core.Stopped},
 	}
-	got := newDashboard(newFakeSSH(hosts...), newFakeForward(sessions...), time.Now()).Hosts()
+	got := newDashboard(servicetest.NewSSH(hosts...), servicetest.NewForward(sessions...), time.Now()).Hosts()
 
 	tests := []struct {
 		name                       string
@@ -104,7 +105,7 @@ func TestDashboard_ForwardsViewAndActions(t *testing.T) {
 		{Rule: core.ForwardRule{Name: "bad", Host: "h", Type: core.Local, LocalPort: 1, RemoteHost: "x", RemotePort: 2}, Status: core.SessionError, LastError: "port in use"},
 		{Rule: core.ForwardRule{Name: "re", Host: "h", Type: core.Remote, LocalPort: 1, RemotePort: 2, RemoteBindAddr: "0.0.0.0"}, Status: core.SessionReconnecting},
 	}
-	got := newDashboard(newFakeSSH(), newFakeForward(sessions...), now).Forwards()
+	got := newDashboard(servicetest.NewSSH(), servicetest.NewForward(sessions...), now).Forwards()
 
 	tests := []struct {
 		name, typ, route, status, label, uptime, sent, recv string
@@ -143,7 +144,7 @@ func TestDashboard_Status(t *testing.T) {
 		{Rule: core.ForwardRule{Name: "x"}, Status: core.Active},
 		{Rule: core.ForwardRule{Name: "y"}, Status: core.Stopped},
 	}
-	got := newDashboard(newFakeSSH(hosts...), newFakeForward(sessions...), time.Now()).Status()
+	got := newDashboard(servicetest.NewSSH(hosts...), servicetest.NewForward(sessions...), time.Now()).Status()
 
 	if want := (StatusView{Hosts: 3, ConnectedHosts: 2, Forwards: 2, ActiveForwards: 1}); got != want {
 		t.Errorf("Status() = %+v, want %+v", got, want)
@@ -151,7 +152,7 @@ func TestDashboard_Status(t *testing.T) {
 }
 
 func TestDashboard_IPv6AddressIsBracketed(t *testing.T) {
-	got := newDashboard(newFakeSSH(core.SSHHost{Name: "v6", HostName: "::1", Port: 22}), newFakeForward(), time.Now()).Hosts()
+	got := newDashboard(servicetest.NewSSH(core.SSHHost{Name: "v6", HostName: "::1", Port: 22}), servicetest.NewForward(), time.Now()).Hosts()
 	if got[0].Address != "[::1]:22" {
 		t.Errorf("Address = %q, want [::1]:22", got[0].Address)
 	}

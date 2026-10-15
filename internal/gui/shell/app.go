@@ -21,6 +21,8 @@ import (
 	trayassets "github.com/ousiassllc/moleport/assets/tray"
 	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/gui/service/bridge"
+	"github.com/ousiassllc/moleport/internal/gui/service/credential"
 	"github.com/ousiassllc/moleport/internal/gui/tray"
 	"github.com/ousiassllc/moleport/internal/gui/web"
 	"github.com/ousiassllc/moleport/internal/gui/web/middleware"
@@ -48,8 +50,9 @@ func Run(cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("generate token: %w", err)
 	}
-	a := &app{cfg: cfg, queue: service.NewNotificationQueue()}
+	a := &app{cfg: cfg, queue: service.NewNotificationQueue(), activity: service.NewActivity()}
 	a.notifier = NewVisibilityNotifier(a.emit)
+	broker := credential.NewBroker(a.notifier, windowShower(a.showWindow))
 	a.life = NewLifecycle(cfg.ConfigDir, cfg.Version, LifecycleDeps{
 		Takeover:    daemon.Takeover,
 		NewDaemon:   func(dir, ver string) (DaemonHost, error) { return daemon.New(dir, ver) },
@@ -58,15 +61,18 @@ func Run(cfg Config) error {
 		ConfirmQuit: a.confirmActiveQuit,
 		Queue:       a.queue,
 		OnReady: func(ctx context.Context, b service.Backend) {
-			service.NewEventBridge(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
+			bridge.New(b.SSH, b.Forward, a.notifier, a.queue, a.notifier).Start(ctx)
 		},
 	})
 	a.closer = NewCloseController(a, a.life.Quitting, a.trayAvailable.Load)
 
 	handler := web.NewRouter(web.Deps{
 		Life:      a.life,
-		Dashboard: service.NewDashboardService(a.life),
+		Dashboard: service.NewDashboardService(a.life, a.activity),
 		Toasts:    a.queue,
+		Forwards:  service.NewForwardService(a.life, broker, a.activity, a.queue, a.notifier),
+		Hosts:     service.NewHostService(a.life, broker, a.activity, a.queue, a.notifier),
+		Cred:      broker,
 		Token:     token,
 		Static:    cfg.Static,
 	})
@@ -90,11 +96,17 @@ func Run(cfg Config) error {
 	})
 }
 
+// windowShower は関数を credential.WindowController にする。
+type windowShower func()
+
+func (f windowShower) Show() { f() }
+
 // app は Wails のコールバックと Shell の純粋ロジックを結ぶ。
 type app struct {
 	cfg      Config
 	notifier *VisibilityNotifier
 	queue    *service.NotificationQueue
+	activity *service.Activity
 	life     *Lifecycle
 	closer   *CloseController
 

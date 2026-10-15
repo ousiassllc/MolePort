@@ -107,7 +107,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 - `<html lang="{ja|en}" data-theme="{system|dark|light}" data-accent="{...}">`（`config.yaml` の保存値）
 - `<meta name="mp-token" content="{起動ごとのランダムトークン}">`
 - `<script type="module" src="/static/dist/js/app.js">`、`<script src="/static/dist/js/htmx.min.js">`、`<link rel="stylesheet" href="/static/dist/css/app.css">`
-- `#header` / `#hosts-panel` / `#forwards-panel` / `#status-bar` / `#modal-root` / `#toast-stack`
+- `#header` / `#hosts-panel` / `#forwards-panel` / `#status-bar` / `#modal-root` / `#credential-root` / `#toast-stack`
 - ライフサイクル状態（`starting` / `ready` / `failed`）に応じたバナー。`ready` でない間はアクションボタンを描画しない
 
 各領域は初期表示でインライン展開し、更新トリガーを持つ。
@@ -133,7 +133,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | `/fragments/hosts` | — | ホスト行（`HostView`）。0 件は案内文 | 接続 / 切断 / 転送追加ボタン（`HostActions`） |
 | `/fragments/forwards` | — | 転送行（`ForwardView`）。0 件は案内と追加ボタン | 開始 / 停止 / 削除ボタン（`ForwardActions`） |
 | `/fragments/status` | — | ホスト数・接続数・転送数・アクティブ数 | — |
-| `/fragments/credential` | — | 待機中の先頭の `CredentialView`。`password` / `passphrase` は 1 入力、`keyboard-interactive` は `Prompts` 数だけ入力。`Echo=false` は `type="password"` | 待機中の要求がなければ空（`204` ではなく空の `#modal-root` 内容） |
+| `/fragments/credential` | — | 待機中の先頭の `CredentialView`。`password` / `passphrase` は 1 入力、`keyboard-interactive` は `Prompts` 数だけ入力。`Echo=false` は `type="password"` | 待機中の要求がなければ空の `#credential-root` 内容。`app.ts` は表示中のダイアログの要求 ID をリクエストヘッダー `X-MolePort-Credential-Shown` で送り、先頭の要求と一致すれば `204`（差し替えない。フォーカス復帰の `mp:all` で入力途中の値を失わないため） |
 | `/fragments/toasts` | — | `NotificationQueue`（GUI Service が保持するメモリ上の FIFO）を **取り出して（drain）** OOB の `beforeend:#toast-stack` で返す。空なら `204`。取り出し時にキューを消すため、このフラグメントのみ読み取りで状態が変わる | — |
 | `/fragments/forward-form` | `host`（任意、選択済みにする） | 転送追加フォーム。種別（local / remote / dynamic）の選択で項目を出し分ける（`hx-get` で再取得） | `type=dynamic` ではリモート項目を描画しない。`type=remote` のときのみバインドアドレスを描画 |
 | `/fragments/forward-delete` | `name` | 削除確認（ルール名表示）。「削除」は `DELETE /actions/forwards/{name}` | — |
@@ -165,8 +165,8 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | 結果 | ステータス | 本文 |
 |------|-----------|------|
 | 成功 | `200` | 転送パネルの更新後フラグメント + OOB トースト（success）+ `HX-Trigger: mp:close-modal` |
-| 検証エラー（ポート範囲外・必須欠落・名前重複・未知ホスト） | `422` | `ForwardForm` の再描画（`FormErrors` 付き、入力値保持）。`hx-target-422` でモーダル内に差し替え |
-| ルール追加は成功したが開始に失敗（ポート競合等） | `200` | 転送パネル（当該行は `Error`）+ OOB トースト（error）。ルールは保存済み |
+| 検証エラー（ポート範囲外・必須欠落・名前重複・未知ホスト） | `422` | `ForwardForm` の再描画（`FormErrors` 付き、入力値保持）。`HX-Retarget: #modal-root` / `HX-Reswap: innerHTML` でモーダル内に差し替え |
+| ルール追加は成功したが開始に失敗（ポート競合等） | — | 開始は非同期のため成功時と同じ `200`（当該行は「開始中…」）。失敗は `Error` 状態（`LastError`）+ `NotificationQueue` のエラートーストで後から通知する。ルールは保存済み |
 
 ポート競合のメッセージには空きポートの候補を含める（UC-28）。
 
@@ -201,10 +201,11 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | `value` | string | `password` / `passphrase` の値 |
 | `answers[]` | string の配列 | `keyboard-interactive` の各プロンプトへの回答（`Prompts` と同数・同順） |
 
-`CredentialBroker.Resolve(id, CredentialResponse)` を呼ぶ。`id` が存在しない・解決済み・タイムアウト済みは `409` + OOB トースト（「入力の有効期限が切れました」）。成功時は `200` で、次の待機要求があれば `CredentialDialog` を、なければ空を返し、`HX-Trigger: mp:close-modal` は付けない（モーダルの開閉は `/fragments/credential` の内容に従う）。
+`CredentialBroker.Resolve(id, credential.Input)` を呼ぶ。`id` が存在しない・解決済み・タイムアウト済みは `409` + OOB トースト（「入力の有効期限が切れました」）+ `HX-Trigger: mp:credential`。成功時は `200` で、次の待機要求があれば `CredentialDialog` を、なければ空を返し、`HX-Trigger: mp:close-modal` は付けない（`#credential-root` の開閉は `/fragments/credential` の内容に従う）。
 
 - 本文（クレデンシャル）はログ出力しない。リクエストログのミドルウェアはこのルートを除外する（NFR-36）
-- 値は `Resolve` に渡した後、ハンドラ内のバッファをゼロ化する
+- `Content-Type` が `application/x-www-form-urlencoded` 以外は `415`、不正なエンコーディングは `400`
+- 値は文字列化せずバイト列のまま解析し、`Resolve` に渡した後にハンドラ内のバッファ（ボディ・各値）をゼロ化する
 
 ### `POST /actions/credential/{id}/cancel`
 
@@ -253,12 +254,12 @@ window.addEventListener('focus', () => htmx.trigger(document.body, 'mp:all'));
 | `forwards` | `#forwards-panel` |
 | `status` | `#status-bar` |
 | `header` | `#header` |
-| `credential` | `#modal-root`（`/fragments/credential`。内容があればモーダル表示） |
+| `credential` | `#credential-root`（`/fragments/credential`。内容があればモーダル表示） |
 | `toast` | `#toast-stack` の取り込み（`/fragments/toasts`、`hx-swap="none"`。OOB のみ使用） |
 | `settings` | 開いている設定フォーム（任意） |
 | `all` | 上記すべて |
 
-`ModalRoot` は転送追加フォーム・削除確認・設定を `hx-get` で `#modal-root` に差し込む。クレデンシャルダイアログは他のモーダルより優先して表示する（先に開いていたモーダルは閉じる。入力途中の値は失われるため、クレデンシャル要求の発生はユーザー操作（接続・開始）に起因する場合に限る。トレイ・復元起因の要求はウィンドウを前面表示した上でダイアログを出す）。
+`ModalRoot` は転送追加フォーム・削除確認・設定を `hx-get` で `#modal-root` に差し込む。クレデンシャルダイアログは別の `#credential-root` に差し込み、他のモーダルより前面（top layer）に重ねて表示する（先に開いていたモーダルは閉じないため入力途中の値は失われない）。トレイ・復元起因の要求はウィンドウを前面表示した上でダイアログを出す。
 
 ## クライアント JS（`app.ts`）の契約
 
@@ -268,7 +269,7 @@ window.addEventListener('focus', () => htmx.trigger(document.body, 'mp:all'));
 | トークン付与 | `htmx:configRequest` で `X-MolePort-Token`（`<meta name="mp-token">`）を付与 |
 | `responseHandling` | 「ステータスコードの方針」の表 |
 | エラートースト | `htmx:responseError` / `htmx:sendError` で汎用エラートーストを DOM に追加（サーバーが応答できない場合に限る唯一のクライアント側 UI 生成） |
-| モーダル | `mp:close-modal`（`HX-Trigger`）で `#modal-root` を空にする。`Esc` で閉じる（クレデンシャルダイアログの `Esc` はキャンセル扱い） |
+| モーダル | ネイティブ `<dialog>` を `showModal()` で開く。`mp:close-modal`（`HX-Trigger`）・`[data-close-modal]`・`Esc` で `#modal-root` を空にする。クレデンシャルダイアログの `Esc` はキャンセル扱い（`/actions/credential/{id}/cancel`） |
 | テーマ | `mp:settings-applied` で `<html>` 属性を更新。設定フォームのスウォッチ選択はプレビューとして `data-theme` / `data-accent` を即時反映し、キャンセル時に元の値へ戻す |
 
 Lit コンポーネントは初期リリースでは存在しない（D-10）。HTMX ↔ Lit 境界ルールは Lit 追加時に適用する。
@@ -279,3 +280,4 @@ Lit コンポーネントは初期リリースでは存在しない（D-10）。
 |----|------|---------|---------|
 | 1.0 | 2026-10-15 | 新規作成 | #84 Wails 版 GUI アプリケーション |
 | 1.1 | 2026-10-15 | `#toast-stack` の取り込みトリガーと稼働状態時のパネル描画を実装に合わせて明記 | #88 M3-1 ダッシュボード |
+| 1.2 | 2026-10-15 | 操作系の実装反映: `#credential-root`（クレデンシャルダイアログを他モーダルに重ねる）、`X-MolePort-Credential-Shown` による差し替え抑止、クレデンシャルルートの `415` / `400`、422 の差し替え先指定（`HX-Retarget`）、転送追加時の開始失敗の通知経路、モーダルの開閉方法を追記 | #89 M3-2 操作系 |

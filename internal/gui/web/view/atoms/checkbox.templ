@@ -1,0 +1,6 @@
+package atoms
+
+// Checkbox はチェックボックス（オンのとき "on" を送信する）。
+templ Checkbox(name string, checked bool) {
+	<input class="mp-checkbox" type="checkbox" id={ FieldID(name) } name={ name } checked?={ checked }/>
+}

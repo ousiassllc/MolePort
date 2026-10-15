@@ -142,3 +142,53 @@
 .mp-row-actions { display: flex; gap: 0.5rem; margin-left: auto; }
 .mp-row-error { flex-basis: 100%; color: var(--mp-danger); font-size: 0.875rem; }
 .mp-port { font-family: ui-monospace, monospace; }
+
+/* 接続中・開始中は CSS のみのスピナーを添える */
+.mp-badge[data-status="connecting"]::after,
+.mp-badge[data-status="starting"]::after {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-left: 0.35rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: mp-spin 0.8s linear infinite;
+}
+@keyframes mp-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mp-badge[data-status="connecting"]::after,
+  .mp-badge[data-status="starting"]::after { animation: none; }
+}
+
+/* モーダル（ネイティブ <dialog>）とフォーム */
+.mp-modal {
+  min-width: 22rem;
+  max-width: 32rem;
+  padding: 1.25rem;
+  border: 1px solid var(--mp-border);
+  border-radius: 0.5rem;
+  background: var(--mp-surface);
+  color: var(--mp-fg);
+}
+.mp-modal::backdrop { background: rgb(0 0 0 / 0.5); }
+.mp-modal-title { margin: 0 0 0.75rem; font-size: 1.125rem; font-weight: 600; }
+.mp-modal-body { margin: 0 0 1rem; }
+.mp-modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.mp-field { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; }
+.mp-field-label { color: var(--mp-muted); font-size: 0.875rem; }
+.mp-field-error { margin: 0; color: var(--mp-danger); font-size: 0.875rem; }
+.mp-field[data-invalid] .mp-input { border-color: var(--mp-danger); }
+.mp-input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--mp-border);
+  border-radius: 0.375rem;
+  background: var(--mp-bg);
+  color: var(--mp-fg);
+}
+.mp-input:focus-visible,
+.mp-btn:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 1px; }
+.mp-checkbox { width: 1rem; height: 1rem; accent-color: var(--mp-accent); }
+.mp-btn:disabled { opacity: 0.6; cursor: progress; }

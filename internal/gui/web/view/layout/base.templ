@@ -10,7 +10,7 @@ type LayoutProps struct {
 	Token  string // 起動ごとのランダムトークン（<meta name="mp-token">）
 }
 
-// BaseLayout は <head>（トークン meta・静的アセット）、ModalRoot、ToastStack を持つ
+// BaseLayout は <head>（トークン meta・静的アセット）、ModalRoot、CredentialRoot、ToastStack を持つ
 // 全ページ共通のレイアウト。CSP は SecurityHeaders ミドルウェアがレスポンスヘッダーで付与する。
 templ BaseLayout(p LayoutProps) {
 	<!DOCTYPE html>
@@ -27,6 +27,12 @@ templ BaseLayout(p LayoutProps) {
 		<body class="bg-mp-bg text-mp-fg">
 			{ children... }
 			<div id="modal-root"></div>
+			<div
+				id="credential-root"
+				hx-get="/fragments/credential"
+				hx-trigger="mp:credential from:body, mp:all from:body"
+				hx-swap="innerHTML"
+			></div>
 			@organisms.ToastStack()
 		</body>
 	</html>

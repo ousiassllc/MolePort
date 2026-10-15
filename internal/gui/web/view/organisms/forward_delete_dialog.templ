@@ -1,0 +1,28 @@
+package organisms
+
+import (
+	"net/url"
+
+	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/molecules"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// ForwardDeleteDialog は転送ルールの削除確認。「削除」は DELETE /actions/forwards/{name}。
+templ ForwardDeleteDialog(name string) {
+	@molecules.ConfirmDialog(molecules.ConfirmDialogProps{
+		ID:             "forward-delete-dialog",
+		Title:          i18n.T("gui.forward.delete.title"),
+		Message:        i18n.T("gui.forward.delete.message", map[string]any{"Name": name}),
+		ConfirmLabel:   i18n.T("gui.forward.delete.confirm"),
+		CancelLabel:    i18n.T("gui.forward.delete.cancel"),
+		ConfirmVariant: atoms.ButtonDanger,
+		ConfirmAttrs: templ.Attributes{
+			"id":              "forward-delete-confirm",
+			"hx-delete":       "/actions/forwards/" + url.PathEscape(name),
+			"hx-target":       "#forwards-panel",
+			"hx-swap":         "innerHTML",
+			"hx-disabled-elt": "this",
+		},
+	})
+}

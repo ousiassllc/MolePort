@@ -1,0 +1,25 @@
+package atoms
+
+// SelectOption は Select の選択肢。Value は送信値、Label は表示用のローカライズ済み文字列。
+type SelectOption struct {
+	Value string
+	Label string
+}
+
+// SelectProps は Select の引数。Attrs には hx-get などの追加属性を渡す。
+type SelectProps struct {
+	Name     string
+	Options  []SelectOption
+	Selected string
+	Invalid  bool
+	Attrs    templ.Attributes
+}
+
+// Select は選択欄。Selected と一致する選択肢を選択済みにする。
+templ Select(p SelectProps) {
+	<select class="mp-input" id={ FieldID(p.Name) } name={ p.Name } aria-invalid?={ p.Invalid } { p.Attrs... }>
+		for _, o := range p.Options {
+			<option value={ o.Value } selected?={ o.Value == p.Selected }>{ o.Label }</option>
+		}
+	</select>
+}

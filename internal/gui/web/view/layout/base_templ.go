@@ -18,7 +18,7 @@ type LayoutProps struct {
 	Token  string // 起動ごとのランダムトークン（<meta name="mp-token">）
 }
 
-// BaseLayout は <head>（トークン meta・静的アセット）、ModalRoot、ToastStack を持つ
+// BaseLayout は <head>（トークン meta・静的アセット）、ModalRoot、CredentialRoot、ToastStack を持つ
 // 全ページ共通のレイアウト。CSP は SecurityHeaders ミドルウェアがレスポンスヘッダーで付与する。
 func BaseLayout(p LayoutProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -101,7 +101,7 @@ func BaseLayout(p LayoutProps) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div id=\"modal-root\"></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div id=\"modal-root\"></div><div id=\"credential-root\" hx-get=\"/fragments/credential\" hx-trigger=\"mp:credential from:body, mp:all from:body\" hx-swap=\"innerHTML\"></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

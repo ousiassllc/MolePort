@@ -4,6 +4,7 @@
 //   2. htmx:configRequest での X-MolePort-Token 付与
 //   3. htmx:responseError / htmx:sendError の汎用エラートースト（3b: トーストの自動消去・手動消去）
 //   4. テーマのプレビュー（data-theme / data-accent の即時切り替え）
+//   5. モーダル（ネイティブ <dialog>）の開閉
 //
 // ライブ更新（1 秒ごとのフラグメント差し替え）でフォーカスを保つため、操作可能要素には
 // サーバーが安定した id（host-{name}-connect、fwd-{name}-stop 等）を付与する。
@@ -115,5 +116,46 @@ for (const name of ["mp:theme-preview", "mp:settings-applied"]) {
   document.body.addEventListener(name, (e) => applyTheme((e as CustomEvent<ThemeDetail>).detail));
 }
 
+// 5. モーダル。#modal-root（転送追加フォーム・削除確認・設定）と #credential-root（クレデンシャルダイアログ）に
+//    差し込まれた <dialog> を showModal() で開く（フォーカストラップと Esc はネイティブ）。
+//    - mp:close-modal（HX-Trigger）と [data-close-modal] のクリックで #modal-root を空にする。
+//    - Esc で閉じたとき（close イベント）も #modal-root を空にする。
+//    - クレデンシャルダイアログの Esc はキャンセル扱い（[data-credential-cancel] をクリックして POST する）。
+//    - #credential-root は別の領域にし、先に開いているフォームの入力を壊さずに前面（top layer）へ重ねる。
+function bridgeModals(): void {
+  const modalRoot = document.getElementById("modal-root");
+  const credentialRoot = document.getElementById("credential-root");
+
+  for (const root of [modalRoot, credentialRoot]) {
+    if (!root) continue;
+    const openNew = () => root.querySelectorAll("dialog:not([open])").forEach((d) => (d as HTMLDialogElement).showModal());
+    new MutationObserver(openNew).observe(root, { childList: true });
+  }
+
+  const closeModal = () => modalRoot?.replaceChildren();
+  document.body.addEventListener("mp:close-modal", closeModal);
+  document.body.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("[data-close-modal]")) closeModal();
+  });
+  modalRoot?.addEventListener("close", closeModal, true);
+  credentialRoot?.addEventListener(
+    "cancel",
+    (e) => {
+      e.preventDefault();
+      credentialRoot.querySelector<HTMLElement>("[data-credential-cancel]")?.click();
+    },
+    true,
+  );
+}
+
+// /fragments/credential の再取得時に、表示中のダイアログの要求 ID を伝える（サーバーが同一要求なら差し替えない）。
+document.body.addEventListener("htmx:configRequest", (e) => {
+  const detail = (e as CustomEvent<HTMXConfigRequestDetail & { path: string }>).detail;
+  if (detail.path !== "/fragments/credential") return;
+  const shown = document.querySelector<HTMLElement>("#credential-root [data-request-id]")?.dataset.requestId;
+  if (shown) detail.headers["X-MolePort-Credential-Shown"] = shown;
+});
+
 bridgeWailsEvents();
 watchToastStack();
+bridgeModals();

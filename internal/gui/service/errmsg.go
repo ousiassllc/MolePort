@@ -37,9 +37,17 @@ func LocalizeError(err error) string {
 		return i18n.T("gui.error.not_connected", map[string]any{"Name": notConnected.HostName})
 	case errors.As(err, &authRequired), core.IsAuthFailure(err):
 		return i18n.T("gui.error.auth_failed")
-	case strings.Contains(err.Error(), "address already in use"):
+	case isPortInUse(err):
 		return i18n.T("gui.error.port_in_use")
 	default:
 		return i18n.T("gui.error.unknown", map[string]any{"Error": err.Error()})
 	}
+}
+
+// isPortInUse はポート競合（待ち受け先が使用中）のエラーかを返す。
+// Core は型付きエラーを返さないため、OS のエラーメッセージ（Unix / Windows）で判定する。
+func isPortInUse(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "Only one usage of each socket address")
 }

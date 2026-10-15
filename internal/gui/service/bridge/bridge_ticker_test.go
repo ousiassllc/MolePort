@@ -1,4 +1,4 @@
-package service
+package bridge
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
+	"github.com/ousiassllc/moleport/internal/gui/service"
 )
 
 func TestEventBridge_HiddenWindowSuppressesNotifyButKeepsDraining(t *testing.T) {
@@ -21,7 +22,7 @@ func TestEventBridge_HiddenWindowSuppressesNotifyButKeepsDraining(t *testing.T) 
 		go func() {
 			defer close(sent)
 			for range total {
-				e.fwd.ch <- core.ForwardEvent{Type: core.ForwardEventError, RuleName: "web", Error: errors.New("x")}
+				e.fwd.Events <- core.ForwardEvent{Type: core.ForwardEventError, RuleName: "web", Error: errors.New("x")}
 			}
 		}()
 		synctest.Wait()
@@ -38,8 +39,8 @@ func TestEventBridge_HiddenWindowSuppressesNotifyButKeepsDraining(t *testing.T) 
 			t.Errorf("非表示中に Notify してはならない: %v", got)
 		}
 		// 通知は非表示中も溜める（表示復帰後に取り出す）。
-		if got := len(e.q.Drain()); got != maxNotifications {
-			t.Errorf("溜まった通知 = %d, want %d（上限）", got, maxNotifications)
+		if got := len(e.q.Drain()); got != service.MaxNotifications {
+			t.Errorf("溜まった通知 = %d, want %d（上限）", got, service.MaxNotifications)
 		}
 		e.stop()
 	})
@@ -50,9 +51,9 @@ func TestEventBridge_LiveTicker(t *testing.T) {
 		name     string
 		visible  bool
 		sessions []core.ForwardSession
-		want     [][]Topic
+		want     [][]service.Topic
 	}{
-		{"表示中かつアクティブ転送あり", true, []core.ForwardSession{activeSession("web")}, [][]Topic{{TopicForwards, TopicStatus}}},
+		{"表示中かつアクティブ転送あり", true, []core.ForwardSession{activeSession("web")}, [][]service.Topic{{service.TopicForwards, service.TopicStatus}}},
 		{"アクティブ転送なし", true, []core.ForwardSession{{Rule: core.ForwardRule{Name: "web"}, Status: core.Stopped}}, nil},
 		{"非表示", false, []core.ForwardSession{activeSession("web")}, nil},
 	}
@@ -85,19 +86,19 @@ func TestEventBridge_ReconcileTickerNotifiesOnlyOnSignatureChange(t *testing.T) 
 		}
 
 		// CLI/TUI による forward.add の反映（ルールの増加）。
-		e.fwd.setSessions(
+		e.fwd.SetSessions(
 			core.ForwardSession{Rule: core.ForwardRule{Name: "web"}, Status: core.Stopped},
 			core.ForwardSession{Rule: core.ForwardRule{Name: "added"}, Status: core.Stopped},
 		)
 		time.Sleep(reconcileInterval + coalesceWindow)
 		synctest.Wait()
-		want := [][]Topic{{TopicHosts, TopicForwards, TopicStatus}}
+		want := [][]service.Topic{{service.TopicHosts, service.TopicForwards, service.TopicStatus}}
 		if got := e.n.take(); !reflect.DeepEqual(got, want) {
 			t.Fatalf("ルール追加: Notify = %v, want %v", got, want)
 		}
 
 		// 状態変化（Stopped → Error）でも通知する。
-		e.fwd.setSessions(
+		e.fwd.SetSessions(
 			core.ForwardSession{Rule: core.ForwardRule{Name: "web"}, Status: core.SessionError},
 			core.ForwardSession{Rule: core.ForwardRule{Name: "added"}, Status: core.Stopped},
 		)
@@ -120,7 +121,7 @@ func TestEventBridge_ReconcileTickerNotifiesOnlyOnSignatureChange(t *testing.T) 
 func TestEventBridge_ReconcileTickerRunsWhileHiddenButDoesNotNotify(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, false)
-		e.fwd.setSessions(core.ForwardSession{Rule: core.ForwardRule{Name: "new"}, Status: core.Stopped})
+		e.fwd.SetSessions(core.ForwardSession{Rule: core.ForwardRule{Name: "new"}, Status: core.Stopped})
 
 		time.Sleep(reconcileInterval + coalesceWindow)
 		synctest.Wait()
@@ -144,7 +145,7 @@ func TestEventBridge_StopsOnContextCancel(t *testing.T) {
 		e := newBridgeEnv(t, true, activeSession("web"))
 		e.stop() // バブル内の全ゴルーチンが終了しなければ synctest がデッドロックを報告する
 
-		e.ssh.ch <- core.SSHEvent{Type: core.SSHEventConnected}
+		e.ssh.Events <- core.SSHEvent{Type: core.SSHEventConnected}
 		time.Sleep(time.Second)
 		if got := e.n.take(); len(got) != 0 {
 			t.Errorf("cancel 後に通知してはならない: %v", got)
@@ -155,8 +156,8 @@ func TestEventBridge_StopsOnContextCancel(t *testing.T) {
 func TestEventBridge_ClosedChannelsEndReceiveLoop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newBridgeEnv(t, true)
-		close(e.ssh.ch)
-		close(e.fwd.ch)
+		close(e.ssh.Events)
+		close(e.fwd.Events)
 		synctest.Wait() // receive ゴルーチンが終了していること（emit ループのみ残る）
 		e.stop()
 	})

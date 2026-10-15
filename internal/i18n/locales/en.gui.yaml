@@ -16,6 +16,8 @@ gui:
     auth_failed: "Authentication failed."
     port_in_use: "The port is already in use."
     unknown: "{{.Error}}"
+    port_in_use_suggest: "The port is already in use. Free ports you can use: {{.Ports}}"
+    not_ready: "The daemon is still starting. Please try again in a moment."
   dialog:
     startup_failed_title: "MolePort failed to start"
     startup_failed: "Failed to start the built-in daemon: {{.Error}}"
@@ -74,3 +76,48 @@ gui:
     forward_error: "Error on forward \"{{.Name}}\": {{.Error}}"
     takeover: "Took over the running daemon."
     dismiss: "Dismiss"
+  forward:
+    form:
+      title: "Add forward"
+      host: "Host"
+      type: "Type"
+      type_local: "Local (-L)"
+      type_remote: "Remote (-R)"
+      type_dynamic: "Dynamic (-D / SOCKS5)"
+      name: "Rule name"
+      name_placeholder: "Auto: host-type-port if empty"
+      local_port: "Local port"
+      remote_host: "Remote host"
+      remote_port: "Remote port"
+      remote_port_placeholder: "Same as local port if empty"
+      remote_bind_addr: "Remote bind address"
+      auto_connect: "Start automatically when the host connects"
+      cancel: "Cancel"
+      submit: "Add and start"
+    delete:
+      title: "Delete forward"
+      message: "Stop and delete the forward rule \"{{.Name}}\"?"
+      confirm: "Delete"
+      cancel: "Cancel"
+    error:
+      host_required: "Select a host."
+      host_unknown: "Host \"{{.Name}}\" is not in the SSH config."
+      type_invalid: "The type must be local, remote or dynamic."
+      port_required: "Enter a port number."
+      port_range: "The port must be an integer between {{.Min}} and {{.Max}}."
+    toast:
+      added: "Added forward rule \"{{.Name}}\"."
+      deleted: "Deleted forward rule \"{{.Name}}\"."
+      start_failed: "Failed to start forward \"{{.Name}}\": {{.Error}}"
+      conflict: "Forward \"{{.Name}}\" cannot be changed in its current state."
+  host:
+    toast:
+      conflict: "Host \"{{.Name}}\" cannot be changed in its current state."
+  credential:
+    title: "Authenticate to {{.Host}}"
+    password: "Password"
+    passphrase: "Private key passphrase"
+    remaining: "Other pending requests"
+    submit: "Submit"
+    cancel: "Cancel"
+    expired: "The input has expired."

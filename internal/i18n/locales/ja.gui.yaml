@@ -16,6 +16,8 @@ gui:
     auth_failed: "認証に失敗しました。"
     port_in_use: "ポートが既に使用されています。"
     unknown: "{{.Error}}"
+    port_in_use_suggest: "ポートが既に使用されています。空きポートの候補: {{.Ports}}"
+    not_ready: "デーモンを起動しています。しばらくしてからもう一度お試しください。"
   dialog:
     startup_failed_title: "MolePort を起動できません"
     startup_failed: "内蔵デーモンの起動に失敗しました: {{.Error}}"
@@ -74,3 +76,48 @@ gui:
     forward_error: "転送「{{.Name}}」でエラー: {{.Error}}"
     takeover: "稼働中のデーモンを引き継ぎました。"
     dismiss: "閉じる"
+  forward:
+    form:
+      title: "転送を追加"
+      host: "ホスト"
+      type: "種別"
+      type_local: "ローカル (-L)"
+      type_remote: "リモート (-R)"
+      type_dynamic: "ダイナミック (-D / SOCKS5)"
+      name: "ルール名"
+      name_placeholder: "空欄ならホスト名-種別-ポートで自動生成"
+      local_port: "ローカルポート"
+      remote_host: "リモートホスト"
+      remote_port: "リモートポート"
+      remote_port_placeholder: "空欄ならローカルポートと同じ"
+      remote_bind_addr: "リモートのバインドアドレス"
+      auto_connect: "ホスト接続時に自動開始する"
+      cancel: "キャンセル"
+      submit: "追加して開始"
+    delete:
+      title: "転送を削除"
+      message: "転送ルール「{{.Name}}」を停止して削除します。よろしいですか？"
+      confirm: "削除"
+      cancel: "キャンセル"
+    error:
+      host_required: "ホストを選択してください。"
+      host_unknown: "ホスト「{{.Name}}」は SSH config にありません。"
+      type_invalid: "種別は local / remote / dynamic のいずれかです。"
+      port_required: "ポート番号を入力してください。"
+      port_range: "ポート番号は {{.Min}}〜{{.Max}} の整数で入力してください。"
+    toast:
+      added: "転送ルール「{{.Name}}」を追加しました。"
+      deleted: "転送ルール「{{.Name}}」を削除しました。"
+      start_failed: "転送「{{.Name}}」の開始に失敗しました: {{.Error}}"
+      conflict: "転送「{{.Name}}」は現在の状態では実行できません。"
+  host:
+    toast:
+      conflict: "ホスト「{{.Name}}」は現在の状態では実行できません。"
+  credential:
+    title: "{{.Host}} の認証"
+    password: "パスワード"
+    passphrase: "秘密鍵のパスフレーズ"
+    remaining: "待機中の他の要求"
+    submit: "送信"
+    cancel: "キャンセル"
+    expired: "入力の有効期限が切れました。"

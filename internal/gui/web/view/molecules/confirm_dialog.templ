@@ -1,0 +1,36 @@
+package molecules
+
+import "github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
+
+// ConfirmDialogProps は ConfirmDialog の引数。ID はダイアログの id（タイトルの id・ボタンの id の接頭辞にもなる）。
+// ConfirmAttrs には確定ボタンの hx-* 属性を渡す。
+type ConfirmDialogProps struct {
+	ID             string
+	Title          string
+	Message        string
+	ConfirmLabel   string
+	CancelLabel    string
+	ConfirmVariant atoms.ButtonVariant
+	ConfirmAttrs   templ.Attributes
+}
+
+// ConfirmDialog は確認ダイアログ（ネイティブ <dialog>。app.ts が showModal() で開く）。
+// キャンセルは data-close-modal で閉じる。
+templ ConfirmDialog(p ConfirmDialogProps) {
+	<dialog id={ p.ID } class="mp-modal" aria-labelledby={ p.ID + "-title" }>
+		<h2 id={ p.ID + "-title" } class="mp-modal-title">{ p.Title }</h2>
+		<p class="mp-modal-body">{ p.Message }</p>
+		<div class="mp-modal-actions">
+			@atoms.Button(atoms.ButtonProps{
+				Label:   p.CancelLabel,
+				Variant: atoms.ButtonSecondary,
+				Attrs:   templ.Attributes{"id": p.ID + "-cancel", "data-close-modal": "", "autofocus": true},
+			})
+			@atoms.Button(atoms.ButtonProps{
+				Label:   p.ConfirmLabel,
+				Variant: p.ConfirmVariant,
+				Attrs:   p.ConfirmAttrs,
+			})
+		</div>
+	</dialog>
+}
