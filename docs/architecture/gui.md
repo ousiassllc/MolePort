@@ -91,7 +91,7 @@ Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
 |---------|-----------|-----------|------|----------------|
 | Shell | `cmd/moleport-gui`, `internal/gui/shell`, `internal/gui/tray` | `gui` | Wails 起動、ウィンドウ制御、トレイ、起動/引き継ぎ/終了の統括、Wails Events 送信 | Web, Service, daemon, Wails, systray |
 | Web | `internal/gui/web`（`handler/`, `middleware/`, `view/{atoms,molecules,organisms,pages,layout}`, `static/`） | なし | HTTP ルーティング、Templ レンダリング、トークン・CSP、静的アセット配信 | Service, i18n, Templ |
-| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker、`settings/`: 設定・更新バッジ、`servicetest/`: テスト用 Core フェイク） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
+| GUI Service | `internal/gui/service`（`bridge/`: EventBridge、`credential/`: CredentialBroker、`settings/`: 設定・更新バッジ、`trayops/`: トレイからの転送操作、`servicetest/`: テスト用 Core フェイク） | なし | ViewModel 生成、ホスト/転送/設定操作、クレデンシャル仲介、イベントのバッチ化、非同期通知キュー（`NotificationQueue`） | `internal/core`, `internal/i18n` |
 | Core / Infra | 既存 | なし | 既存どおり | — |
 
 - `internal/gui/web` と `internal/gui/service` は Wails・トレイに依存しない。`go test ./...` で Linux CI 上でテストできる（NFR-41）
@@ -389,10 +389,13 @@ sequenceDiagram
 - ライブラリ: `fyne.io/systray`。`systray.RunWithExternalLoop` により Wails のイベントループと共存させる（`Run` は使わない）
 - 初期化は Wails の `OnStartup`（ウィンドウ生成後）で行う
 - アイコン: `assets/tray/{mac-template.png, tray.png, tray.ico}`（`go:embed`。macOS はテンプレート画像でダーク/ライト自動反転）。現在はプレースホルダー（単色の円）で、製品版アイコンはファイルの差し替えのみで置き換える
-- トレイ利用可否は起動時に 1 回だけ判定する（`onReady` に 5 秒以内に到達 かつ Linux は StatusNotifierWatcher が存在）。実行中にトレイが消えた場合の検知は行わない。M2 の PoC メニューは「表示」「終了」のみ（UC-33 のフルメニューは M3）
+- トレイ利用可否は起動時に 1 回だけ判定する（`onReady` に 5 秒以内に到達 かつ Linux は StatusNotifierWatcher が存在）。実行中にトレイが消えた場合の検知は行わない。M3 で UC-33 のフルメニュー（状態サマリー・ウィンドウ表示・転送トグル・全停止・終了）を実装した
 - メニュー構成は UC-33。状態変化（イベント発生時）に 500ms デバウンスで `ResetMenu` を使わず既存項目の `SetTitle` / `Check` / `Show` / `Hide` で更新する。転送項目は最大 20 件のプールを使い回す
 - 左クリック: ウィンドウ表示（`SetOnTapped`）。右クリック: メニュー
-- 言語変更時はメニュー全項目のタイトルを再設定する
+- 言語変更時はメニュー全項目のタイトルを再設定する（設定の保存成功で `Tray.RefreshNow`）
+- ウィンドウ非表示中は `EventBridge` が通知を止める（NFR-33）ため、トレイは SSH / 転送イベントと 5 秒ティッカーを独自に購読して更新する（`tray.Watch`）。メニューの内容は `tray.BuildMenu`（`gui` タグなしの純粋関数）が ViewModel から組み立てる
+- 転送項目のクリックは `trayops.Actions.ToggleForward`（停止中なら開始、稼働中なら停止）、「すべての転送を停止」は `StopAll`。トレイから開始した転送で認証が必要な場合は `CredentialBroker` がウィンドウを前面表示する（UC-31）
+- 「ウィンドウで全て表示…」は転送が 20 件を超える時だけ表示し、クリックでウィンドウを表示する
 - Linux: StatusNotifierItem（D-Bus）。StatusNotifierWatcher が不在の環境ではトレイ利用不可として扱う（UC-25 代替フロー）
 
 ## 設定の拡張
@@ -482,10 +485,10 @@ PoC 用の最小実装は `cmd/moleport-gui`、`internal/gui/shell`、`internal/
 | 縮退方針 | 実装 | テスト |
 |---------|------|--------|
 | トレイ利用可否（`onReady` 到達 + Linux の StatusNotifierWatcher）。5 秒以内に `onReady` へ到達しなければ利用不可（R-1, NFR-37） | `internal/gui/tray/availability.go`（`Available` / `Detect`）。Linux のホスト確認は `host_linux.go`、他 OS は不要（`host_other.go`） | `availability_test.go` |
-| 閉じる操作の決定表（`quitting`・トレイ可否 → 素通し / `WindowHide` / 終了確認。トレイなしは必ず終了確認）（R-5, NFR-37） | `internal/gui/shell/close.go`（`DecideClose` / `CloseController`）、`dialog.go`（`IsAffirmative`） | `close_test.go`, `dialog_test.go` |
+| 閉じる操作の決定表（`quitting`・トレイ可否 → 素通し / `WindowHide` / 終了確認。トレイなしは必ず終了確認）（R-5, NFR-37） | `internal/gui/shell/close.go`（`DecideClose` / `CloseController`。`Window` / `Dialog` を注入）、`dialog.go`（`IsAffirmative`）、`trayhint.go`（初回のみの OS 通知と `gui.tray_notice_shown` の保存） | `close_test.go`, `dialog_test.go`, `trayhint_test.go` |
 | 非表示中は `EventsEmit` しない。非表示 → 表示で `all` を 1 回送る（R-7, NFR-33） | `internal/gui/shell/notifier.go`（`VisibilityNotifier`） | `notifier_test.go` |
-| 内蔵デーモン起動失敗（引き継ぎ失敗・PID ロック取得失敗を含む）はエラーダイアログ後に終了する。`SingleInstanceLock` が使えない環境でも PID ファイルのロックが二重起動を防ぐ（R-6） | `internal/gui/shell/lifecycle.go`（`Lifecycle.Start` / `StartupErrorKey`） | `lifecycle_test.go` |
-| `daemon.shutdown`（IPC）・OS シグナル起因の終了は確認なし、トレイ「終了」はアクティブな転送があれば確認。`quitting` の二重実行を防ぐ | `internal/gui/shell/lifecycle.go`（`RequestQuit` / `Shutdown`） | `lifecycle_test.go` |
+| 内蔵デーモン起動失敗（引き継ぎ失敗・PID ロック取得失敗を含む）はエラーダイアログ後に終了する。`SingleInstanceLock` が使えない環境でも PID ファイルのロックが二重起動を防ぐ（R-6） | `internal/gui/shell/lifecycle.go`（`Lifecycle.Start` / `Run` / `StartupErrorKey`）。`Window` / `Dialog` / `DaemonHost` interface 越しに実装（`ports.go`） | `lifecycle_test.go`（引き継ぎ 4 ケース）, `lifecycle_quit_test.go` |
+| `daemon.shutdown`（IPC）・OS シグナル起因の終了は確認なし、トレイ「終了」はアクティブな転送があれば確認。`quitting` の二重実行を防ぐ | `internal/gui/shell/lifecycle.go`（`RequestQuit` / `Shutdown`。`Daemon.Stop()` は `sync.Once` で 1 回。確認ダイアログの重複表示も防ぐ） | `lifecycle_test.go`, `lifecycle_quit_test.go`（終了競合） |
 
 R-2（静的 `index.html` への切り替え）、R-3（トークンのフォームフィールド化）、R-4（CSP 例外）の縮退は、実機での検証結果が出てから該当する経路だけを実装する（現状は `GET /` を Router が返し、トークンはヘッダーで検証する）。
 

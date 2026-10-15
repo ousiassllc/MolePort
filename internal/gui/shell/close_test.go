@@ -1,6 +1,9 @@
 package shell
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestDecideClose(t *testing.T) {
 	tests := []struct {
@@ -28,50 +31,53 @@ func TestDecideClose(t *testing.T) {
 	}
 }
 
-type fakeCloseHost struct {
-	confirm bool
-	hidden  int
-	asked   int
-	quits   int
+type fakeQuitController struct {
+	quitting bool
+	active   int
+	requests []bool
 }
 
-func (f *fakeCloseHost) HideWindow() { f.hidden++ }
-func (f *fakeCloseHost) ConfirmQuit() bool {
-	f.asked++
-	return f.confirm
-}
-func (f *fakeCloseHost) RequestQuit() { f.quits++ }
+func (f *fakeQuitController) Quitting() bool      { return f.quitting }
+func (f *fakeQuitController) ActiveForwards() int { return f.active }
+func (f *fakeQuitController) RequestQuit(c bool)  { f.requests = append(f.requests, c) }
 
 func TestCloseController_BeforeClose(t *testing.T) {
 	tests := []struct {
-		name        string
-		quitting    bool
-		tray        bool
-		confirm     bool
-		wantPrevent bool
-		wantHidden  int
-		wantAsked   int
-		wantQuits   int
+		name         string
+		quitting     bool
+		tray         bool
+		confirm      bool
+		active       int
+		wantPrevent  bool
+		wantHidden   int
+		wantHidden2  int // onHidden の呼び出し回数
+		wantAsked    []int
+		wantRequests []bool
 	}{
 		{name: "終了処理中は素通し", quitting: true, tray: true, wantPrevent: false},
-		{name: "トレイあり: 非表示にして中断", tray: true, wantPrevent: true, wantHidden: 1},
-		{name: "トレイなし・承認: 終了を要求して中断", confirm: true, wantPrevent: true, wantAsked: 1, wantQuits: 1},
-		{name: "トレイなし・拒否: 何もせず中断", wantPrevent: true, wantAsked: 1},
+		{name: "トレイあり: 非表示にして中断", tray: true, wantPrevent: true, wantHidden: 1, wantHidden2: 1},
+		{name: "トレイなし・承認: 確認なしの終了を要求して中断", confirm: true, active: 2, wantPrevent: true, wantAsked: []int{2}, wantRequests: []bool{false}},
+		{name: "トレイなし・拒否: 何もせず中断", active: 1, wantPrevent: true, wantAsked: []int{1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host := &fakeCloseHost{confirm: tt.confirm}
-			c := NewCloseController(host,
-				func() bool { return tt.quitting },
-				func() bool { return tt.tray },
-			)
+			win := &fakeWindow{}
+			dlg := &fakeDialog{confirm: tt.confirm}
+			life := &fakeQuitController{quitting: tt.quitting, active: tt.active}
+			hidden := 0
+			c := NewCloseController(win, dlg, life, func() bool { return tt.tray }, func() { hidden++ })
 
 			if got := c.BeforeClose(); got != tt.wantPrevent {
 				t.Errorf("BeforeClose() = %v, want %v", got, tt.wantPrevent)
 			}
-			if host.hidden != tt.wantHidden || host.asked != tt.wantAsked || host.quits != tt.wantQuits {
-				t.Errorf("hidden/asked/quits = %d/%d/%d, want %d/%d/%d",
-					host.hidden, host.asked, host.quits, tt.wantHidden, tt.wantAsked, tt.wantQuits)
+			if win.hides != tt.wantHidden || hidden != tt.wantHidden2 {
+				t.Errorf("hides/onHidden = %d/%d, want %d/%d", win.hides, hidden, tt.wantHidden, tt.wantHidden2)
+			}
+			if fmt.Sprint(dlg.closeAsks) != fmt.Sprint(tt.wantAsked) {
+				t.Errorf("ConfirmClose = %v, want %v", dlg.closeAsks, tt.wantAsked)
+			}
+			if fmt.Sprint(life.requests) != fmt.Sprint(tt.wantRequests) {
+				t.Errorf("RequestQuit = %v, want %v", life.requests, tt.wantRequests)
 			}
 		})
 	}

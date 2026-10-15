@@ -34,39 +34,43 @@ func DecideClose(quitting, trayAvailable bool) CloseAction {
 	}
 }
 
-// CloseHost は CloseController が閉じる操作の結果を実行するためのウィンドウ側の操作。
-// Wails の型を持たず、Shell（app.go）が runtime.* で実装する。
-type CloseHost interface {
-	// HideWindow はウィンドウを非表示にする。
-	HideWindow()
-	// ConfirmQuit は終了確認ダイアログを表示し、承認されたら true を返す。
-	ConfirmQuit() bool
-	// RequestQuit は確認なしの終了を要求する（Lifecycle.RequestQuit(false)）。
-	RequestQuit()
+// QuitController は CloseController が参照・要求する終了制御。*Lifecycle が満たす。
+type QuitController interface {
+	Quitting() bool
+	ActiveForwards() int
+	// RequestQuit は終了を要求する。confirm が false なら確認しない。
+	RequestQuit(confirm bool)
 }
 
 // CloseController は OnBeforeClose の分岐を担う。
 type CloseController struct {
-	host          CloseHost
-	quitting      func() bool
+	win           Window
+	dialog        Dialog
+	life          QuitController
 	trayAvailable func() bool
+	onHidden      func()
 }
 
 // NewCloseController は CloseController を返す。
-// quitting は Lifecycle.Quitting、trayAvailable は起動時に 1 回判定したトレイ可否を返す。
-func NewCloseController(host CloseHost, quitting, trayAvailable func() bool) *CloseController {
-	return &CloseController{host: host, quitting: quitting, trayAvailable: trayAvailable}
+// trayAvailable は起動時に 1 回判定したトレイ可否を返す。onHidden はトレイへ非表示にした直後に呼ばれる
+// （初回のみのトレイ稼働通知。nil 可）。
+func NewCloseController(win Window, dialog Dialog, life QuitController, trayAvailable func() bool, onHidden func()) *CloseController {
+	return &CloseController{win: win, dialog: dialog, life: life, trayAvailable: trayAvailable, onHidden: onHidden}
 }
 
 // BeforeClose は OnBeforeClose の本体。prevent を返す。
 func (c *CloseController) BeforeClose() (prevent bool) {
-	action := DecideClose(c.quitting(), c.trayAvailable())
+	action := DecideClose(c.life.Quitting(), c.trayAvailable())
 	switch action {
 	case CloseHide:
-		c.host.HideWindow()
+		c.win.Hide()
+		if c.onHidden != nil {
+			c.onHidden()
+		}
 	case CloseConfirmQuit:
-		if c.host.ConfirmQuit() {
-			c.host.RequestQuit()
+		// ダイアログで確認済みのため RequestQuit は再確認しない。
+		if c.dialog.ConfirmClose(c.life.ActiveForwards()) {
+			c.life.RequestQuit(false)
 		}
 	case CloseAllow:
 	}
