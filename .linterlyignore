@@ -9,6 +9,7 @@ coverage_review.out
 *.pb.go
 *_generated.go
 *.gen.go
+*_templ.go
 
 # ビルド成果物
 bin/

@@ -269,3 +269,9 @@ tui:
     daemon_connect_failed: "Failed to connect to new daemon"
   prompt:
     placeholder: "Enter command..."
+gui:
+  banner:
+    starting: "Starting the daemon..."
+    failed: "Failed to start the daemon."
+  error:
+    generic: "An error occurred. Please try again."

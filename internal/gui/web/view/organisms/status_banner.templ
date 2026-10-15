@@ -1,0 +1,16 @@
+package organisms
+
+import (
+	"github.com/ousiassllc/moleport/internal/gui/service"
+	"github.com/ousiassllc/moleport/internal/i18n"
+)
+
+// StatusBanner は内蔵デーモンの起動状態を示すバナー。ready のときは何も描画しない。
+templ StatusBanner(state service.LifecycleState) {
+	switch state {
+		case service.LifecycleStarting:
+			<div id="status-banner" class="mp-banner" data-state="starting" role="status">{ i18n.T("gui.banner.starting") }</div>
+		case service.LifecycleFailed:
+			<div id="status-banner" class="mp-banner" data-state="failed" role="alert">{ i18n.T("gui.banner.failed") }</div>
+	}
+}

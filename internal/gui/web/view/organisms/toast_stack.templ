@@ -1,0 +1,9 @@
+package organisms
+
+import "github.com/ousiassllc/moleport/internal/i18n"
+
+// ToastStack はトーストの表示領域。OOB（hx-swap-oob="beforeend:#toast-stack"）で追記される。
+// data-error-message は app.ts がサーバー無応答時の汎用エラートーストに使うローカライズ済み文言。
+templ ToastStack() {
+	<div id="toast-stack" class="mp-toast-stack" aria-live="polite" data-error-message={ i18n.T("gui.error.generic") }></div>
+}

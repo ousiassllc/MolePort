@@ -1,7 +1,12 @@
 # Build output
 bin/
-dist/
+/dist/
 moleport
+
+# GUI フロントエンド
+node_modules/
+internal/gui/web/static/dist/*
+!internal/gui/web/static/dist/.gitkeep
 
 # IDE
 .idea/

@@ -1,0 +1,100 @@
+/* source(none) で自動検出を無効にし、Templ テンプレートのみをクラス検出の対象にする */
+@import "tailwindcss" source(none);
+@source "../../../view";
+
+/* テーマは CSS カスタムプロパティで定義し、<html data-theme data-accent> で切り替える。
+   data-theme="system" は prefers-color-scheme に追従する（JS 不要）。 */
+:root {
+  --mp-bg: #0f1115;
+  --mp-surface: #181b22;
+  --mp-fg: #e6e8ee;
+  --mp-muted: #8b93a7;
+  --mp-border: #2a2f3a;
+  --mp-ok: #3fb950;
+  --mp-warn: #d29922;
+  --mp-danger: #f85149;
+  --mp-accent: #8b5cf6;
+}
+
+:root[data-theme="light"] {
+  --mp-bg: #ffffff;
+  --mp-surface: #f4f5f8;
+  --mp-fg: #1b1f27;
+  --mp-muted: #5b6475;
+  --mp-border: #d6d9e0;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --mp-bg: #ffffff;
+    --mp-surface: #f4f5f8;
+    --mp-fg: #1b1f27;
+    --mp-muted: #5b6475;
+    --mp-border: #d6d9e0;
+  }
+}
+
+:root[data-accent="violet"] { --mp-accent: #8b5cf6; }
+:root[data-accent="blue"] { --mp-accent: #3b82f6; }
+:root[data-accent="green"] { --mp-accent: #22c55e; }
+:root[data-accent="cyan"] { --mp-accent: #06b6d4; }
+:root[data-accent="orange"] { --mp-accent: #f97316; }
+
+@theme inline {
+  --color-mp-bg: var(--mp-bg);
+  --color-mp-surface: var(--mp-surface);
+  --color-mp-fg: var(--mp-fg);
+  --color-mp-muted: var(--mp-muted);
+  --color-mp-border: var(--mp-border);
+  --color-mp-accent: var(--mp-accent);
+}
+
+/* atoms / organisms の見た目（動的な data-* 属性で切り替えるためユーティリティではなく CSS で定義する） */
+.mp-badge {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--mp-border);
+  font-size: 0.75rem;
+}
+.mp-badge[data-status="active"],
+.mp-badge[data-status="connected"] { color: var(--mp-ok); }
+.mp-badge[data-status="reconnecting"],
+.mp-badge[data-status="pending_auth"] { color: var(--mp-warn); }
+.mp-badge[data-status="error"] { color: var(--mp-danger); }
+
+.mp-btn {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--mp-border);
+  background: var(--mp-surface);
+  color: var(--mp-fg);
+  cursor: pointer;
+}
+.mp-btn[data-variant="primary"] { background: var(--mp-accent); border-color: var(--mp-accent); color: #fff; }
+.mp-btn[data-variant="danger"] { color: var(--mp-danger); border-color: var(--mp-danger); }
+
+.mp-banner {
+  padding: 0.5rem 1rem;
+  background: var(--mp-surface);
+  border-bottom: 1px solid var(--mp-border);
+}
+.mp-banner[data-state="failed"] { color: var(--mp-danger); }
+
+.mp-toast-stack {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mp-toast {
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--mp-border);
+  background: var(--mp-surface);
+  color: var(--mp-fg);
+}
+.mp-toast[data-kind="error"] { border-color: var(--mp-danger); }
+.mp-toast[data-kind="success"] { border-color: var(--mp-ok); }

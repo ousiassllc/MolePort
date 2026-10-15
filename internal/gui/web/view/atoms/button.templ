@@ -1,0 +1,22 @@
+package atoms
+
+// ButtonVariant はボタンの見た目のバリエーション。
+type ButtonVariant string
+
+const (
+	ButtonPrimary   ButtonVariant = "primary"
+	ButtonSecondary ButtonVariant = "secondary"
+	ButtonDanger    ButtonVariant = "danger"
+)
+
+// ButtonProps は Button の引数。Attrs には hx-* や id などの追加属性を渡す。
+type ButtonProps struct {
+	Label   string
+	Variant ButtonVariant
+	Attrs   templ.Attributes
+}
+
+// Button は種別付きボタン。サーバーが hx-post の URL などを Attrs で渡す。
+templ Button(p ButtonProps) {
+	<button type="button" class="mp-btn" data-variant={ string(p.Variant) } { p.Attrs... }>{ p.Label }</button>
+}

@@ -1,0 +1,33 @@
+package layout
+
+import "github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
+
+// LayoutProps は BaseLayout の引数。
+type LayoutProps struct {
+	Lang   string // "ja" | "en"
+	Theme  string // "system" | "dark" | "light"
+	Accent string // "violet" | "blue" | "green" | "cyan" | "orange"
+	Token  string // 起動ごとのランダムトークン（<meta name="mp-token">）
+}
+
+// BaseLayout は <head>（トークン meta・静的アセット）、ModalRoot、ToastStack を持つ
+// 全ページ共通のレイアウト。CSP は SecurityHeaders ミドルウェアがレスポンスヘッダーで付与する。
+templ BaseLayout(p LayoutProps) {
+	<!DOCTYPE html>
+	<html lang={ p.Lang } data-theme={ p.Theme } data-accent={ p.Accent }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="mp-token" content={ p.Token }/>
+			<title>MolePort</title>
+			<link rel="stylesheet" href="/static/dist/css/app.css"/>
+			<script src="/static/dist/js/htmx.min.js"></script>
+			<script type="module" src="/static/dist/js/app.js"></script>
+		</head>
+		<body class="bg-mp-bg text-mp-fg">
+			{ children... }
+			<div id="modal-root"></div>
+			@organisms.ToastStack()
+		</body>
+	</html>
+}

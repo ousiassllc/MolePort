@@ -1,0 +1,12 @@
+package atoms
+
+import "github.com/ousiassllc/moleport/internal/gui/service"
+
+// Toast は通知 1 件。エラーは role="alert"、それ以外は role="status" とする。
+templ Toast(kind service.ToastKind, message string) {
+	if kind == service.ToastError {
+		<div class="mp-toast" data-kind={ string(kind) } role="alert">{ message }</div>
+	} else {
+		<div class="mp-toast" data-kind={ string(kind) } role="status">{ message }</div>
+	}
+}
