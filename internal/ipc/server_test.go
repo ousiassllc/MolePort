@@ -136,6 +136,82 @@ func TestServerClient_ConnectedClients(t *testing.T) {
 	waitFor(t, func() bool { return srv.ConnectedClients() == 0 })
 }
 
+// TestServerClient_ConcurrentCredentialExchange は、readLoop が同期的にハンドラーを
+// 呼び出している場合に発生するデッドロックを検証する回帰テスト（Issue #81）。
+//
+// シナリオ:
+//  1. クライアントが forward.start RPC を送信
+//  2. サーバーハンドラーが credential.request 通知を返送し、credential.response を待機
+//  3. クライアントが通知を受信し credential.response RPC を送信
+//  4. readLoop が同期的だと手順3のメッセージを読めずデッドロックする
+func TestServerClient_ConcurrentCredentialExchange(t *testing.T) {
+	// credential.response 用のチャネル（ハンドラー間でデータを受け渡す）
+	credCh := make(chan string, 1)
+
+	var srv *IPCServer
+
+	handler := func(clientID string, method string, params json.RawMessage) (any, *protocol.RPCError) {
+		switch method {
+		case "forward.start":
+			// credential.request 通知をクライアントに送信
+			notif := protocol.Notification{
+				JSONRPC: protocol.JSONRPCVersion,
+				Method:  "credential.request",
+				Params:  json.RawMessage(`{"request_id":"cr-1","type":"password","host":"test","prompt":"Password:"}`),
+			}
+			if err := srv.SendNotification(clientID, notif); err != nil {
+				return nil, &protocol.RPCError{Code: protocol.InternalError, Message: err.Error()}
+			}
+			// credential.response が来るまで待機（タイムアウト付き）
+			select {
+			case val := <-credCh:
+				return map[string]string{"password": val}, nil
+			case <-time.After(3 * time.Second):
+				return nil, &protocol.RPCError{Code: protocol.InternalError, Message: "credential timeout"}
+			}
+
+		case "credential.response":
+			var p struct {
+				RequestID string `json:"request_id"`
+				Value     string `json:"value"`
+			}
+			if err := json.Unmarshal(params, &p); err != nil {
+				return nil, &protocol.RPCError{Code: protocol.InvalidParams, Message: err.Error()}
+			}
+			credCh <- p.Value
+			return map[string]bool{"ok": true}, nil
+
+		default:
+			return nil, &protocol.RPCError{Code: protocol.MethodNotFound, Message: "not found"}
+		}
+	}
+
+	var sockPath string
+	srv, sockPath = startTestServer(t, handler)
+	client := connectTestClient(t, sockPath)
+	waitFor(t, func() bool { return srv.ConnectedClients() == 1 })
+
+	// クライアント側: credential.request 通知を受けたら credential.response を返す
+	client.SetCredentialHandler(func(req protocol.CredentialRequestNotification) (*protocol.CredentialResponseParams, error) {
+		return &protocol.CredentialResponseParams{
+			RequestID: req.RequestID,
+			Value:     "my-secret",
+		}, nil
+	})
+
+	// forward.start を呼び出し — デッドロックしなければ成功する
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var result map[string]string
+	if err := client.Call(ctx, "forward.start", map[string]string{"name": "test"}, &result); err != nil {
+		t.Fatalf("forward.start should succeed but got: %v", err)
+	}
+	if result["password"] != "my-secret" {
+		t.Errorf("password = %q, want %q", result["password"], "my-secret")
+	}
+}
+
 // waitFor は条件が満たされるまで最大 2 秒待つヘルパー。
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()

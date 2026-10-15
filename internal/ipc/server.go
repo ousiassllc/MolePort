@@ -240,26 +240,29 @@ func (s *IPCServer) readLoop(c *clientConn) {
 
 		// ID が nil の場合は通知（レスポンス不要）
 		if req.ID == nil {
-			s.handler(c.id, req.Method, req.Params)
+			go func(method string, params json.RawMessage) {
+				_, _ = s.handler(c.id, method, params)
+			}(req.Method, req.Params)
 			continue
 		}
 
-		result, rpcErr := s.handler(c.id, req.Method, req.Params)
-		if rpcErr != nil {
-			resp := protocol.NewErrorResponse(req.ID, rpcErr.Code, rpcErr.Message)
-			if err := c.send(resp); err != nil {
+		// リクエストを goroutine で非同期処理する。
+		// これにより readLoop がブロックされず、同一クライアントからの
+		// 後続リクエスト（例: credential.response）を読み取れる。
+		go func(id *int, method string, params json.RawMessage) {
+			result, rpcErr := s.handler(c.id, method, params)
+			if rpcErr != nil {
+				resp := protocol.NewErrorResponse(id, rpcErr.Code, rpcErr.Message)
+				_ = c.send(resp)
 				return
 			}
-			continue
-		}
 
-		resp, err := protocol.NewResponse(req.ID, result)
-		if err != nil {
-			resp = protocol.NewErrorResponse(req.ID, protocol.InternalError, "marshal result: "+err.Error())
-		}
-		if err := c.send(resp); err != nil {
-			return
-		}
+			resp, err := protocol.NewResponse(id, result)
+			if err != nil {
+				resp = protocol.NewErrorResponse(id, protocol.InternalError, "marshal result: "+err.Error())
+			}
+			_ = c.send(resp)
+		}(req.ID, req.Method, req.Params)
 	}
 }
 
