@@ -2,11 +2,14 @@ package client
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
@@ -89,4 +92,35 @@ func (s *mockServer) getReceived() []protocol.Request {
 	cp := make([]protocol.Request, len(s.received))
 	copy(cp, s.received)
 	return cp
+}
+
+// サーバーが応答前に接続を閉じたとき、保留中の Call は ctx の期限を待たずに
+// 接続切断エラーで戻る。以後の Call も即座に失敗する。
+func TestIPCClient_Call_ReleasedWhenConnectionClosed(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	c := newTestClient(t, clientConn)
+	srv := newMockServer(t, serverConn)
+
+	go func() {
+		// リクエストを 1 件読んだら応答せずに接続を閉じる
+		srv.scanner.Scan()
+		_ = serverConn.Close()
+	}()
+
+	// 期限はテストが固まらないための上限であり、通常は使われない
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := c.Call(ctx, "daemon.status", nil, nil)
+	if err == nil || errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Call error = %v, want connection closed error", err)
+	}
+	if err.Error() != "connection closed" {
+		t.Errorf("Call error = %q, want %q", err.Error(), "connection closed")
+	}
+
+	<-c.done
+	if err := c.Call(ctx, "daemon.status", nil, nil); err == nil {
+		t.Fatal("Call after disconnect should fail")
+	}
 }

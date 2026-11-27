@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -38,6 +39,8 @@ type IPCClient struct {
 	mu          sync.Mutex
 	pending     map[int]chan *protocol.Response
 	pendingMu   sync.Mutex
+	pendingDone bool // true なら接続が閉じており、新規の pending 登録は不可（pendingMu で保護）
+	droppedEvts atomic.Int64
 	eventCh     chan *protocol.Notification
 	done        chan struct{}
 	connected   atomic.Bool
@@ -91,15 +94,21 @@ func (c *IPCClient) Close() error {
 	case <-time.After(readLoopShutdownTimeout):
 	}
 
-	// 保留中のリクエストをすべてエラーで解決する
+	c.releasePending()
+
+	return err
+}
+
+// releasePending は保留中のリクエストをすべて接続切断エラーで解決し、
+// 以後の pending 登録を拒否する。Close と readLoop 終了時の両方から呼ばれる。
+func (c *IPCClient) releasePending() {
 	c.pendingMu.Lock()
+	defer c.pendingMu.Unlock()
+	c.pendingDone = true
 	for id, ch := range c.pending {
 		close(ch)
 		delete(c.pending, id)
 	}
-	c.pendingMu.Unlock()
-
-	return err
 }
 
 // Call は RPC メソッドを呼び出し、結果を待つ。
@@ -131,6 +140,10 @@ func (c *IPCClient) Call(ctx context.Context, method string, params any, result 
 
 	ch := make(chan *protocol.Response, 1)
 	c.pendingMu.Lock()
+	if c.pendingDone {
+		c.pendingMu.Unlock()
+		return errors.New("connection closed")
+	}
 	c.pending[id] = ch
 	c.pendingMu.Unlock()
 
@@ -196,6 +209,7 @@ func (c *IPCClient) IsConnected() bool {
 func (c *IPCClient) readLoop() {
 	defer func() {
 		c.connected.Store(false)
+		c.releasePending()
 		close(c.eventCh)
 		close(c.done)
 	}()
@@ -242,6 +256,8 @@ func (c *IPCClient) readLoop() {
 			case c.eventCh <- &notif:
 			default:
 				// チャネルが満杯の場合は通知を破棄する
+				slog.Warn("event channel full; dropping notification",
+					"method", notif.Method, "dropped_total", c.droppedEvts.Add(1))
 			}
 		}
 	}
