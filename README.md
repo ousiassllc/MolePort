@@ -101,7 +101,7 @@ moleport daemon start
 moleport connect prod-server
 
 # 3. Add a forwarding rule
-moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80
+moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80 --name web
 
 # 4. Start forwarding
 moleport start web

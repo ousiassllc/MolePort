@@ -17,6 +17,9 @@
 - Document PoC procedures (R-1 to R-8) and fallback policies; real-device results are pending / PoC の検証手順（R-1〜R-8）と縮退方針を仕様書に記載（実機検証結果は待ち） (#87)
 
 ### 🐛 Bug Fixes / バグ修正
+- Fix a forward start in progress (waiting for SSH connect / opening the listener) not being cancelled by `StopForward` / `DeleteRule` / `Close`, which left an orphaned forward; `StartForward` after `Close` now fails / 転送の開始処理中に停止・ルール削除・Close しても開始が止まらず孤立した転送が残る問題を修正。Close 後の `StartForward` も失敗するように (#105)
+- Fix docs for auto-generated rule names (`forward-<N>` for CLI/IPC, `<host>-<type>-<port>` for TUI/GUI) and README Quick Start (`--name web`) / 自動生成ルール名（CLI/IPC は `forward-<N>`、TUI/GUI は `<host>-<type>-<port>`）と README Quick Start（`--name web`）のドキュメントを実装に合わせて修正 (#119)
+- Fix docs for `ForwardSession.ID` / `session.list` `id` to the actual `<ruleName>-<UnixNano>` opaque format / `ForwardSession.ID`・`session.list` の `id` を実装の `<ruleName>-<UnixNano>`（不透明な値）に合わせてドキュメント修正 (#120)
 - Fix `host.list` losing connection state (every host reported `disconnected`) and always returning `active_forward_count` 0; `SSHManager.LoadHosts` now keeps existing state / `host.list` が接続状態を失い全ホストが `disconnected` になる問題と `active_forward_count` が常に 0 になる問題を修正 (#102)
 - Start the host's `auto_connect` forwards on `ssh.connect` / `moleport connect` as documented / `ssh.connect`・`moleport connect` で当該ホストの `auto_connect` ルールを仕様どおり開始 (#118)
 - Fix docs for `ssh.connect` idempotency and error codes 1002/1003 to match the implementation / `ssh.connect` の冪等性とエラーコード 1002/1003 のドキュメントを実装に合わせて修正 (#121)

@@ -99,7 +99,7 @@ moleport daemon start
 moleport connect prod-server
 
 # 3. 転送ルールを追加
-moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80
+moleport add --host prod-server --type local --local-port 8080 --remote-host localhost --remote-port 80 --name web
 
 # 4. フォワーディングを開始
 moleport start web

@@ -158,7 +158,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 |-----------|----|------|------|
 | `host` | string | ✓ | SSH ホスト名（`Host` エイリアス） |
 | `type` | string | ✓ | `local` / `remote` / `dynamic` |
-| `name` | string | — | ルール名。空なら `{host}-{type}-{local_port}` を自動生成（CLI/TUI と同じ） |
+| `name` | string | — | ルール名。空なら `{host}-{type}-{local_port}` を GUI 側で生成（TUI のウィザードと同じ。CLI / IPC の `forward.add` で名前を省略した場合は Core が `forward-<N>` を割り当てる） |
 | `local_port` | string | ✓ | 1〜65535 |
 | `remote_host` | string | local / remote で任意 | 空なら `localhost` |
 | `remote_port` | string | local / remote で任意 | 空なら `local_port` と同値（F-50） |

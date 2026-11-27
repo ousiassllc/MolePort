@@ -379,7 +379,7 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| ID | string | セッション一意 ID（`<host>-<type>-<localport>` 形式で自動生成） |
+| ID | string | セッション一意 ID（`<ruleName>-<開始時刻 UnixNano>` 形式。開始のたびに変わる不透明な値として扱い、形式に依存しない） |
 | Rule | ForwardRule | 転送ルール |
 | Status | SessionStatus | セッション状態 |
 | ConnectedAt | time.Time | 接続開始時刻 |
@@ -451,7 +451,7 @@ type SSHHost struct {
 
 // 転送セッション（実行時状態 + メトリクス）
 type ForwardSession struct {
-    ID             string        // 一意 ID（<host>-<type>-<localport>）
+    ID             string        // 一意 ID（<ruleName>-<開始時刻 UnixNano>。不透明な値）
     Rule           ForwardRule   // 転送ルール
     Status         SessionStatus // セッション状態
     ConnectedAt    time.Time     // 接続開始時刻
@@ -478,7 +478,7 @@ type VersionCheckResult struct {
 
 ```
 
-**ForwardRule.Name の一意性**: ルール名はグローバルユニーク（全ホスト横断で一意）とする。`ForwardManager` がルール名のみで操作するため。省略時は `<host>-<type>-<localport>` 形式で自動生成される。
+**ForwardRule.Name の一意性**: ルール名はグローバルユニーク（全ホスト横断で一意）とする。`ForwardManager` がルール名のみで操作するため。省略時の自動生成名は経路により異なる。CLI / IPC（`forward.add`）では `ForwardManager` が `forward-<N>`（`N` はデーモン起動中の連番）を割り当て、TUI のウィザードと GUI では `<host>-<type>-<localport>` を補完して渡す。
 
 ## 状態遷移図
 
@@ -629,7 +629,7 @@ type ForwardInfo struct {
 
 // forward.add
 type ForwardAddParams struct {
-    Name           string `json:"name,omitempty"`            // 省略時は自動生成
+    Name           string `json:"name,omitempty"`            // 省略時は Core が forward-<N> を自動生成
     Host           string `json:"host"`
     Type           string `json:"type"`
     LocalPort      int    `json:"local_port"`
