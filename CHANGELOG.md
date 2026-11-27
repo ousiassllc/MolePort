@@ -23,6 +23,10 @@
 - Clamp `update_check.interval` from `config.yaml` (<= 0 → 24h, < 1h → 1h) with a warning instead of panicking in `time.NewTicker` / `config.yaml` の `update_check.interval` が 0 以下・1h 未満でも panic せず補正して警告する (#115)
 - Use a dedicated download HTTP client without the 5-second version-check timeout for `moleport update` / `moleport update` のダウンロードにバージョンチェック用の 5 秒タイムアウトを使わないよう修正 (#103)
 - Apply `update_check.enabled` changes from IPC `config.update` to the running version checker / IPC `config.update` による `update_check.enabled` の変更を稼働中のバージョンチェッカーに反映 (#136)
+- Allow restarting forwards left in the Error state (reconnect or restore failure) with start / `ssh.connect` auto_connect instead of failing with `already active` / 再接続・復元の失敗で Error になった転送を、開始操作と `ssh.connect` の auto_connect で再開できるよう修正（`already active` で失敗していた）(#139)
+- Stop the host's forwards on IPC `ssh.disconnect` (CLI/TUI), as documented, so no Active forward is left on a closed SSH client / IPC `ssh.disconnect`（CLI/TUI）が仕様どおり当該ホストの転送も停止するよう修正し、切断済みの SSH クライアントを掴んだ Active 転送が残らないように (#140)
+- Fix an automatic reconnect succeeding after a manual connect made during the reconnect wait, which overwrote and leaked the healthy connection and later disconnected it by host name; the manual connection now takes precedence / 自動再接続の待機中に手動接続した場合、後続の再接続成功が接続を上書きしてリークし、ホスト名で健全な接続を切断し直す問題を修正（手動接続を優先）(#141)
+- Make auto-generated `forward-<N>` rule names skip existing rules (e.g. after a daemon restart) and not consume an ID on validation errors / 自動生成名 `forward-<N>` が既存ルール（デーモン再起動後など）と衝突しないよう未使用の番号まで進め、検証エラーでは番号を消費しないよう修正 (#143)
 
 ### 🐛 Bug Fixes / バグ修正
 - Fix a forward start in progress (waiting for SSH connect / opening the listener) not being cancelled by `StopForward` / `DeleteRule` / `Close`, which left an orphaned forward; `StartForward` after `Close` now fails / 転送の開始処理中に停止・ルール削除・Close しても開始が止まらず孤立した転送が残る問題を修正。Close 後の `StartForward` も失敗するように (#105)
