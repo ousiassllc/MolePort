@@ -48,6 +48,10 @@ type Daemon struct {
 	stopped bool
 	purge   bool
 
+	// pendingRestore は非同期の復元でまだ処理されていないルール（restoreMu で保護）。
+	restoreMu      sync.Mutex
+	pendingRestore []core.ForwardRule
+
 	// shutdownTimeout は切断処理の上限。0 以下なら defaultShutdownTimeout を使う（テスト用に上書き可）。
 	shutdownTimeout time.Duration
 

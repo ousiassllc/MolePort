@@ -50,6 +50,7 @@
 - Stop reconnect retries on authentication failure and set the host to `PendingAuth` / 再接続中の認証失敗でリトライを止めて `PendingAuth` にする (#114)
 - Apply jitter to the first reconnect delay and never exceed `max_delay` / 再接続の初回遅延にもジッターを付け、待機時間が `max_delay` を超えないようにする (#133)
 - Defer key file loading and passphrase prompts until the key is actually needed (ssh-agent and earlier keys are tried first) / 鍵ファイルの読み込みとパスフレーズ要求を実際に必要になるまで遅延（エージェント・先行する鍵を先に試行） (#109)
+- Keep rules that the background session restore had not yet processed in `state.yaml` when the daemon stops mid-restore, so they are restored on the next start / セッション復元の途中でデーモンを停止しても、未処理のルールを `state.yaml` に残し次回起動で復元されるよう修正 (#159, #154)
 
 ## [v1.0.0] - 2026-03-15
 

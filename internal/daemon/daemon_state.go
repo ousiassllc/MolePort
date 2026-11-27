@@ -3,6 +3,7 @@ package daemon
 import (
 	"log/slog"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -99,14 +100,42 @@ func (d *Daemon) restoreState() {
 		return
 	}
 
+	d.setPendingRestore(state.ActiveForwards)
 	for _, rule := range state.ActiveForwards {
 		if d.shuttingDown() {
 			return
 		}
-		if err := d.fwdMgr.StartForward(rule.Name, nil); err != nil {
+		err := d.fwdMgr.StartForward(rule.Name, nil)
+		if err != nil && d.shuttingDown() {
+			// 停止による中断は失敗ではない。未復元として残し、saveState が state.yaml に引き継ぐ。
+			return
+		}
+		if err != nil {
 			slog.Warn("failed to restore forward", "rule", rule.Name, "error", err)
 		}
+		d.markRestoreProcessed(rule.Name)
 	}
+}
+
+// setPendingRestore は復元待ちのルール一覧を記録する。
+func (d *Daemon) setPendingRestore(rules []core.ForwardRule) {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	d.pendingRestore = append([]core.ForwardRule(nil), rules...)
+}
+
+// markRestoreProcessed は復元の処理が終わったルールを復元待ちから外す。
+func (d *Daemon) markRestoreProcessed(name string) {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	d.pendingRestore = slices.DeleteFunc(d.pendingRestore, func(r core.ForwardRule) bool { return r.Name == name })
+}
+
+// pendingRestoreSnapshot は復元待ちのルールのコピーを返す。
+func (d *Daemon) pendingRestoreSnapshot() []core.ForwardRule {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	return append([]core.ForwardRule(nil), d.pendingRestore...)
 }
 
 // autoStartForwards は config.yaml で auto_connect が有効なフォワードルールを自動開始する。
@@ -142,12 +171,23 @@ func (d *Daemon) autoStartForwards() {
 }
 
 // saveState はアクティブなフォワード状態を保存する。
+// 非同期の復元が終わる前に停止した場合に備え、未復元のルールも保存対象に含める（NFR-16 / UC-9）。
 func (d *Daemon) saveState() {
+	// 復元の完了でルールが復元待ちから外れる前に Active になっているため、
+	// 復元待ちを先に取得してからセッションを読めば、どちらにも載らないルールは出ない。
+	pending := d.pendingRestoreSnapshot()
 	sessions := d.fwdMgr.GetAllSessions()
 	var activeRules []core.ForwardRule
+	saved := make(map[string]bool)
 	for _, s := range sessions {
 		if s.Status == core.Active {
 			activeRules = append(activeRules, s.Rule)
+			saved[s.Rule.Name] = true
+		}
+	}
+	for _, rule := range pending {
+		if !saved[rule.Name] {
+			activeRules = append(activeRules, rule)
 		}
 	}
 
