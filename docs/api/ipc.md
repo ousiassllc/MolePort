@@ -134,7 +134,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### ssh.connect
 
-指定ホストに SSH 接続を確立する。接続成功後、当該ホストの auto_connect ルールのうち未開始のもの（`stopped` / `error`）のフォワーディングも自動的に開始する。ルールの開始に失敗しても `ssh.connect` 自体は成功を返す（失敗はデーモンのログに警告として記録される）。接続済みのホストに対する呼び出しは冪等で、そのまま成功を返す。
+指定ホストに SSH 接続を確立する。接続成功後、当該ホストの auto_connect ルールのうち未開始のもの（`stopped` / `error`）のフォワーディングも自動的に開始する。ルールの開始に失敗しても `ssh.connect` 自体は成功を返す（失敗はデーモンのログに警告として記録される）。接続済みのホストに対する呼び出しも成功を返す（接続自体は再確立しない冪等な呼び出し）が、未開始の auto_connect ルール（`moleport stop` で止めたものを含む）は上記と同様に開始される。
 
 **リクエスト**:
 
@@ -704,7 +704,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 }
 ```
 
-> **Note**: `update_check.enabled` の変更は稼働中のデーモンの定期チェックに即時反映される（`false` で停止、`true` で再開）。`update_check.interval` の変更は設定ファイルへ保存されるが、定期チェックには次回のデーモン起動時に反映される。
+> **Note**: 設定の反映タイミングはフィールドにより異なる。`config.update` は変更を `config.yaml` へ保存し、稼働中のデーモンへ即時反映するのは `update_check.enabled` のみ（定期チェックを `false` で停止、`true` で再開）。`update_check.interval`・`reconnect`・`hosts`・`ssh_config_path`・`session`・`log` は保存されるが、デーモンは起動時の値を保持し続けるため、次回のデーモン起動時に反映される。`language`・`tui.theme` はクライアントが `config.get` で読み直したときに反映される。
 
 **テーマ更新の例**:
 
@@ -1244,3 +1244,4 @@ SSH 接続状態の変化。
 | 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |
 | 2.2 | 2026-10-15 | GUI 内蔵デーモン稼働時の挙動セクションを追加（接続先共通、`daemon.shutdown`、`config` の `gui` 非公開、認証要求の扱い）。プロトコル自体の変更なし | #84 Wails 版 GUI アプリケーション |
 | 2.3 | 2026-11-28 | forward.list / forward.add / session.list / session.get に `remote_bind_addr`（F-51）を追記、forward.add のパラメータ表を追加、ソケットパスの設定ディレクトリ解決順を明記。プロトコル自体の変更なし | #124, #131 ドキュメント乖離修正 |
+| 2.4 | 2026-11-28 | `ssh.connect` を接続済みホストに呼んでも未開始の auto_connect ルールは開始されることを明記、`config.update` の反映タイミング（即時反映は `update_check.enabled` のみ、他は保存のみで再起動後に反映）を明記。プロトコル自体の変更なし | #144, #149 ドキュメント乖離修正 |

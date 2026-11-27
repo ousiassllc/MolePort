@@ -135,10 +135,13 @@ MolePort デーモン:
   クライアント: 1 接続中
   SSH:        2 接続
   フォワード:  3 アクティブ
+  警告:       update_check.interval 30m0s is invalid (minimum 1h0m0s); using 1h0m0s
 
 $ moleport daemon status
 デーモンは稼働していません
 ```
+
+`警告:` 行はデーモンが起動時などに検出した警告ごとに 1 行ずつ、フォワード行の後に表示される（警告がなければ表示されない）。メッセージは英語のまま表示される。主な内容: `config.yaml` の読み込み失敗（デフォルト値で動作。元のファイルは設定保存時に `config.yaml.bak` へ退避される）、`update_check.interval` の補正、設定ディレクトリ・`config.yaml`・`state.yaml`・SSH config のパーミッションが group/other に開放されている場合（Unix のみ）、フォワードルール・SSH ホストの読み込み失敗。
 
 ---
 
@@ -174,7 +177,7 @@ $ moleport daemon kill
 
 ### connect
 
-SSH ホストに接続する。auto_connect ルールのフォワーディングはデーモンが自動的に開始する（開始したルールの一覧は出力されない。`moleport list` で確認できる）。接続済みのホストに対しては何もせず成功を返す。
+SSH ホストに接続する。auto_connect ルールのフォワーディングはデーモンが自動的に開始する（開始したルールの一覧は出力されない。`moleport list` で確認できる）。接続済みのホストに対しては SSH 接続を再確立せず成功を返すが、未開始（`stopped` / `error`）の auto_connect ルールは開始される（`moleport stop` で止めたルールも再開される）。
 
 ```
 moleport connect <host>
@@ -227,7 +230,7 @@ $ moleport connect unknown-host
 エラー: connect failed: rpc error: code=1001, message=host "unknown-host" not found
 ```
 
-接続済みのホストに対して再度実行してもエラーにならず、そのまま成功する（冪等）。
+接続済みのホストに対して再度実行してもエラーにならず、そのまま成功する（SSH 接続は再確立されない。ただし未開始の auto_connect ルールは上記のとおり開始される）。
 
 ---
 
@@ -420,8 +423,10 @@ MolePort ステータス:
   ホスト:      3 件, 1 件接続中, 1 件認証待ち
   フォワード:  3 件, 2 件アクティブ, 1 件停止
   トラフィック: 送信 1.3MB, 受信 468.0KB
-
+  警告:       update_check.interval 30m0s is invalid (minimum 1h0m0s); using 1h0m0s
 ```
+
+サマリー出力の末尾に、`daemon status` と同じ警告をデーモンが検出した分だけ `警告:` 行として表示する（警告がなければ表示されない。セッション詳細では表示されない）。
 
 **出力例（セッション詳細）**:
 
@@ -784,3 +789,4 @@ GUI 稼働中は内蔵デーモンが `moleport.sock` / `moleport.pid` を保持
 | 3.1 | 2026-03-08 | `update` サブコマンド仕様追加、ヘルプ出力例・デーモン自動起動除外リストに追記 | #58 セルフアップデート機能 |
 | 3.2 | 2026-10-15 | GUI 稼働中の動作セクションを追加（daemon start/stop/kill/status、update、tui の挙動） | #84 Wails 版 GUI アプリケーション |
 | 3.3 | 2026-11-28 | 出力例を ja ロケールの実出力に修正（start/delete/list/status/config/daemon status、エラーは `rpc error` 形式）、出力言語の注記を追加、add に `--remote-bind-addr` を追記、help はサブコマンド別ヘルプ未実装と明記、グローバルフラグ節に設定ディレクトリ解決順（`XDG_CONFIG_HOME` 含む）を追記、daemon kill が `state.yaml` を削除する旨を追記、update はデーモンのキャッシュを使わない旨に修正、version の動作（最新時は無表示・失敗時は stderr）を明記、TUI パスワードのマスク文字を `*` に統一 | #122, #123, #124, #132, #134 ドキュメント乖離修正 |
+| 3.4 | 2026-11-28 | `connect` が接続済みでも未開始の auto_connect ルールを開始することを明記、`daemon status` / `status` の出力例と説明に警告行（`警告:`）を追記 | #149, #151 ドキュメント乖離修正 |
