@@ -59,7 +59,7 @@ func (m *configManager) LoadConfig() (*Config, error) {
 	if err := m.store.Read(m.configPath(), &cfg); err != nil {
 		return nil, err
 	}
-	m.cached = &cfg
+	m.cached = cfg.Clone()
 	return &cfg, nil
 }
 
@@ -71,8 +71,7 @@ func (m *configManager) SaveConfig(config *Config) error {
 	if err := m.store.Write(m.configPath(), config); err != nil {
 		return err
 	}
-	c := *config
-	m.cached = &c
+	m.cached = config.Clone()
 	return nil
 }
 
@@ -86,8 +85,7 @@ func (m *configManager) GetConfig() *Config {
 		cfg := DefaultConfig()
 		return &cfg
 	}
-	c := *m.cached
-	return &c
+	return m.cached.Clone()
 }
 
 // UpdateConfig は設定をアトミックに変更して保存する。
@@ -95,19 +93,21 @@ func (m *configManager) UpdateConfig(fn func(*Config)) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var cfg Config
+	// コールバックには作業コピーを渡す。保存に失敗してもキャッシュは変わらない。
+	var cfg *Config
 	if m.cached != nil {
-		cfg = *m.cached
+		cfg = m.cached.Clone()
 	} else {
-		cfg = DefaultConfig()
+		d := DefaultConfig()
+		cfg = &d
 	}
 
-	fn(&cfg)
+	fn(cfg)
 
-	if err := m.store.Write(m.configPath(), &cfg); err != nil {
+	if err := m.store.Write(m.configPath(), cfg); err != nil {
 		return err
 	}
-	m.cached = &cfg
+	m.cached = cfg
 	return nil
 }
 
