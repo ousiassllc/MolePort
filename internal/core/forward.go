@@ -1,5 +1,7 @@
 package core
 
+import "fmt"
+
 // ForwardManager はポートフォワーディングルールとセッションを管理する。
 type ForwardManager interface {
 	// AddRule はフォワーディングルールを追加し、割り当てられたルール名を返す。
@@ -48,4 +50,21 @@ type ForwardManager interface {
 
 	// Close は全フォワーディングを停止し、サブスクライバーチャネルを閉じる。
 	Close()
+}
+
+// StopHostForwards は host の停止可能なフォワーディング（Starting / Active / Reconnecting）を全て停止する。
+// SSH 切断時に、切断済みクライアントを掴んだ転送を残さないために使う。
+func StopHostForwards(fm ForwardManager, host string) error {
+	for _, sess := range fm.GetAllSessions() {
+		if sess.Rule.Host != host {
+			continue
+		}
+		if s := sess.Status; s != Starting && s != Active && s != SessionReconnecting {
+			continue
+		}
+		if err := fm.StopForward(sess.Rule.Name); err != nil {
+			return fmt.Errorf("stop forward %q: %w", sess.Rule.Name, err)
+		}
+	}
+	return nil
 }

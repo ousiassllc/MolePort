@@ -107,3 +107,38 @@ func TestForwardManager_AddRule_DefaultRemoteHost(t *testing.T) {
 		t.Errorf("Dynamic RemoteHost = %q, want empty", rules[2].RemoteHost)
 	}
 }
+
+// 永続化済みルール（明示名）と衝突しない自動名を採番する（デーモン再起動後の add を想定）。
+func TestForwardManager_AddRule_AutoNameSkipsExisting(t *testing.T) {
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
+	for _, name := range []string{"forward-1", "forward-2"} {
+		if _, err := fm.AddRule(core.ForwardRule{Name: name, Host: "server1", Type: core.Dynamic, LocalPort: 1080}); err != nil {
+			t.Fatalf("AddRule(%q) error = %v", name, err)
+		}
+	}
+	got, err := fm.AddRule(core.ForwardRule{Host: "server1", Type: core.Dynamic, LocalPort: 1081})
+	if err != nil {
+		t.Fatalf("AddRule() error = %v", err)
+	}
+	if got != "forward-3" {
+		t.Errorf("AddRule() name = %q, want %q", got, "forward-3")
+	}
+}
+
+// 検証エラーでは自動採番の ID を消費しない。
+func TestForwardManager_AddRule_AutoNameNotConsumedOnValidationError(t *testing.T) {
+	fm := NewForwardManager(context.Background(), forwardtest.NewMockSSHManager())
+	if _, err := fm.AddRule(core.ForwardRule{Type: core.Dynamic, LocalPort: 1080}); err == nil {
+		t.Fatal("AddRule() without host should fail")
+	}
+	if _, err := fm.AddRule(core.ForwardRule{Host: "server1", Type: core.Dynamic, LocalPort: 0}); err == nil {
+		t.Fatal("AddRule() with invalid port should fail")
+	}
+	got, err := fm.AddRule(core.ForwardRule{Host: "server1", Type: core.Dynamic, LocalPort: 1080})
+	if err != nil {
+		t.Fatalf("AddRule() error = %v", err)
+	}
+	if got != "forward-1" {
+		t.Errorf("AddRule() name = %q, want %q", got, "forward-1")
+	}
+}
