@@ -54,12 +54,14 @@ document.body.addEventListener("htmx:configRequest", (e) => {
 });
 
 // 3. サーバーが応答できない場合に限る、唯一のクライアント側 UI 生成（汎用エラートースト）。
+//    同じトーストが残っている間は追加しない（再取得の失敗が続いても積み上がらない。閉じれば次の失敗で再表示する）。
 function showErrorToast(): void {
   const stack = document.getElementById("toast-stack");
-  if (!stack) return;
+  if (!stack || stack.querySelector("[data-generic-error]")) return;
   const toast = document.createElement("div");
   toast.className = "mp-toast";
   toast.dataset.kind = "error";
+  toast.setAttribute("data-generic-error", "");
   toast.setAttribute("role", "alert");
   const message = document.createElement("span");
   message.textContent = stack.dataset.errorMessage ?? "";
@@ -176,12 +178,16 @@ function bridgeModals(): void {
   );
 }
 
-// /fragments/credential の再取得時に、表示中のダイアログの要求 ID を伝える（サーバーが同一要求なら差し替えない）。
+// /fragments/credential の再取得時に、表示中のダイアログの要求 ID と待機中の他要求数を伝える
+// （サーバーが同一要求なら差し替えず、待機数が違うときだけ「残り」表示を OOB で更新する）。
 document.body.addEventListener("htmx:configRequest", (e) => {
   const detail = (e as CustomEvent<HTMXConfigRequestDetail & { path: string }>).detail;
   if (detail.path !== "/fragments/credential") return;
   const shown = document.querySelector<HTMLElement>("#credential-root [data-request-id]")?.dataset.requestId;
-  if (shown) detail.headers["X-MolePort-Credential-Shown"] = shown;
+  if (!shown) return;
+  detail.headers["X-MolePort-Credential-Shown"] = shown;
+  const remaining = document.getElementById("credential-remaining")?.dataset.remaining;
+  if (remaining) detail.headers["X-MolePort-Credential-Remaining"] = remaining;
 });
 
 bridgeWailsEvents();

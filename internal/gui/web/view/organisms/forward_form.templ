@@ -109,8 +109,8 @@ templ ForwardForm(in service.ForwardFormInput, errs service.FormErrors, hosts []
 				Input: atoms.Checkbox("auto_connect", in.AutoConnect),
 			})
 			<div class="mp-modal-actions">
-				<button type="button" class="mp-btn" data-variant="secondary" id="forward-form-cancel" data-close-modal>{ i18n.T("gui.forward.form.cancel") }</button>
-				<button type="submit" class="mp-btn" data-variant="primary" id="forward-form-submit">{ i18n.T("gui.forward.form.submit") }</button>
+				@atoms.Button(atoms.ButtonProps{Label: i18n.T("gui.forward.form.cancel"), Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"id": "forward-form-cancel", "data-close-modal": true}})
+				@atoms.Button(atoms.ButtonProps{Label: i18n.T("gui.forward.form.submit"), Variant: atoms.ButtonPrimary, Type: "submit", Attrs: templ.Attributes{"id": "forward-form-submit"}})
 			</div>
 		</form>
 	</dialog>

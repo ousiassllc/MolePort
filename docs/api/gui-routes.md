@@ -39,7 +39,7 @@
 
 | ヘッダー | 値 |
 |---------|----|
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'`（NFR-35。R-4 の結果に応じて最小限の例外を追加） |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`（NFR-35。R-4 の結果に応じて最小限の例外を追加） |
 | `X-Content-Type-Options` | `nosniff` |
 | `Cache-Control` | HTML は `no-store`、`/static/*` は `no-cache` |
 | `Content-Type` | HTML は `text/html; charset=utf-8`。`/static/*` は拡張子ごとの固定表（`.js` / `.mjs` は `text/javascript; charset=utf-8`、`.css` は `text/css; charset=utf-8`、`.map` / `.json` は `application/json` など）で明示し、OS の MIME 登録（Windows のレジストリ）に依存しない（`nosniff` 下の `<script type="module">` のため） |
@@ -64,7 +64,10 @@ HTMX 2 は既定で 4xx/5xx を差し替えない。`app.ts` で `htmx.config.re
 
 ```html
 <div hx-swap-oob="beforeend:#toast-stack">
-  <div id="toast-7" class="toast toast-error" role="alert">ルール 'prod-web' の開始に失敗: port 8080 is in use</div>
+  <div class="mp-toast" data-kind="error" role="alert">
+    <span>ルール 'prod-web' の開始に失敗: port 8080 is in use</span>
+    <button type="button" class="mp-toast-close" data-dismiss-toast aria-label="閉じる">&times;</button>
+  </div>
 </div>
 ```
 
@@ -133,9 +136,9 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 | `/fragments/banner` | — | `LifecycleState` に応じた起動中 / 失敗バナー | `ready` のときは何も描画しない（空） |
 | `/fragments/header` | — | バージョン、PID、稼働表示、更新バッジ（`update_check` 有効かつ新版あり） | 更新バッジは更新があるときのみ。クリックで `POST /actions/update/open` |
 | `/fragments/hosts` | — | ホスト行（`HostView`）。0 件は案内文 | 接続 / 切断 / 転送追加ボタン（`HostActions`） |
-| `/fragments/forwards` | — | 転送行（`ForwardView`）。0 件は案内と追加ボタン | 開始 / 停止 / 削除ボタン（`ForwardActions`） |
+| `/fragments/forwards` | — | 転送行（`ForwardView`）。0 件は案内文のみ（追加ボタンはホスト行にある） | 開始 / 停止 / 削除ボタン（`ForwardActions`） |
 | `/fragments/status` | — | ホスト数・接続数・転送数・アクティブ数 | — |
-| `/fragments/credential` | — | 待機中の先頭の `CredentialView`。`password` / `passphrase` は 1 入力、`keyboard-interactive` は `Prompts` 数だけ入力。`Echo=false` は `type="password"` | 待機中の要求がなければ空の `#credential-root` 内容。`app.ts` は表示中のダイアログの要求 ID をリクエストヘッダー `X-MolePort-Credential-Shown` で送り、先頭の要求と一致すれば `204`（差し替えない。フォーカス復帰の `mp:all` で入力途中の値を失わないため） |
+| `/fragments/credential` | — | 待機中の先頭の `CredentialView`。`password` / `passphrase` は 1 入力、`keyboard-interactive` は `Prompts` 数だけ入力。`Echo=false` は `type="password"` | 待機中の要求がなければ空の `#credential-root` 内容。`app.ts` は表示中のダイアログの要求 ID をリクエストヘッダー `X-MolePort-Credential-Shown` で送り、先頭の要求と一致すれば差し替えない（フォーカス復帰の `mp:all` で入力途中の値を失わないため）。このとき待機中の他要求数（`#credential-remaining` の `data-remaining`）もヘッダー `X-MolePort-Credential-Remaining` で送り、数が同じ（またはヘッダーなし）なら `204`、違うなら `HX-Reswap: none` + 「残り」行（`<p id="credential-remaining" hx-swap-oob="true">`）のみの OOB を `200` で返す |
 | `/fragments/toasts` | — | `NotificationQueue`（GUI Service が保持するメモリ上の FIFO）を **取り出して（drain）** OOB の `beforeend:#toast-stack` で返す。空なら `204`。取り出し時にキューを消すため、このフラグメントのみ読み取りで状態が変わる | — |
 | `/fragments/forward-form` | `host`（任意、選択済みにする） | 転送追加フォーム。種別（local / remote / dynamic）の選択で項目を出し分ける（`hx-get` で再取得） | `type=dynamic` ではリモート項目を描画しない。`type=remote` のときのみバインドアドレスを描画 |
 | `/fragments/forward-delete` | `name` | 削除確認（ルール名表示）。「削除」は `DELETE /actions/forwards/{name}` | — |
@@ -287,3 +290,4 @@ Lit コンポーネントは初期リリースでは存在しない（D-10）。
 | 1.1 | 2026-10-15 | `#toast-stack` の取り込みトリガーと稼働状態時のパネル描画を実装に合わせて明記 | #88 M3-1 ダッシュボード |
 | 1.2 | 2026-10-15 | 操作系の実装反映: `#credential-root`（クレデンシャルダイアログを他モーダルに重ねる）、`X-MolePort-Credential-Shown` による差し替え抑止、クレデンシャルルートの `415` / `400`、422 の差し替え先指定（`HX-Retarget`）、転送追加時の開始失敗の通知経路、モーダルの開閉方法を追記 | #89 M3-2 操作系 |
 | 1.3 | 2026-10-15 | 設定・更新バッジの実装反映: `POST /actions/settings` の応答（`hx-swap="none"`、`HX-Trigger` の JSON 形式、`409`）、テーマのプレビュー/キャンセル、トレイ再構築を #91 に委譲、`/actions/update/open` のキャッシュ参照と `409` 時の `mp:header` | #90 M3-3 設定・更新バッジ |
+| 1.4 | 2026-11-28 | 実装に合わせて修正: `/fragments/credential` の待機数更新（`X-MolePort-Credential-Remaining`）、CSP に `object-src` / `base-uri` / `form-action` / `frame-ancestors` を追加、空の転送パネルは案内文のみ、トーストの markup 例を `mp-toast` に修正 | #95 #99 #100 |

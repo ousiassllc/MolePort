@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 
 	"github.com/a-h/templ"
 
@@ -32,10 +33,21 @@ func NewCredential(cred credential.Prompter) *Credential { return &Credential{cr
 // 同じ要求のダイアログが既に表示されているときは差し替えない（window フォーカス復帰の mp:all で入力途中の値を失わないため）。
 const CredentialShownHeader = "X-MolePort-Credential-Shown" //nolint:gosec // ヘッダー名であり秘密情報ではない
 
+// CredentialRemainingHeader は表示中のダイアログの「待機中の他要求数」（#credential-remaining の data-remaining）を
+// app.ts が付けるリクエストヘッダー。同じ要求のまま待機数が変わったときに、「残り」表示だけを更新するために使う。
+const CredentialRemainingHeader = "X-MolePort-Credential-Remaining" //nolint:gosec // ヘッダー名であり秘密情報ではない
+
 // Dialog は GET /fragments/credential。待機中の先頭の要求があればダイアログ、なければ空を返す。
-// 先頭の要求が CredentialShownHeader と同じなら 204（差し替えなし）。
+// 先頭の要求が CredentialShownHeader と同じなら、ダイアログは差し替えない。
+//   - 待機数も CredentialRemainingHeader と同じ（ヘッダーなしを含む）: 204。
+//   - 待機数が違う: HX-Reswap: none + 「残り」行だけの OOB（入力途中の値を保つ）。
 func (c *Credential) Dialog(w http.ResponseWriter, r *http.Request) {
 	if v, ok := c.cred.Pending(); ok && v.RequestID == r.Header.Get(CredentialShownHeader) {
+		if shown, err := strconv.Atoi(r.Header.Get(CredentialRemainingHeader)); err == nil && shown != v.Remaining {
+			w.Header().Set("HX-Reswap", "none")
+			render(w, r, http.StatusOK, organisms.CredentialRemaining(v.Remaining, true))
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

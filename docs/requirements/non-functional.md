@@ -214,7 +214,7 @@ MolePort の性能、セキュリティ、可用性、運用性に関する非�
 ### NFR-35: GUI の Web セキュリティ
 
 - **要件**: HTML 出力は Templ の自動エスケープを使用し、ユーザー入力・SSH config 由来の値（ホスト名、ルール名、エラー文字列）を未エスケープで出力しないこと
-- **要件**: レスポンスに `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'` を付与し、インラインスクリプト・外部リソース読み込みを禁止すること（Wails ランタイムの注入が CSP と両立しない場合は PoC で検証した最小限の例外のみ許可）
+- **要件**: レスポンスに `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` を付与し、インラインスクリプト・外部リソース読み込みを禁止すること（Wails ランタイムの注入が CSP と両立しない場合は PoC で検証した最小限の例外のみ許可）
 - **要件**: 状態変更を伴うアクションルートは `POST` / `DELETE` のみとし、WebView 内から発行されたリクエスト（Wails 起動時に生成した起動ごとのランダムトークンを `X-MolePort-Token` ヘッダーで照合）のみ受け付けること
 - **備考**: AssetServer は他プロセスから到達できないが、WebView 内で表示される外部コンテンツ（ホスト名等に含まれる文字列）から意図しない状態変更が行われることを防ぐ多層防御として導入する
 

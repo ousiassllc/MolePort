@@ -247,8 +247,8 @@ HALT の 3 パターンのうち、JSON API ルート（Huma）は初期リリ�
 - すべての HTML は Templ で生成する（NFR-35: 自動エスケープ）
 - **実行可能なアクションだけをレンダリングする**。例: 状態が `Active` の転送行は「停止」のみ、`Stopped` / `Error` の行は「開始」のみ、`Pending Auth` / `Disconnected` のホストは「接続」のみを描画する（UC-29, UC-30）。ボタンの `hx-post` URL はサーバーが生成する（クライアントに URL 規則を持たせない）
 - アクションの可否は `service` の ViewModel が `Actions` フィールド（`CanStart`, `CanStop`, `CanDelete`, `CanConnect`, `CanDisconnect`）として計算し、Templ は条件分岐のみを行う
-- 検証エラーはフォームを再レンダリングして `422` で返す（`hx-target-422` + response-targets 拡張）。業務エラーは OOB でトーストを返す
-- 二重送信防止は `hx-disabled-elt="this"`、進行表示は `hx-indicator`（スケルトンスクリーンは使わない）
+- 検証エラーはフォームを再レンダリングして `422` で返す（`HX-Retarget` / `HX-Reswap` レスポンスヘッダーでモーダルへ差し替える。response-targets 拡張は使わない）。業務エラーは OOB でトーストを返す
+- 二重送信防止は `hx-disabled-elt="this"`、進行表示は `hx-disabled-elt`（送信中のボタンを無効化する。`hx-indicator` は使わず、スケルトンスクリーンも使わない）
 
 ### Atomic Design
 

@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/web/view/atoms"
 	"github.com/ousiassllc/moleport/internal/gui/web/view/layout"
+	"github.com/ousiassllc/moleport/internal/gui/web/view/molecules"
 	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
 	"github.com/ousiassllc/moleport/internal/gui/web/view/pages"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -160,5 +161,68 @@ func TestDuration_EmptyRendersNothing(t *testing.T) {
 	}
 	if out := renderToString(t, atoms.Duration("Uptime", "5m 0s")); !strings.Contains(out, "5m 0s") {
 		t.Errorf("稼働時間が含まれない: %q", out)
+	}
+}
+
+func TestButton_TypeDefaultsToButtonAndAllowsSubmit(t *testing.T) {
+	if out := renderToString(t, atoms.Button(atoms.ButtonProps{Label: "x", Variant: atoms.ButtonPrimary})); !strings.Contains(out, `type="button"`) {
+		t.Errorf("既定は type=button: %s", out)
+	}
+	if out := renderToString(t, atoms.Button(atoms.ButtonProps{Label: "x", Variant: atoms.ButtonPrimary, Type: "submit"})); !strings.Contains(out, `type="submit"`) {
+		t.Errorf("Type=submit は type=submit: %s", out)
+	}
+	if out := renderToString(t, atoms.Button(atoms.ButtonProps{Label: "x", Variant: atoms.ButtonPrimary, Type: "reset"})); !strings.Contains(out, `type="button"`) {
+		t.Errorf("未知の Type は type=button にする: %s", out)
+	}
+}
+
+func TestFormField_ErrorIsDescribedByInput(t *testing.T) {
+	field := func(msg string) string {
+		return renderToString(t, molecules.FormField(molecules.FormFieldProps{
+			Label: "Port", Name: "local_port", Error: msg,
+			Input: atoms.TextInput(atoms.TextInputProps{Name: "local_port", Invalid: msg != ""}),
+		}))
+	}
+
+	out := field("bad port")
+	for _, want := range []string{`aria-describedby="field-local_port-error"`, `id="field-local_port-error"`, `aria-invalid`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q が含まれない: %s", want, out)
+		}
+	}
+	if out := field(""); strings.Contains(out, "aria-describedby") || strings.Contains(out, "-error") {
+		t.Errorf("エラーなしは aria-describedby もエラー要素も出さない: %s", out)
+	}
+
+	sel := renderToString(t, atoms.Select(atoms.SelectProps{Name: "language", Invalid: true}))
+	if !strings.Contains(sel, `aria-describedby="field-language-error"`) {
+		t.Errorf("Select も aria-describedby を持つ: %s", sel)
+	}
+	if sel := renderToString(t, atoms.Select(atoms.SelectProps{Name: "language"})); strings.Contains(sel, "aria-describedby") {
+		t.Errorf("Invalid でない Select は aria-describedby を出さない: %s", sel)
+	}
+}
+
+func TestSettingsForm_ThemeErrorDescribesFieldset(t *testing.T) {
+	out := renderToString(t, organisms.SettingsForm(service.SettingsView{}, service.FormErrors{"theme_base": "bad base"}))
+	for _, want := range []string{`id="settings-theme-base" aria-describedby="field-theme_base-error"`, `id="field-theme_base-error"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q が含まれない: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "field-theme_accent-error") {
+		t.Errorf("エラーのない accent には aria-describedby / エラー要素を出さない: %s", out)
+	}
+}
+
+func TestOrganismButtons_RenderedByAtom(t *testing.T) {
+	out := renderToString(t, organisms.SettingsForm(service.SettingsView{}, nil))
+	for _, want := range []string{
+		`id="settings-cancel"`, `data-close-modal`, `type="button"`,
+		`id="settings-submit"`, `type="submit"`, `data-variant="primary"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q が含まれない: %s", want, out)
+		}
 	}
 }
