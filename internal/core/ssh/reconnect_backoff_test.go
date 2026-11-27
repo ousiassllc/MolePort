@@ -51,6 +51,21 @@ func TestNextBackoff(t *testing.T) {
 	}
 }
 
+// initial_delay が 0 以下でも max_retries: 0（無制限）で待機なしのループにならない。
+func TestInitialBackoff(t *testing.T) {
+	for _, tt := range []struct{ initial, maxDelay, want time.Duration }{
+		{0, 0, defaultInitialDelay},
+		{-time.Second, time.Minute, defaultInitialDelay},
+		{0, time.Millisecond, time.Millisecond},
+		{5 * time.Second, time.Second, time.Second},
+		{500 * time.Millisecond, time.Minute, 500 * time.Millisecond},
+	} {
+		if got := initialBackoff(tt.initial, tt.maxDelay); got != tt.want {
+			t.Errorf("initialBackoff(%v, %v) = %v, want %v", tt.initial, tt.maxDelay, got, tt.want)
+		}
+	}
+}
+
 // max_retries: 0 は無制限（グローバル設定・ホスト別オーバーライドの両方）。
 func TestSSHManager_Reconnect_MaxRetriesZeroIsUnlimited(t *testing.T) {
 	zero := 0
