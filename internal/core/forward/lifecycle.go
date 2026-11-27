@@ -2,6 +2,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -9,10 +10,17 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+var errManagerClosed = errors.New("forward manager is closed")
+
 // StartForward はフォワーディングセッションを開始する。
 // cb が非 nil の場合、SSH 接続にクレデンシャルコールバックを使用する。
 func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallback) error {
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return errManagerClosed
+	}
+
 	rule, exists := m.rules[ruleName]
 	if !exists {
 		m.mu.Unlock()
@@ -24,15 +32,28 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		return &core.AlreadyActiveError{Name: ruleName}
 	}
 
-	m.active[ruleName] = &activeForward{starting: true}
+	// 開始中プレースホルダー。Stop / Delete / Close はこのエントリを active から外すため、
+	// 開始処理側は m.active[ruleName] が自分のプレースホルダーのままかで中断要求を検知する。
+	placeholder := &activeForward{starting: true}
+	m.active[ruleName] = placeholder
 	m.mu.Unlock()
 
 	cleanup := func() {
 		m.mu.Lock()
-		if af, ok := m.active[ruleName]; ok && af.starting {
+		if m.active[ruleName] == placeholder {
 			delete(m.active, ruleName)
 		}
 		m.mu.Unlock()
+	}
+
+	// stillStarting は開始処理が中断されていなければ nil を返す。
+	stillStarting := func() error {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		if m.active[ruleName] != placeholder || m.closed {
+			return fmt.Errorf("forward start cancelled: %s", ruleName)
+		}
+		return nil
 	}
 
 	if !m.sshManager.IsConnected(rule.Host) {
@@ -40,6 +61,11 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 			cleanup()
 			return fmt.Errorf("failed to connect to host %s: %w", rule.Host, err)
 		}
+	}
+
+	if err := stillStarting(); err != nil {
+		cleanup()
+		return err
 	}
 
 	sshConn, err := m.sshManager.GetSSHConnection(rule.Host)
@@ -57,7 +83,6 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	ctx, cancel := context.WithCancel(m.ctx)
 
 	listener, err := openListener(ctx, sshConn, rule)
-
 	if err != nil {
 		cancel()
 		cleanup()
@@ -76,7 +101,17 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		cancel:   cancel,
 	}
 
+	// 開始処理中に Stop / Delete / Close された場合は、確立したリスナーを破棄する。
 	m.mu.Lock()
+	if m.active[ruleName] != placeholder || m.closed {
+		if m.active[ruleName] == placeholder {
+			delete(m.active, ruleName)
+		}
+		m.mu.Unlock()
+		_ = listener.Close()
+		cancel()
+		return fmt.Errorf("forward start cancelled: %s", ruleName)
+	}
 	m.active[ruleName] = af
 	m.mu.Unlock()
 
@@ -135,7 +170,8 @@ func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession
 		return nil
 	}
 
-	// 起動中プレースホルダーの場合はエントリを削除するのみ
+	// 起動中プレースホルダーの場合はエントリを削除するのみ。
+	// 開始処理側が active の不一致を検知して中断する。
 	if af.starting {
 		delete(m.active, ruleName)
 		return nil
@@ -153,11 +189,15 @@ func (m *forwardManager) stopForwardLocked(ruleName string) *core.ForwardSession
 
 // Close は全フォワーディングを停止し、サブスクライバーチャネルを閉じる。
 func (m *forwardManager) Close() {
+	// 先に closed を立て、停止中に新たな開始が確立されないようにする。
+	m.mu.Lock()
+	m.closed = true
+	m.mu.Unlock()
+
 	_ = m.StopAllForwards()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.closed = true
 	m.events.CloseSubscribers()
 }
