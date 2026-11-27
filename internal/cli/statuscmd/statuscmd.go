@@ -153,4 +153,7 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	}
 	fmt.Println(i18n.T("cli.status.forwards_summary", map[string]any{"Total": len(sessions.Sessions), "Active": activeSessions, "Stopped": stoppedSessions}))
 	fmt.Println(i18n.T("cli.status.traffic_summary", map[string]any{"Sent": format.Bytes(totalSent), "Received": format.Bytes(totalRecv)}))
+	for _, w := range daemonStatus.Warnings {
+		fmt.Println(i18n.T("cli.daemon.status_warning", map[string]any{"Message": w}))
+	}
 }

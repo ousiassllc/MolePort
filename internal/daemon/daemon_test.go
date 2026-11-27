@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/core"
 )
 
 // createTestConfigDir はテスト用の設定ディレクトリを作成し、最小限の SSH config を配置する。
@@ -213,5 +216,48 @@ func TestPIDFilePath(t *testing.T) {
 	want := "/tmp/test/moleport.pid"
 	if got != want {
 		t.Errorf("PIDFilePath() = %q, want %q", got, want)
+	}
+}
+
+// 壊れた config.yaml でも起動でき、警告が daemon.status に載り、
+// ルール保存後も元のファイルが config.yaml.bak に残る。
+func TestDaemon_New_BrokenConfigWarnsAndKeepsBackup(t *testing.T) {
+	dir := t.TempDir()
+	broken := "forwards:\n  - name: keep-me\n   host: [unclosed\n"
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := New(dir, "test")
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer d.cancel()
+
+	var found bool
+	for _, w := range d.Status().Warnings {
+		if strings.Contains(w, "failed to load config.yaml") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Status().Warnings = %v, want config load failure", d.Status().Warnings)
+	}
+
+	rule := core.ForwardRule{Name: "web", Host: "dev", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80}
+	if _, err := d.fwdMgr.AddRule(rule); err != nil {
+		t.Fatal(err)
+	}
+	if err := core.PersistForwardRules(d.cfgMgr, d.fwdMgr); err != nil {
+		t.Fatalf("PersistForwardRules() error: %v", err)
+	}
+
+	got, err := os.ReadFile(path + ".bak") //nolint:gosec // テスト用の一時ディレクトリ内のパス
+	if err != nil {
+		t.Fatalf("backup not created: %v", err)
+	}
+	if string(got) != broken {
+		t.Errorf("backup = %q, want original", got)
 	}
 }

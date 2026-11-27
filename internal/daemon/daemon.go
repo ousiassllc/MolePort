@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/infra"
+	"github.com/ousiassllc/moleport/internal/infra/permcheck"
 	"github.com/ousiassllc/moleport/internal/infra/sshconfig"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc"
@@ -91,8 +92,12 @@ func New(configDir string, version string) (*Daemon, error) {
 
 	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
+	var warnings []string
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
+		// 読み込めなかった config.yaml は最初の書き込み前に config.yaml.bak へ退避される（yamlstore）。
+		slog.Error("failed to load config; using defaults", "path", filepath.Join(configDir, "config.yaml"), "error", err)
+		warnings = append(warnings, fmt.Sprintf("failed to load config.yaml (using defaults; the original file is kept as config.yaml.bak when settings are saved): %v", err))
 		c := core.DefaultConfig()
 		cfg = &c
 	}
@@ -117,7 +122,6 @@ func New(configDir string, version string) (*Daemon, error) {
 	fwdMgr := forward.NewForwardManager(ctx, sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
-	var warnings []string
 	for _, rule := range cfg.Forwards {
 		if _, err := fwdMgr.AddRule(rule); err != nil {
 			slog.Warn("failed to load forward rule", "rule", rule.Name, "error", err)
@@ -125,8 +129,17 @@ func New(configDir string, version string) (*Daemon, error) {
 		}
 	}
 
+	// config.yaml を直接編集した無効な間隔（0 以下・1h 未満）は補正して警告する（NFR-31）。
+	checkInterval, adjusted := update.NormalizeInterval(cfg.UpdateCheck.Interval.Duration)
+	if adjusted {
+		slog.Warn("update_check.interval is invalid; adjusted", "configured", cfg.UpdateCheck.Interval.String(), "using", checkInterval.String())
+		warnings = append(warnings, fmt.Sprintf("update_check.interval %s is invalid (minimum %s); using %s", cfg.UpdateCheck.Interval.Duration, update.MinInterval, checkInterval))
+	}
+	// 設定ディレクトリ・設定ファイル・SSH config のパーミッションが緩い場合は警告する（NFR-09 / NFR-10）
+	warnings = append(warnings, permcheck.Warnings(configDir, sshConfigPath)...)
+
 	pidFile := pidfile.NewPIDFile(PIDFilePath(configDir))
-	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, cfg.UpdateCheck.Interval.Duration)
+	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, checkInterval)
 
 	// Daemon を先に生成し、IPC コンポーネントに渡す
 	d := &Daemon{

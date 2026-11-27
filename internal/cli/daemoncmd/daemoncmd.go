@@ -138,6 +138,9 @@ func runDaemonStatus(configDir string) {
 	fmt.Println(i18n.T("cli.daemon.status_clients", map[string]any{"Count": status.ConnectedClients}))
 	fmt.Println(i18n.T("cli.daemon.status_ssh", map[string]any{"Count": status.ActiveSSHConnections}))
 	fmt.Println(i18n.T("cli.daemon.status_forwards", map[string]any{"Count": status.ActiveForwards}))
+	for _, w := range status.Warnings {
+		fmt.Println(i18n.T("cli.daemon.status_warning", map[string]any{"Message": w}))
+	}
 }
 
 // RunDaemonMode はデーモンモードで起動する。
