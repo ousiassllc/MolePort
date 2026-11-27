@@ -65,6 +65,22 @@ func (d *Daemon) logRestoreSummary(hostName string, results []core.ForwardRestor
 	slog.Info("forward restore summary", "host", hostName, "total", len(results), "succeeded", succeeded, "failed", failed)
 }
 
+// startBackgroundRestore はセッション復元と auto_connect の接続を d.wg 管理下の
+// goroutine で実行する。SSH ダイヤルに時間がかかっても Start をブロックしない（NFR-01）。
+func (d *Daemon) startBackgroundRestore() {
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		d.restoreState()
+		d.autoStartForwards()
+	}()
+}
+
+// shuttingDown はデーモンの停止が始まっているかを返す。
+func (d *Daemon) shuttingDown() bool {
+	return d.ctx != nil && d.ctx.Err() != nil
+}
+
 // restoreState は前回の状態を復元する。auto_restore が有効な場合のみ。
 func (d *Daemon) restoreState() {
 	cfg := d.cfgMgr.GetConfig()
@@ -79,6 +95,9 @@ func (d *Daemon) restoreState() {
 	}
 
 	for _, rule := range state.ActiveForwards {
+		if d.shuttingDown() {
+			return
+		}
 		if err := d.fwdMgr.StartForward(rule.Name, nil); err != nil {
 			slog.Warn("failed to restore forward", "rule", rule.Name, "error", err)
 		}
@@ -92,6 +111,9 @@ func (d *Daemon) autoStartForwards() {
 
 	var started, skipped, failed int
 	for _, rule := range cfg.Forwards {
+		if d.shuttingDown() {
+			break
+		}
 		if !rule.AutoConnect {
 			continue
 		}

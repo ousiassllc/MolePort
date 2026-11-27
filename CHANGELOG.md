@@ -21,6 +21,10 @@
 - Start the host's `auto_connect` forwards on `ssh.connect` / `moleport connect` as documented / `ssh.connect`・`moleport connect` で当該ホストの `auto_connect` ルールを仕様どおり開始 (#118)
 - Fix docs for `ssh.connect` idempotency and error codes 1002/1003 to match the implementation / `ssh.connect` の冪等性とエラーコード 1002/1003 のドキュメントを実装に合わせて修正 (#121)
 - Fix `moleport start` failing on hosts that need password / passphrase / keyboard-interactive input: register the credential handler and use the 60s connect timeout like `moleport connect` / `moleport start` が認証入力の必要なホストで失敗する問題を修正（`moleport connect` と同じクレデンシャルハンドラーと 60 秒タイムアウトを使用） (#104)
+- Deliver daemon event notifications in order through a bounded per-client queue and disconnect clients that stop reading / デーモンのイベント通知をクライアントごとの有界キューで順序どおり配信し、読み取りが滞ったクライアントを切断 (#107)
+- Release pending IPC client calls immediately when the connection drops / IPC クライアントの接続断時に保留中の Call を即座に解放 (#110)
+- Restore sessions and auto-connect in the background, and force-close after 5 seconds on shutdown (NFR-16) / セッション復元・auto_connect をバックグラウンド化し、停止処理に 5 秒の強制切断タイムアウトを追加 (#128, #116)
+- Make `moleport update` wait for the daemon to stop before replacing the binary and restart only a daemon it stopped / `moleport update` がデーモン停止完了を待ってからバイナリを置換し、停止したデーモンのみ再起動 (#111)
 
 ## [v1.0.0] - 2026-03-15
 

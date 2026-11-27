@@ -138,3 +138,42 @@ func TestUpdate_ProgressCallback(t *testing.T) {
 		}
 	}
 }
+
+// beforeReplace フックがエラーを返した場合、バイナリは置換されず Update が中断する。
+func TestUpdate_BeforeReplaceError_AbortsWithoutReplacing(t *testing.T) {
+	execPath := filepath.Join(t.TempDir(), "moleport")
+	if err := os.WriteFile(execPath, []byte("old"), 0o755); err != nil { //nolint:gosec // テスト用実行可能ファイル
+		t.Fatalf("write test binary: %v", err)
+	}
+
+	assetName := fmt.Sprintf("moleport_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	tarGzData := createTestTarGz(t, "moleport", []byte("new"))
+	checksumData := createTestChecksums(t, map[string][]byte{assetName: tarGzData})
+	srv := newUpdaterTestServer(t, "v1.1.0",
+		map[string]githubRelease{
+			"v1.1.0": {TagName: "v1.1.0", Assets: []githubReleaseAsset{{Name: assetName}, {Name: "checksums.txt"}}},
+		},
+		map[string][]byte{assetName: tarGzData, "checksums.txt": checksumData},
+	)
+	defer srv.Close()
+
+	u := NewUpdater(newTestChecker(srv.URL, "v1.0.0", true))
+	u.execPath = execPath
+	hookErr := fmt.Errorf("daemon still running")
+	u.SetBeforeReplace(func() error { return hookErr })
+
+	var stages []string
+	err := u.Update(t.Context(), func(stage string) { stages = append(stages, stage) })
+	if err == nil || !strings.Contains(err.Error(), hookErr.Error()) {
+		t.Fatalf("Update() error = %v, want it to wrap %v", err, hookErr)
+	}
+	got, _ := os.ReadFile(execPath) //nolint:gosec // テスト用の一時ファイル
+	if string(got) != "old" {
+		t.Errorf("binary = %q, want it unchanged", got)
+	}
+	for _, s := range stages {
+		if s == "replacing" {
+			t.Errorf("stages = %v, should not reach replacing", stages)
+		}
+	}
+}

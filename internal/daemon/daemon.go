@@ -24,6 +24,9 @@ import (
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
+// defaultShutdownTimeout は切断処理（NFR-16）の上限時間。
+const defaultShutdownTimeout = 5 * time.Second
+
 // LogConfig はデーモンのログ設定を保持する。
 type LogConfig struct {
 	Path  string
@@ -79,6 +82,9 @@ type Daemon struct {
 	wg      sync.WaitGroup
 	stopped bool
 	purge   bool
+
+	// shutdownTimeout は切断処理の上限。0 以下なら defaultShutdownTimeout を使う（テスト用に上書き可）。
+	shutdownTimeout time.Duration
 
 	warnings []string
 }
@@ -148,6 +154,11 @@ func New(configDir string, version string) (*Daemon, error) {
 		return d.server.SendNotification(clientID, notification)
 	})
 
+	// 送信キューが溢れた（読み取りが滞っている）クライアントは切断する
+	broker.SetOnOverflow(func(clientID string) {
+		d.server.DisconnectClient(clientID)
+	})
+
 	handler := ipchandler.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d, versionChecker)
 	server := ipc.NewIPCServer(SocketPath(configDir), handler.Handle)
 
@@ -201,8 +212,7 @@ func (d *Daemon) Start(ctx context.Context) error {
 	d.versionChecker.Start(d.ctx, versionCheckInterval)
 
 	d.startEventRouting()
-	d.restoreState()
-	d.autoStartForwards()
+	d.startBackgroundRestore()
 
 	slog.Info("daemon started", "pid", os.Getpid(), "config_dir", d.configDir)
 	return nil
@@ -235,14 +245,7 @@ func (d *Daemon) Stop() error {
 		d.saveState()
 	}
 
-	if err := d.fwdMgr.StopAllForwards(); err != nil {
-		slog.Warn("failed to stop all forwards", "error", err)
-	}
-	d.fwdMgr.Close()
-	d.sshMgr.Close()
-
-	// イベントルーティングゴルーチンの終了を待つ
-	d.wg.Wait()
+	d.closeComponents()
 
 	if err := d.server.Stop(); err != nil {
 		slog.Warn("failed to stop ipc server", "error", err)
@@ -254,6 +257,37 @@ func (d *Daemon) Stop() error {
 
 	slog.Info("daemon stopped")
 	return nil
+}
+
+// closeComponents はフォワード停止・SSH クローズ・バックグラウンド goroutine の終了待ちを行う。
+// NFR-16: 切断処理は shutdownTimeout 以内に完了させ、超過した場合は警告ログを出して
+// 後続のソケット・PID ファイルの解放に進む（強制切断）。
+func (d *Daemon) closeComponents() {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := d.fwdMgr.StopAllForwards(); err != nil {
+			slog.Warn("failed to stop all forwards", "error", err)
+		}
+		d.fwdMgr.Close()
+		d.sshMgr.Close()
+
+		// イベントルーティング・復元ゴルーチンの終了を待つ
+		d.wg.Wait()
+	}()
+
+	timeout := d.shutdownTimeout
+	if timeout <= 0 {
+		timeout = defaultShutdownTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+	case <-timer.C:
+		slog.Warn("shutdown timed out; forcing close", "timeout", timeout)
+	}
 }
 
 // Wait はシグナル (SIGTERM/SIGINT) を待ち、受信したら Stop() を呼ぶ。

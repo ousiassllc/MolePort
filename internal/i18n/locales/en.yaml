@@ -136,6 +136,7 @@ cli:
     failed: "Update failed: {{.Error}}"
     dev_build: "Cannot update dev build (install a release build)"
     restart_failed: "Failed to restart daemon. Run 'moleport daemon start' manually."
+    stop_failed: "Failed to stop daemon: {{.Error}}. Update aborted; run 'moleport daemon kill' and retry."
   tui:
     daemon_start_failed: "Failed to start daemon: {{.Error}}"
     daemon_started: "Daemon started (PID: {{.PID}})"

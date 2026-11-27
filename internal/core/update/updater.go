@@ -40,6 +40,8 @@ type Updater struct {
 	repoName   string
 	apiBase    string
 	execPath   string // テスト用。空の場合は os.Executable() を使用
+
+	beforeReplace func() error
 }
 
 // NewUpdater は VersionChecker から Updater を生成する。
@@ -51,6 +53,12 @@ func NewUpdater(checker *VersionChecker) *Updater {
 		repoName:   checker.repoName,
 		apiBase:    checker.apiBase,
 	}
+}
+
+// SetBeforeReplace はバイナリ置換の直前に呼ばれるフックを設定する。
+// フックがエラーを返した場合、バイナリは置換されず Update はそのエラーで中断する。
+func (u *Updater) SetBeforeReplace(fn func() error) {
+	u.beforeReplace = fn
 }
 
 // FindAsset は指定バージョンのリリースからアセット URL を検索する。
@@ -138,6 +146,11 @@ func (u *Updater) Update(ctx context.Context, progress func(stage string)) error
 	}
 
 	// 8-10. バイナリを置換
+	if u.beforeReplace != nil {
+		if err := u.beforeReplace(); err != nil {
+			return fmt.Errorf("before replace: %w", err)
+		}
+	}
 	progress("replacing")
 	execPath := u.execPath
 	if execPath == "" {
