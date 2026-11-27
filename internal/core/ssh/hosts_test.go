@@ -37,6 +37,32 @@ func TestSSHManager_LoadHosts_ParseError(t *testing.T) {
 	}
 }
 
+func TestSSHManager_LoadHosts_PreservesState(t *testing.T) {
+	sm := newTestSSHManager(testHosts(), func() core.SSHConnection {
+		return &mockSSHConnection{client: nil, isAlive: true}
+	})
+	if _, err := sm.LoadHosts(); err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+	if err := sm.Connect("server1"); err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+
+	loaded, err := sm.LoadHosts()
+	if err != nil {
+		t.Fatalf("LoadHosts() error = %v", err)
+	}
+	if loaded[0].State != core.Connected {
+		t.Errorf("server1 state = %v, want %v", loaded[0].State, core.Connected)
+	}
+	if loaded[1].State != core.Disconnected {
+		t.Errorf("server2 state = %v, want %v", loaded[1].State, core.Disconnected)
+	}
+	if got := sm.GetHosts()[0].State; got != core.Connected {
+		t.Errorf("cached server1 state = %v, want %v", got, core.Connected)
+	}
+}
+
 func TestSSHManager_GetHost(t *testing.T) {
 	hosts := testHosts()
 	sm := newTestSSHManager(hosts, nil)
