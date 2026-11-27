@@ -111,7 +111,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 - `<html lang="{ja|en}" data-theme="{system|dark|light}" data-accent="{...}">`（`config.yaml` の保存値）
 - `<meta name="mp-token" content="{起動ごとのランダムトークン}">`
 - `<script type="module" src="/static/dist/js/app.js">`、`<script src="/static/dist/js/htmx.min.js">`、`<link rel="stylesheet" href="/static/dist/css/app.css">`
-- `#header` / `#hosts-panel` / `#forwards-panel` / `#status-bar` / `#modal-root` / `#credential-root` / `#toast-stack`
+- `#header` / `#hosts-panel` / `#forwards-panel` / `#status-bar` / `#modal-root` / `#credential-root` / `#toast-stack` / `#toast-messages`（`hidden`。`app.ts` の汎用エラートーストに使うローカライズ済み文言を `data-error-message` / `data-dismiss-label` で持つ）
 - ライフサイクル状態（`starting` / `ready` / `failed`）に応じたバナー（`#status-banner-region`。`hx-get="/fragments/banner"` を `mp:all` / `mp:status` で再取得し、`ready` 後に消える）。`ready` でない間はアクションボタンを描画しない
 
 各領域は初期表示でインライン展開し、更新トリガーを持つ。
@@ -229,7 +229,7 @@ JSON API ルート（HALT の API ルート）は初期リリースでは提供�
 
 | 結果 | ステータス | 本文 |
 |------|-----------|------|
-| 成功 | `200` | 本文は OOB トースト（success）のみ（フォームは `hx-swap="none"`）。`HX-Refresh` は使わず `HX-Trigger: {"mp:close-modal": "", "mp:all": "", "mp:settings-applied": {...}}`（全フラグメントを新しい言語で再取得し、`<html>` の `lang` / `data-theme` / `data-accent` は `app.ts` が `mp:settings-applied` の値で更新する） |
+| 成功 | `200` | 本文は OOB トースト（success）と、`#toast-messages` の OOB 差し替え（`hx-swap-oob="true"`。新しい言語の汎用エラー文言・閉じるラベル。`#toast-stack` は置換せず表示中のトーストを消さない）のみ（フォームは `hx-swap="none"`）。`HX-Refresh` は使わず `HX-Trigger: {"mp:close-modal": "", "mp:all": "", "mp:settings-applied": {...}}`（全フラグメントを新しい言語で再取得し、`<html>` の `lang` / `data-theme` / `data-accent` は `app.ts` が `mp:settings-applied` の値で更新する） |
 | 検証エラー | `422` | `SettingsForm` の再描画（`FormErrors` 付き、入力値保持）。`HX-Retarget: #modal-root` |
 | 起動中 | `409` | OOB トースト（起動中です） |
 

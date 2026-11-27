@@ -38,8 +38,8 @@ templ TextInput(p TextInputProps) {
 		autocomplete="off"
 		required?={ p.Required }
 		autofocus?={ p.Autofocus }
-		aria-invalid?={ p.Invalid }
 		if p.Invalid {
+			aria-invalid="true"
 			aria-describedby={ ErrorID(p.Name) }
 		}
 		{ p.Attrs... }

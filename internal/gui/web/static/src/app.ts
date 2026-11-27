@@ -58,18 +58,19 @@ document.body.addEventListener("htmx:configRequest", (e) => {
 function showErrorToast(): void {
   const stack = document.getElementById("toast-stack");
   if (!stack || stack.querySelector("[data-generic-error]")) return;
+  const messages = document.getElementById("toast-messages")?.dataset;
   const toast = document.createElement("div");
   toast.className = "mp-toast";
   toast.dataset.kind = "error";
   toast.setAttribute("data-generic-error", "");
   toast.setAttribute("role", "alert");
   const message = document.createElement("span");
-  message.textContent = stack.dataset.errorMessage ?? "";
+  message.textContent = messages?.errorMessage ?? "";
   const close = document.createElement("button");
   close.type = "button";
   close.className = "mp-toast-close";
   close.setAttribute("data-dismiss-toast", "");
-  close.setAttribute("aria-label", stack.dataset.dismissLabel ?? "");
+  close.setAttribute("aria-label", messages?.dismissLabel ?? "");
   close.textContent = "\u00d7";
   toast.append(message, close);
   stack.append(toast);

@@ -99,7 +99,7 @@ func TestBaseLayout_EscapesTokenAndRendersChildren(t *testing.T) {
 	if strings.Contains(out, "<script>x</script>") {
 		t.Errorf("トークンがエスケープされていない: %s", out)
 	}
-	for _, want := range []string{`lang="ja"`, `data-theme="dark"`, `data-accent="blue"`, "CHILD", `id="modal-root"`, `id="toast-stack"`} {
+	for _, want := range []string{`lang="ja"`, `data-theme="dark"`, `data-accent="blue"`, "CHILD", `id="modal-root"`, `id="toast-stack"`, `id="toast-messages"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q が含まれない: %s", want, out)
 		}
@@ -185,21 +185,39 @@ func TestFormField_ErrorIsDescribedByInput(t *testing.T) {
 	}
 
 	out := field("bad port")
-	for _, want := range []string{`aria-describedby="field-local_port-error"`, `id="field-local_port-error"`, `aria-invalid`} {
+	for _, want := range []string{`aria-describedby="field-local_port-error"`, `id="field-local_port-error"`, `aria-invalid="true"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q が含まれない: %s", want, out)
 		}
 	}
-	if out := field(""); strings.Contains(out, "aria-describedby") || strings.Contains(out, "-error") {
+	if out := field(""); strings.Contains(out, "aria-describedby") || strings.Contains(out, "-error") || strings.Contains(out, "aria-invalid") {
 		t.Errorf("エラーなしは aria-describedby もエラー要素も出さない: %s", out)
 	}
 
 	sel := renderToString(t, atoms.Select(atoms.SelectProps{Name: "language", Invalid: true}))
-	if !strings.Contains(sel, `aria-describedby="field-language-error"`) {
-		t.Errorf("Select も aria-describedby を持つ: %s", sel)
+	if !strings.Contains(sel, `aria-describedby="field-language-error"`) || !strings.Contains(sel, `aria-invalid="true"`) {
+		t.Errorf("Select も aria-describedby と aria-invalid=\"true\" を持つ: %s", sel)
 	}
-	if sel := renderToString(t, atoms.Select(atoms.SelectProps{Name: "language"})); strings.Contains(sel, "aria-describedby") {
-		t.Errorf("Invalid でない Select は aria-describedby を出さない: %s", sel)
+	if sel := renderToString(t, atoms.Select(atoms.SelectProps{Name: "language"})); strings.Contains(sel, "aria-describedby") || strings.Contains(sel, "aria-invalid") {
+		t.Errorf("Invalid でない Select は aria-describedby / aria-invalid を出さない: %s", sel)
+	}
+}
+
+func TestToastMessages_OOBOnlyWhenRequested(t *testing.T) {
+	plain := renderToString(t, organisms.ToastMessages(false))
+	for _, want := range []string{`id="toast-messages"`, `data-error-message="`, `data-dismiss-label="`, "hidden"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("%q が含まれない: %s", want, plain)
+		}
+	}
+	if strings.Contains(plain, "hx-swap-oob") {
+		t.Errorf("通常描画は OOB にしない: %s", plain)
+	}
+	if oob := renderToString(t, organisms.ToastMessages(true)); !strings.Contains(oob, `hx-swap-oob="true"`) {
+		t.Errorf("oob=true は hx-swap-oob=\"true\" を出す: %s", oob)
+	}
+	if stack := renderToString(t, organisms.ToastStack()); strings.Contains(stack, "data-error-message") {
+		t.Errorf("#toast-stack は文言属性を持たない: %s", stack)
 	}
 }
 

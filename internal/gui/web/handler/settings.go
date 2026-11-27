@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/a-h/templ"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/service/settings"
 	"github.com/ousiassllc/moleport/internal/gui/web/view/organisms"
@@ -72,7 +73,11 @@ func (s *Settings) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("HX-Trigger", string(trigger))
-	render(w, r, http.StatusOK, toastOOB(service.ToastSuccess, i18n.T("gui.settings.saved")))
+	// 汎用エラートーストの文言も新しい言語へ差し替える（#toast-stack 自体は置換しない）。
+	render(w, r, http.StatusOK, templ.Join(
+		toastOOB(service.ToastSuccess, i18n.T("gui.settings.saved")),
+		organisms.ToastMessages(true),
+	))
 }
 
 // OpenUpdate は POST /actions/update/open。リリースページを開く（URL はサーバー側のキャッシュから取得する）。
