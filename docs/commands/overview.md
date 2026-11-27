@@ -154,7 +154,7 @@ $ moleport daemon kill
 
 ### connect
 
-SSH ホストに接続する。auto_connect ルールのフォワーディングも自動的に開始される。
+SSH ホストに接続する。auto_connect ルールのフォワーディングはデーモンが自動的に開始する（開始したルールの一覧は出力されない。`moleport list` で確認できる）。接続済みのホストに対しては何もせず成功を返す。
 
 ```
 moleport connect <host>
@@ -165,8 +165,6 @@ moleport connect <host>
 ```
 $ moleport connect prod-server
 prod-server に接続しました
-  ✓ prod-web (L :8080 → localhost:80) を開始しました
-  ✓ prod-db (L :5432 → localhost:5432) を開始しました
 ```
 
 **出力例（パスワード認証）**:
@@ -183,7 +181,6 @@ password-server に接続しました
 $ moleport connect prod-server
 Enter passphrase for key '/home/user/.ssh/id_ed25519': ********
 prod-server に接続しました
-  ✓ prod-web (L :8080 → localhost:80) を開始しました
 ```
 
 **出力例（keyboard-interactive / 2FA）**:

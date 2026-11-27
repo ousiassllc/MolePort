@@ -712,10 +712,10 @@ sequenceDiagram
     Infra->>Remote: SSH Handshake
     Remote-->>Infra: 認証成功
     Infra-->>Core: Connection established
-    Core->>Core: auto_connect ルールのフォワーディング開始
     Core-->>Daemon: 接続完了
+    Daemon->>Core: ForwardManager.StartForward(auto_connect ルール)<br/>（失敗しても接続は成功扱い）
     Daemon-->>CLI: {"result":{"status":"connected","host":"prod-server"}}
-    CLI-->>User: "prod-server に接続しました (2 forwards started)"
+    CLI-->>User: "prod-server に接続しました"
 ```
 
 ### クレデンシャルコールバック（パスワード認証の例）
@@ -751,8 +751,8 @@ sequenceDiagram
     Infra->>Remote: パスワードで認証
     Remote-->>Infra: 認証成功
     Infra-->>Core: Connection established
-    Core->>Core: auto_connect ルールのフォワーディング開始
     Core-->>Daemon: 接続完了
+    Daemon->>Core: ForwardManager.StartForward(auto_connect ルール)<br/>（失敗しても接続は成功扱い）
     Daemon-->>CLI: {"result":{"status":"connected","host":"prod-server"}}
     CLI-->>User: "prod-server に接続しました"
 ```
