@@ -23,6 +23,9 @@
 - Clamp `update_check.interval` from `config.yaml` (<= 0 → 24h, < 1h → 1h) with a warning instead of panicking in `time.NewTicker` / `config.yaml` の `update_check.interval` が 0 以下・1h 未満でも panic せず補正して警告する (#115)
 - Use a dedicated download HTTP client without the 5-second version-check timeout for `moleport update` / `moleport update` のダウンロードにバージョンチェック用の 5 秒タイムアウトを使わないよう修正 (#103)
 - Apply `update_check.enabled` changes from IPC `config.update` to the running version checker / IPC `config.update` による `update_check.enabled` の変更を稼働中のバージョンチェッカーに反映 (#136)
+- Deep-copy `Config` in `ConfigManager` so concurrent `config.update` / `config.get` / SSH reconnect lookups no longer crash the daemon with a concurrent map access, and a failed save leaves the cached config untouched / `ConfigManager` が `Config`（`hosts`・`forwards`）をディープコピーして扱うようにし、`config.update` と `config.get`・SSH 再接続設定の並行アクセスによるデーモンの異常終了と、保存失敗時にキャッシュだけが変わる不整合を修正 (#142)
+- Emit `aria-invalid="true"` (instead of a value-less attribute) on invalid GUI inputs / GUI の検証エラー入力欄が値なしの `aria-invalid` ではなく `aria-invalid="true"` を出力するよう修正 (#137)
+- Switch the GUI generic error toast text and close label to the new language right after the language is saved / GUI の言語を保存した直後から、汎用エラートーストの文言と閉じるボタンのラベルが新しい言語になるよう修正 (#138)
 
 ### 🐛 Bug Fixes / バグ修正
 - Fix a forward start in progress (waiting for SSH connect / opening the listener) not being cancelled by `StopForward` / `DeleteRule` / `Close`, which left an orphaned forward; `StartForward` after `Close` now fails / 転送の開始処理中に停止・ルール削除・Close しても開始が止まらず孤立した転送が残る問題を修正。Close 後の `StartForward` も失敗するように (#105)
