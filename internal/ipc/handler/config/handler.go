@@ -27,14 +27,21 @@ func validateAndParseDuration(value *string, fieldName string, parsed parsedDura
 	return nil
 }
 
+// UpdateCheckApplier は update_check.enabled の変更を稼働中のバージョンチェッカーへ反映する（NFR-30）。
+type UpdateCheckApplier interface {
+	SetEnabled(enabled bool)
+}
+
 // Handler は設定関連の JSON-RPC メソッドを処理する。
 type Handler struct {
-	cfgMgr core.ConfigManager
+	cfgMgr  core.ConfigManager
+	updates UpdateCheckApplier // nil の場合は設定ファイルの更新のみ行う
 }
 
 // New は新しい設定ハンドラを生成する。
-func New(cfgMgr core.ConfigManager) *Handler {
-	return &Handler{cfgMgr: cfgMgr}
+// updates は update_check.enabled の変更を稼働中のチェッカーに反映する。不要な場合は nil。
+func New(cfgMgr core.ConfigManager, updates UpdateCheckApplier) *Handler {
+	return &Handler{cfgMgr: cfgMgr, updates: updates}
 }
 
 // Get は config.get リクエストを処理する。
@@ -149,6 +156,12 @@ func (h *Handler) Update(params json.RawMessage) (any, *protocol.RPCError) {
 		}
 	}); err != nil {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
+	}
+
+	// 保存に成功した後で、稼働中のバックグラウンドチェックへ反映する。
+	// interval は起動時の値を使うため、変更の反映にはデーモンの再起動が必要。
+	if h.updates != nil && p.UpdateCheck != nil && p.UpdateCheck.Enabled != nil {
+		h.updates.SetEnabled(*p.UpdateCheck.Enabled)
 	}
 
 	return protocol.ConfigUpdateResult{OK: true}, nil
