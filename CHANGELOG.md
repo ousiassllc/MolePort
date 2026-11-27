@@ -20,6 +20,7 @@
 - Fix `host.list` losing connection state (every host reported `disconnected`) and always returning `active_forward_count` 0; `SSHManager.LoadHosts` now keeps existing state / `host.list` が接続状態を失い全ホストが `disconnected` になる問題と `active_forward_count` が常に 0 になる問題を修正 (#102)
 - Start the host's `auto_connect` forwards on `ssh.connect` / `moleport connect` as documented / `ssh.connect`・`moleport connect` で当該ホストの `auto_connect` ルールを仕様どおり開始 (#118)
 - Fix docs for `ssh.connect` idempotency and error codes 1002/1003 to match the implementation / `ssh.connect` の冪等性とエラーコード 1002/1003 のドキュメントを実装に合わせて修正 (#121)
+- Fix `moleport start` failing on hosts that need password / passphrase / keyboard-interactive input: register the credential handler and use the 60s connect timeout like `moleport connect` / `moleport start` が認証入力の必要なホストで失敗する問題を修正（`moleport connect` と同じクレデンシャルハンドラーと 60 秒タイムアウトを使用） (#104)
 
 ## [v1.0.0] - 2026-03-15
 
