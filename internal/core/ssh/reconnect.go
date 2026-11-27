@@ -65,8 +65,8 @@ type disconnectState struct {
 }
 
 // handleDisconnect は切断検出時の自動再接続を処理する。
-func (m *sshManager) handleDisconnect(hostName string) {
-	ds, ok := m.cleanupDisconnected(hostName)
+func (m *sshManager) handleDisconnect(hostName string, hc *hostConnection) {
+	ds, ok := m.cleanupDisconnected(hostName, hc)
 	if !ok {
 		return
 	}
@@ -81,13 +81,13 @@ func (m *sshManager) handleDisconnect(hostName string) {
 }
 
 // cleanupDisconnected は切断されたホストの状態をクリーンアップし、再接続に必要な情報を返す。
-// ホストが存在しない場合や既にキャンセル済みの場合は false を返す。
-func (m *sshManager) cleanupDisconnected(hostName string) (disconnectState, bool) {
+// 現在の接続が hc と異なる場合（置き換え済みの古い接続の切断検出）や、ホストが存在しない場合、
+// 既にキャンセル済みの場合は false を返す。
+func (m *sshManager) cleanupDisconnected(hostName string, hc *hostConnection) (disconnectState, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	hc, exists := m.conns[hostName]
-	if !exists {
+	if current, exists := m.conns[hostName]; !exists || current != hc {
 		return disconnectState{}, false
 	}
 
@@ -267,7 +267,8 @@ func (m *sshManager) tryReconnect(reconnectCtx context.Context, hostName string,
 
 	m.mu.Lock()
 	// Disconnect は reconnectCancels 経由で reconnectCtx をキャンセルする（m.mu 下）。
-	if m.closed || reconnectCtx.Err() != nil {
+	// 待機中に別経路で接続が確立された場合も、その接続を優先して確立した接続を破棄する。
+	if _, occupied := m.conns[hostName]; m.closed || occupied || reconnectCtx.Err() != nil {
 		m.mu.Unlock()
 		cancel()
 		_ = conn.Close()
@@ -289,7 +290,7 @@ func (m *sshManager) tryReconnect(reconnectCtx context.Context, hostName string,
 		case <-ctx.Done():
 			return
 		default:
-			m.handleDisconnect(hostName)
+			m.handleDisconnect(hostName, hc)
 		}
 	}()
 

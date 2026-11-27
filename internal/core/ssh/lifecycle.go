@@ -53,6 +53,13 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		return nil
 	}
 
+	// 再接続待機中の手動接続を優先し、進行中の再接続を打ち切る。
+	// 打ち切らないと、後続の再接続成功がこの接続を上書きしてリークさせる。
+	if cancelReconnect, reconnecting := m.reconnectCancels[hostName]; reconnecting {
+		cancelReconnect()
+		delete(m.reconnectCancels, hostName)
+	}
+
 	// 接続処理中として登録（同一ホストへの並行 Connect を防ぐ）
 	hcConnecting := &hostConnection{state: core.Connecting}
 	m.conns[hostName] = hcConnecting
@@ -128,7 +135,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		case <-ctx.Done():
 			return
 		default:
-			m.handleDisconnect(hostName)
+			m.handleDisconnect(hostName, hc)
 		}
 	}()
 
