@@ -889,7 +889,7 @@ type ForwardEventNotification struct {
     Error string `json:"error,omitempty"`
 }
 
-// event.metrics（デーモン → クライアント通知、定期送信）
+// event.metrics（デーモン → クライアント通知。型のみ定義、未実装でデーモンは発行しない）
 type MetricsEventNotification struct {
     Sessions []SessionMetrics `json:"sessions"`
 }

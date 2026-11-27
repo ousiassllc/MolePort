@@ -228,20 +228,19 @@ sequenceDiagram
     participant TUI as TUI クライアント
     participant Daemon as デーモン
 
-    TUI->>Daemon: {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"types":["forward","ssh","metrics"]}}
+    TUI->>Daemon: {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"types":["forward","ssh"]}}
     Daemon-->>TUI: {"jsonrpc":"2.0","id":1,"result":{"subscription_id":"sub-1"}}
 
     Note over Daemon,TUI: 以降、状態変化時にデーモンから通知が送られる
 
-    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.forward","params":{"type":"started","rule":"prod-web",...}}
-    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.metrics","params":{"sessions":[...]}}
+    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.forward","params":{"type":"started","name":"prod-web",...}}
     Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.ssh","params":{"type":"disconnected","host":"prod-server",...}}
 
     TUI->>Daemon: {"jsonrpc":"2.0","id":2,"method":"events.unsubscribe","params":{"subscription_id":"sub-1"}}
     Daemon-->>TUI: {"jsonrpc":"2.0","id":2,"result":{"ok":true}}
 ```
 
-TUI は `events.subscribe` でイベントストリームを開始し、接続中はデーモンから通知を受け続ける。
+TUI は `events.subscribe`（`ssh` / `forward`）でイベントストリームを開始し、接続中はデーモンから通知を受け続ける。メトリクス（稼働時間・転送量）は `event.metrics` では配信されず、TUI が `session.list` を 2 秒間隔でポーリングして取得する（`event.metrics` は未実装）。
 
 ### JSON-RPC メソッド一覧
 
@@ -257,7 +256,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
 | `forward.start` | req/res | ポートフォワーディングを開始 |
 | `forward.stop` | req/res | ポートフォワーディングを停止 |
 | `forward.stopAll` | req/res | 全ポートフォワーディングを停止 |
-| `session.list` | req/res | アクティブセッション一覧を取得 |
+| `session.list` | req/res | 全ルールのセッション一覧を取得（停止中は `stopped`） |
 | `session.get` | req/res | セッション詳細を取得 |
 | `config.get` | req/res | 設定を取得 |
 | `config.update` | req/res | 設定を更新 |
@@ -270,7 +269,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
 | `credential.response` | req/res | クレデンシャル入力応答（クライアント → デーモン） |
 | `event.ssh` | notification | SSH 状態変化通知 |
 | `event.forward` | notification | 転送状態変化通知 |
-| `event.metrics` | notification | メトリクス更新通知 |
+| `event.metrics` | notification | メトリクス更新通知（**未実装**。購読は受理されるがデーモンは発行しない） |
 
 ## レイヤー構造
 
@@ -305,6 +304,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
   - `YAMLStore`: YAML ファイルの読み書き
 - **サブパッケージ構成**:
   - `infra/`（ベース）: `SSHConnection`、認証メソッド構築
+  - `infra/permcheck/`: パーミッション検査（`Warnings`。NFR-09/10）
   - `infra/proxycommand/`: `ProxyCommand`（ProxyCommand 経由接続）
   - `infra/sshconfig/`: `SSHConfigParser`（SSH config 解析）
   - `infra/yamlstore/`: `YAMLStore`（YAML ファイル I/O）
@@ -322,11 +322,11 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
   - `theme/` パッケージでテーマ定義・パレット管理・グローバルテーマ参照を提供
   - ベーステーマ（Dark / Light）× 5 アクセントカラー = 10 プリセット
   - `styles.go` のハードコードカラーを `theme.Current()` 経由の動的参照に置き換え
-  - 初回起動時のセットアップ画面 + `/theme` コマンドによる変更に対応
+  - 初回起動時のセットアップ画面 + `t` キーによる変更に対応
   - テーマ選択は `config.yaml` の `tui.theme` セクションに永続化
 - **多言語対応**: `i18n` パッケージを通じた翻訳テキストの動的取得
   - 全 UI テキスト（ラベル、メッセージ、キーヒント）を `i18n.T("key")` 経由に置き換え
-  - 初回起動時の言語選択画面（LangPage）+ `/lang` コマンドによる変更に対応
+  - 初回起動時の言語選択画面（LangPage）+ `l` キーによる変更に対応
   - 言語選択は `config.yaml` の `language` フィールドに永続化
   - 初回セットアップ順序: 言語選択 → テーマ選択
 
@@ -556,7 +556,10 @@ moleport/
 │   │   │   ├── config/handler.go      # config.get, config.update（サブパッケージ）
 │   │   │   ├── handler_daemon.go      # daemon.status, daemon.shutdown
 │   │   │   ├── handler_version.go    # version.check
-│   │   │   └── handler_events.go      # events.subscribe/unsubscribe
+│   │   │   ├── handler_events.go      # events.subscribe/unsubscribe
+│   │   │   └── forwardint/            # IPC ハンドラと実 ForwardManager（モック SSH 上）の結合テスト専用パッケージ
+│   │   │       ├── doc.go
+│   │   │       └── handler_forward_test.go
 │   │   └── client/                    # JSON-RPC クライアント
 │   │       ├── client.go              # IPCClient（メソッド呼び出し・イベント受信）
 │   │       └── client_credential.go   # クレデンシャルハンドラ（設定・応答処理）
@@ -631,6 +634,7 @@ moleport/
 │   │   ├── types_events.go            # イベント型（SSHEvent, ForwardEvent）
 │   │   ├── types_credentials.go       # クレデンシャル型
 │   │   ├── config.go                  # ConfigManager
+│   │   ├── config_clone.go            # Config.Clone（Hosts マップ・ReconnectOverride・Forwards を複製するディープコピー）
 │   │   ├── errors.go                  # コアエラー型定義
 │   │   ├── event_emitter.go           # EventEmitter[E]（イベント購読・配信の共通実装）
 │   │   ├── forward_persist.go         # PersistForwardRules（ルールの config.yaml 保存。IPC ハンドラと GUI Service で共用）
@@ -653,6 +657,7 @@ moleport/
 │   │   │   └── forward_helper.go     # ヘルパー関数（openListener 等）
 │   │   └── update/                    # バージョンチェック・セルフアップデート
 │   │       ├── checker.go            # VersionChecker（GitHub API・キャッシュ・比較）
+│   │       ├── download_client.go    # ダウンロード用 HTTP クライアント（サイズ上限・タイムアウト）
 │   │       └── updater.go            # Updater（ダウンロード・検証・バイナリ置換）
 │   ├── format/                        # フォーマットユーティリティ
 │   │   ├── bytes.go                   # バイト数フォーマット関数
@@ -663,6 +668,8 @@ moleport/
 │   │   ├── auth.go                    # SSH 認証メソッド構築
 │   │   ├── auth_unix.go               # SSH_AUTH_SOCK（Unix ソケット）
 │   │   ├── auth_windows.go            # OpenSSH agent（named pipe）
+│   │   ├── permcheck/                 # 設定ディレクトリ・設定ファイル・状態ファイル・SSH config のパーミッション検査（NFR-09/10。サブパッケージ）
+│   │   │   └── permcheck.go           # Warnings（検査のみ。Windows は対象外）
 │   │   ├── proxycommand/              # ProxyCommand 経由接続（サブパッケージ）
 │   │   │   ├── proxycommand.go
 │   │   │   ├── proxycommand_unix.go   # sh -c / プロセスグループ kill
@@ -879,7 +886,7 @@ sequenceDiagram
     participant Daemon as デーモン
     participant Core as Core Layer
 
-    TUI->>Daemon: events.subscribe {"types":["ssh","forward","metrics"]}
+    TUI->>Daemon: events.subscribe {"types":["ssh","forward"]}
     Daemon-->>TUI: {"subscriptionId":"sub-1"}
 
     Note over Daemon: SSH 接続断を検知
