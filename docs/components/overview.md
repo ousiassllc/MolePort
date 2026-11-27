@@ -249,8 +249,12 @@ func (d *Daemon) Wait() error      // 終了シグナルを待機（headless 用
 func (d *Daemon) Services() Services       // Core マネージャーの参照（Config / SSH / Forward / Version）。Start 後に有効
 func (d *Daemon) Done() <-chan struct{}    // コンテキスト終了（daemon.shutdown / Shutdown）で close
 func (d *Daemon) Info() Info               // Version / PID / StartedAt
+```
 
-// headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
+headless デーモンの引き継ぎ（`Takeover` / `TakeoverTimeout`）は `daemon` ではなく `internal/daemon/control` サブパッケージにある（後述の「DaemonControl」を参照）。
+
+```go
+// control.Takeover: headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
 func Takeover(configDir string, timeout time.Duration) (prevPID int, err error)
 
 const TakeoverTimeout = 10 * time.Second // 標準の待機時間（Shell が Takeover に渡す）
@@ -293,18 +297,18 @@ func IsLocked(path string) (locked bool, pid int) // 排他ロックを他プロ
 - `KillProcess` は Unix では `SIGKILL`、Windows では `TerminateProcess` で停止する
 - Windows の `LockFileEx` は強制ロックのため、PID の読み取りを妨げないようファイル先頭ではなくオフセット `0x7FFFFFFF` の 1 バイトをロックする
 
-### Fork
+### DaemonControl
 
-デーモンの自己フォーク処理を提供する。
+デーモンの起動・引き継ぎ・自己フォークを提供する。`daemon` 本体と分離した `internal/daemon/control` パッケージ（Linterly の 2000 行/ディレクトリ制限のため分離）に置き、CLI / TUI / GUI から `control.EnsureDaemon` のように参照する。`Takeover`（上記）と `EnsureDaemon` / `EnsureDaemonWithRetry`（`ensure.go`）もこのパッケージに属する。
 
-#### インターフェース
+#### インターフェース（Fork）
 
 ```go
-// StartDaemonProcess は現在のバイナリを --daemon-mode フラグ付きで再起動し、
+// control.StartDaemonProcess は現在のバイナリを --daemon-mode フラグ付きで再起動し、
 // バックグラウンドプロセスとして動作させる
 func StartDaemonProcess(configDir string) (int, error)
 
-// IsDaemonMode は --daemon-mode フラグが指定されているかを返す
+// control.IsDaemonMode は --daemon-mode フラグが指定されているかを返す
 func IsDaemonMode() bool
 ```
 
@@ -1951,7 +1955,7 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | `ipc/protocol/` | `protocol.go` | 432 | 9 (`protocol.go`, `convert.go`, `protocol_host.go`, `protocol_ssh.go`, `protocol_forward.go`, `protocol_session.go`, `protocol_config.go`, `protocol_daemon.go`, `protocol_events.go`) |
 | `tui/app/` | `app.go` | 470 | 9 (`app.go`, `app_forward.go`, `app_help.go`, `app_ipc.go`, `app_lang.go`, `app_lifecycle.go`, `app_theme.go`, `app_version.go`, `convert.go`) |
 | `tui/organisms/` | `setuppanel.go` | 534 | 3 (`setuppanel.go`, `setuppanel_update.go`, `setuppanel_view.go`) |
-| `daemon/` | `daemon.go` | 321 | 3 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `ensure.go`) |
+| `daemon/` | `daemon.go` | 321 | 6 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `daemon_host.go`, `daemon_paths.go`, `daemon_shutdown.go`, `doc.go`)。`Takeover` / `EnsureDaemon` / fork は `daemon/control/`（`ensure.go`, `takeover.go`, `fork.go`, `fork_unix.go`, `fork_windows.go`）、PID ファイルは `daemon/pidfile/` |
 | `gui/service/` | （新規） | — | 12 ファイル（`dashboard.go`, `host.go`, `forward.go`, `operations.go`, `activity.go`, `backend.go`, `lifecycle.go`, `notification.go`, `topic.go`, `errors.go`, `errmsg.go`, `viewmodel.go`）＋サブパッケージ 5（`settings/`, `credential/`（`broker.go`）, `bridge/`, `trayops/`, `servicetest/`） |
 
 ## 改訂履歴
@@ -1984,3 +1988,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |
 | 6.5 | 2026-10-15 | M3-3 の実装反映: `Settings`（`gui/service/settings`。`View` / `Save` / `OpenUpdate`）、`Opener`、`Backend.Version`（`VersionSource`）と `AvailableUpdate`、`Deps.Theme`、`VersionChecker.SetEnabled` / `Cached`、`gui:` セクションの型を `core/guiconfig` サブパッケージ（`Config` / `Theme` / `Normalized`）に置くことを追記 | #90 M3-3 設定・更新バッジ |
 | 6.6 | 2026-11-28 | ドキュメント乖離修正: ForwardManager のファイル表・分割サマリーを実在ファイル（`events.go` は存在せず `forward_helper.go`、セッション照会・イベント購読は `manager.go`）に修正、`gui/service/` の分割サマリーをサブパッケージ構成（`settings/` `credential/` `bridge/` `trayops/` `servicetest/`）に更新、設定ディレクトリの解決順に `XDG_CONFIG_HOME` を追記 | #124, #129, #134 ドキュメント乖離修正 |
+| 6.7 | 2026-11-28 | ドキュメント乖離修正: `Takeover` / `TakeoverTimeout` / `StartDaemonProcess` / `IsDaemonMode` / `EnsureDaemon` を `daemon/control` サブパッケージのものとして記載し、`daemon/` の分割サマリーを実在ファイルに更新 | #148 ドキュメント乖離修正 |
