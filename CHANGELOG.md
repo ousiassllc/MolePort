@@ -23,8 +23,8 @@
 - Clamp `update_check.interval` from `config.yaml` (<= 0 → 24h, < 1h → 1h) with a warning instead of panicking in `time.NewTicker` / `config.yaml` の `update_check.interval` が 0 以下・1h 未満でも panic せず補正して警告する (#115)
 - Use a dedicated download HTTP client without the 5-second version-check timeout for `moleport update` / `moleport update` のダウンロードにバージョンチェック用の 5 秒タイムアウトを使わないよう修正 (#103)
 - Apply `update_check.enabled` changes from IPC `config.update` to the running version checker / IPC `config.update` による `update_check.enabled` の変更を稼働中のバージョンチェッカーに反映 (#136)
-
-### 🐛 Bug Fixes / バグ修正
+- Add `object-src 'none'`, `base-uri 'none'`, `form-action 'self'` and `frame-ancestors 'none'` to the GUI Content-Security-Policy (these do not fall back to `default-src`) / GUI の Content-Security-Policy に `object-src 'none'`・`base-uri 'none'`・`form-action 'self'`・`frame-ancestors 'none'`（`default-src` にフォールバックしない指令）を追加 (#99)
+- Fix the GUI credential dialog not updating its pending-request count, link form validation errors to their inputs via `aria-describedby`, and suppress duplicate generic error toasts / GUI のクレデンシャルダイアログの待機数が更新されない問題、フォームの検証エラーが入力欄に `aria-describedby` で関連付けられていない問題、汎用エラートーストが重複表示される問題を修正 (#95, #96, #98)
 - Fix a forward start in progress (waiting for SSH connect / opening the listener) not being cancelled by `StopForward` / `DeleteRule` / `Close`, which left an orphaned forward; `StartForward` after `Close` now fails / 転送の開始処理中に停止・ルール削除・Close しても開始が止まらず孤立した転送が残る問題を修正。Close 後の `StartForward` も失敗するように (#105)
 - Fix docs for auto-generated rule names (`forward-<N>` for CLI/IPC, `<host>-<type>-<port>` for TUI/GUI) and README Quick Start (`--name web`) / 自動生成ルール名（CLI/IPC は `forward-<N>`、TUI/GUI は `<host>-<type>-<port>`）と README Quick Start（`--name web`）のドキュメントを実装に合わせて修正 (#119)
 - Fix docs for `ForwardSession.ID` / `session.list` `id` to the actual `<ruleName>-<UnixNano>` opaque format / `ForwardSession.ID`・`session.list` の `id` を実装の `<ruleName>-<UnixNano>`（不透明な値）に合わせてドキュメント修正 (#120)
@@ -37,8 +37,6 @@
 - Restore sessions and auto-connect in the background, and force-close after 5 seconds on shutdown (NFR-16) / セッション復元・auto_connect をバックグラウンド化し、停止処理に 5 秒の強制切断タイムアウトを追加 (#128, #116)
 - Make `moleport update` wait for the daemon to stop before replacing the binary and restart only a daemon it stopped / `moleport update` がデーモン停止完了を待ってからバイナリを置換し、停止したデーモンのみ再起動 (#111)
 - Fix TUI key hints that described forward-list `Enter` / `d` as connect/disconnect: they now read "Toggle start/stop" and "Stop" (the actions never changed), and align the READMEs and command docs with the actual CLI output, flags and key bindings / 転送一覧の `Enter` / `d` のキーヒントが「接続トグル・切断」となっていた問題を「開始/停止トグル・停止」に修正（動作は従来どおり）。README・コマンド仕様を実際の CLI 出力・フラグ・キーバインドに合わせて修正 (#122, #123, #125)
-
-### 🐛 Bug Fixes / バグ修正
 - Fix a connection established while `Disconnect` / `Close` was in progress being registered and leaked; reconnect no longer overrides a user disconnect / Dial 中の `Disconnect` / `Close` 後に接続が登録・残留する問題を修正（再接続もユーザーの切断を上書きしない） (#106)
 - Time out SSH keepalive responses (within `keepalive_interval`) so silently dropped connections are detected and reconnected promptly / SSH keepalive の応答にタイムアウトを設け、無音で切れた接続を速やかに検知して再接続 (#108)
 - Treat `reconnect.max_retries: 0` as unlimited as documented / `reconnect.max_retries: 0` を仕様どおり無制限として扱う (#113)
