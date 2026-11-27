@@ -56,7 +56,7 @@ ssh_config_path: "~/.ssh/config"
 reconnect:
   enabled: true              # 自動再接続の有効/無効
   max_retries: 10            # 最大リトライ回数（0 = 無制限）
-  initial_delay: "1s"        # 初回リトライ待機時間
+  initial_delay: "1s"        # 初回リトライ待機時間（0 以下は 1s として扱い、max_delay が正ならそれを超えない）
   max_delay: "60s"           # 最大リトライ待機時間
   keepalive_interval: "30s"  # KeepAlive 送信間隔
 
@@ -220,7 +220,7 @@ type ForwardRule struct {
 
 ## 状態ファイル（state.yaml）
 
-デーモン停止時のセッション状態を保持する。デーモン起動時の自動復元に使用する。
+デーモン停止時のセッション状態を保持する。デーモン起動時の自動復元に使用する。起動時の復元は非同期（NFR-01）で行うため、復元が完了する前に停止した場合は、未処理（復元待ち）のルールも `active_forwards` に保存し、次回起動で復元する。
 
 ### 構造
 
@@ -943,7 +943,7 @@ type CredentialResponseResult struct {
 | -32603 | InternalError | 内部エラー |
 | 1001 | HostNotFound | 指定ホストが見つからない |
 | 1002 | AlreadyConnected | 指定ルールが既にアクティブ（`forward.start`）。`ssh.connect` は接続済みでも成功を返す |
-| 1003 | NotConnected | 予約（通常、IPC メソッドからは返らない。接続確立直後に切断された場合のみ `forward.start` が返しうる） |
+| 1003 | NotConnected | 再接続待機中（`Reconnecting`）のホストのルールに対する `forward.start`（進行中の自動再接続を打ち切らないため、手動では接続しない）、および接続確立直後に切断された場合 |
 | 1004 | RuleNotFound | 転送ルールが見つからない |
 | 1005 | RuleAlreadyExists | ルール名が重複 |
 | 1006 | PortConflict | ポートが使用中 |
@@ -1082,3 +1082,4 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
 | 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |
 | 3.7 | 2026-11-28 | `state.yaml` の `selected_host` が未実装（常に空文字）であることを明記 | #145 ドキュメント乖離修正 |
+| 3.8 | 2026-11-28 | エラーコード 1003 (NotConnected) の返却条件を更新、`reconnect.initial_delay` が 0 以下のとき 1s にフォールバックすることを追記、state.yaml に復元待ちのルールも保存されることを追記 | #165, #166 ドキュメント乖離修正 |

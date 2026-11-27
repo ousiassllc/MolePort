@@ -316,7 +316,7 @@ $ moleport delete unknown
 
 ### start
 
-転送ルールのフォワーディングを開始する。SSH 未接続の場合は自動的に接続する。
+転送ルールのフォワーディングを開始する。SSH 未接続の場合は自動的に接続する。ホストが再接続待機中（`Reconnecting`）の場合は、自動再接続を打ち切らないため接続せず、`NotConnected`（エラーコード 1003）で失敗する。再接続の完了後に再実行する。
 
 ```
 moleport start <name>
@@ -790,3 +790,4 @@ GUI 稼働中は内蔵デーモンが `moleport.sock` / `moleport.pid` を保持
 | 3.2 | 2026-10-15 | GUI 稼働中の動作セクションを追加（daemon start/stop/kill/status、update、tui の挙動） | #84 Wails 版 GUI アプリケーション |
 | 3.3 | 2026-11-28 | 出力例を ja ロケールの実出力に修正（start/delete/list/status/config/daemon status、エラーは `rpc error` 形式）、出力言語の注記を追加、add に `--remote-bind-addr` を追記、help はサブコマンド別ヘルプ未実装と明記、グローバルフラグ節に設定ディレクトリ解決順（`XDG_CONFIG_HOME` 含む）を追記、daemon kill が `state.yaml` を削除する旨を追記、update はデーモンのキャッシュを使わない旨に修正、version の動作（最新時は無表示・失敗時は stderr）を明記、TUI パスワードのマスク文字を `*` に統一 | #122, #123, #124, #132, #134 ドキュメント乖離修正 |
 | 3.4 | 2026-11-28 | `connect` が接続済みでも未開始の auto_connect ルールを開始することを明記、`daemon status` / `status` の出力例と説明に警告行（`警告:`）を追記 | #149, #151 ドキュメント乖離修正 |
+| 3.5 | 2026-11-28 | `start` が再接続待機中（`Reconnecting`）のホストのルールに対して接続せず `NotConnected`（1003）で失敗することを明記 | #165 ドキュメント乖離修正 |
