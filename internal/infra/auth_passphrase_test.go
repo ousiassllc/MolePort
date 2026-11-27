@@ -25,7 +25,7 @@ func TestTryKeyFileWithPassphrase_Unencrypted(t *testing.T) {
 		return core.CredentialResponse{}, nil
 	}
 
-	auth, err := tryKeyFileWithPassphrase(keyPath, cb, host)
+	auth, err := loadKeySigner(keyPath, cb, host)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestTryKeyFileWithPassphrase_Encrypted(t *testing.T) {
 		return core.CredentialResponse{Value: "test-passphrase"}, nil
 	}
 
-	auth, err := tryKeyFileWithPassphrase(keyPath, cb, host)
+	auth, err := loadKeySigner(keyPath, cb, host)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestTryKeyFileWithPassphrase_EncryptedNilCallback(t *testing.T) {
 	}
 
 	host := core.SSHHost{Name: "test-host"}
-	auth, err := tryKeyFileWithPassphrase(keyPath, nil, host)
+	auth, err := loadKeySigner(keyPath, nil, host)
 	if err == nil {
 		t.Fatal("expected error for encrypted key with nil callback")
 	}
@@ -104,7 +104,7 @@ func TestTryKeyFileWithPassphrase_EncryptedCancelled(t *testing.T) {
 		return core.CredentialResponse{Cancelled: true}, nil
 	}
 
-	auth, err := tryKeyFileWithPassphrase(keyPath, cb, host)
+	auth, err := loadKeySigner(keyPath, cb, host)
 	if err == nil {
 		t.Fatal("expected error when passphrase input is cancelled")
 	}
@@ -129,7 +129,7 @@ func TestTryKeyFileWithPassphrase_EncryptedWrongPassphrase(t *testing.T) {
 		return core.CredentialResponse{Value: "wrong-passphrase"}, nil
 	}
 
-	auth, err := tryKeyFileWithPassphrase(keyPath, cb, host)
+	auth, err := loadKeySigner(keyPath, cb, host)
 	if err == nil {
 		t.Fatal("expected error for wrong passphrase")
 	}
@@ -151,7 +151,7 @@ func TestTryKeyFileWithPassphrase_CallbackError(t *testing.T) {
 		return core.CredentialResponse{}, fmt.Errorf("connection lost")
 	}
 
-	auth, err := tryKeyFileWithPassphrase(keyPath, cb, host)
+	auth, err := loadKeySigner(keyPath, cb, host)
 	if err == nil {
 		t.Fatal("expected error when callback returns error")
 	}

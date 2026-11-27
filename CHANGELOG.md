@@ -37,6 +37,14 @@
 - Restore sessions and auto-connect in the background, and force-close after 5 seconds on shutdown (NFR-16) / セッション復元・auto_connect をバックグラウンド化し、停止処理に 5 秒の強制切断タイムアウトを追加 (#128, #116)
 - Make `moleport update` wait for the daemon to stop before replacing the binary and restart only a daemon it stopped / `moleport update` がデーモン停止完了を待ってからバイナリを置換し、停止したデーモンのみ再起動 (#111)
 
+### 🐛 Bug Fixes / バグ修正
+- Fix a connection established while `Disconnect` / `Close` was in progress being registered and leaked; reconnect no longer overrides a user disconnect / Dial 中の `Disconnect` / `Close` 後に接続が登録・残留する問題を修正（再接続もユーザーの切断を上書きしない） (#106)
+- Time out SSH keepalive responses (within `keepalive_interval`) so silently dropped connections are detected and reconnected promptly / SSH keepalive の応答にタイムアウトを設け、無音で切れた接続を速やかに検知して再接続 (#108)
+- Treat `reconnect.max_retries: 0` as unlimited as documented / `reconnect.max_retries: 0` を仕様どおり無制限として扱う (#113)
+- Stop reconnect retries on authentication failure and set the host to `PendingAuth` / 再接続中の認証失敗でリトライを止めて `PendingAuth` にする (#114)
+- Apply jitter to the first reconnect delay and never exceed `max_delay` / 再接続の初回遅延にもジッターを付け、待機時間が `max_delay` を超えないようにする (#133)
+- Defer key file loading and passphrase prompts until the key is actually needed (ssh-agent and earlier keys are tried first) / 鍵ファイルの読み込みとパスフレーズ要求を実際に必要になるまで遅延（エージェント・先行する鍵を先に試行） (#109)
+
 ## [v1.0.0] - 2026-03-15
 
 ### ⚠️ Breaking Changes / 破壊的変更

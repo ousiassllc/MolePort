@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -65,9 +66,9 @@ func trySSHAgent() (ssh.AuthMethod, net.Conn, error) {
 	return ssh.PublicKeysCallback(agentClient.Signers), conn, nil
 }
 
-// tryKeyFileWithPassphrase は秘密鍵ファイルから認証メソッドを取得する。
+// loadKeySigner は秘密鍵ファイルから署名器を読み込む。
 // 鍵がパスフレーズで暗号化されている場合、コールバックを使ってパスフレーズを取得する。
-func tryKeyFileWithPassphrase(path string, cb core.CredentialCallback, host core.SSHHost) (ssh.AuthMethod, error) {
+func loadKeySigner(path string, cb core.CredentialCallback, host core.SSHHost) (ssh.Signer, error) {
 	keyData, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read key file %s: %w", path, err)
@@ -92,34 +93,82 @@ func tryKeyFileWithPassphrase(path string, cb core.CredentialCallback, host core
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse key file %s with passphrase: %w", path, err)
 			}
-			return ssh.PublicKeys(signer), nil
+			return signer, nil
 		}
 		return nil, fmt.Errorf("failed to parse key file %s: %w", path, err)
 	}
-	return ssh.PublicKeys(signer), nil
+	return signer, nil
 }
 
-// buildAuthMethods はホスト情報をもとに認証メソッドのリストを構築する。
-// SSH エージェントと鍵ファイルを組み合わせる。
-// cb が nil でない場合、パスフレーズ付き鍵・パスワード認証・keyboard-interactive 認証も追加する。
+// SSH 認証方式名（RFC 4252）。サーバーが許可する方式との照合に使う。
+const (
+	authMethodPublicKey           = "publickey"
+	authMethodPassword            = "password"
+	authMethodKeyboardInteractive = "keyboard-interactive"
+)
+
+// authStep は認証の 1 段階。buildAuthMethods が試行順に並べて返す。
+type authStep struct {
+	method string         // RFC 4252 の認証方式名
+	auth   ssh.AuthMethod // 実際の認証メソッド
+}
+
+// keyFileAuthStep は鍵ファイル 1 本分の認証段階を返す。
+// 鍵の読み込み（パスフレーズの要求を含む）は、この段階が実際に試行されるまで行わない。
+// 読み込みに失敗した鍵は署名器なしとして扱い、次の段階へ進める。
+func keyFileAuthStep(path string, cb core.CredentialCallback, host core.SSHHost, logFailure bool) authStep {
+	return authStep{authMethodPublicKey, ssh.PublicKeysCallback(func() ([]ssh.Signer, error) {
+		signer, err := loadKeySigner(path, cb, host)
+		if err != nil {
+			if logFailure {
+				slog.Debug("failed to load key file", "path", path, "error", err)
+			}
+			return nil, nil
+		}
+		return []ssh.Signer{signer}, nil
+	})}
+}
+
+// sequentialAuthCallback は steps を先頭から順に 1 段階ずつ試行する ssh.ClientAuthCallback を返す。
+// crypto/ssh は同じ方式（publickey 等）を 1 回しか試行しないため、ClientConfig.Auth に並べるだけでは
+// エージェントの後の鍵ファイルが試行されない。コールバックで次の段階を選ぶことで、
+// 前の段階が失敗した場合にだけ後続の段階（鍵の読み込み・クレデンシャル要求）が実行される。
+// サーバーが許可していない方式の段階は選ばない。
+func sequentialAuthCallback(steps []authStep) ssh.ClientAuthCallback {
+	used := make([]bool, len(steps))
+	return func(ctx *ssh.ClientAuthContext) (ssh.AuthMethod, error) {
+		for i, step := range steps {
+			if used[i] || !slices.Contains(ctx.AllowedMethods, step.method) {
+				continue
+			}
+			used[i] = true
+			return step.auth, nil
+		}
+		return nil, nil
+	}
+}
+
+// buildAuthMethods はホスト情報をもとに認証の段階を試行順に構築する。
+// 順序: SSH エージェント → ホスト固有の IdentityFiles → 既定の鍵パス →
+// パスワード → keyboard-interactive（後ろ 2 つは cb が nil でない場合のみ）。
+// 鍵ファイルの読み込みとパスフレーズの要求は、その段階が試行されるまで遅延する
+// （エージェントや前の鍵で認証できれば、後続の鍵のパスフレーズは要求されない）。
 // 返される io.Closer は SSH エージェント接続を閉じるために使用する。
 // エージェントに接続しなかった場合は nil が返される。
-func buildAuthMethods(host core.SSHHost, cb core.CredentialCallback) ([]ssh.AuthMethod, io.Closer) {
-	var methods []ssh.AuthMethod
+func buildAuthMethods(host core.SSHHost, cb core.CredentialCallback) ([]authStep, io.Closer) {
+	var steps []authStep
 	var agentCloser io.Closer
 
 	// SSH エージェントを試行
 	if agentAuth, conn, err := trySSHAgent(); err == nil {
-		methods = append(methods, agentAuth)
+		steps = append(steps, authStep{authMethodPublicKey, agentAuth})
 		agentCloser = conn
 	}
 
 	// ホスト固有の IdentityFiles
 	for _, idFile := range host.IdentityFiles {
-		if keyAuth, err := tryKeyFileWithPassphrase(idFile, cb, host); err == nil {
-			methods = append(methods, keyAuth)
-		} else {
-			slog.Debug("failed to load identity file", "path", idFile, "error", err)
+		if fileExists(idFile) {
+			steps = append(steps, keyFileAuthStep(idFile, cb, host, true))
 		}
 	}
 
@@ -129,55 +178,59 @@ func buildAuthMethods(host core.SSHHost, cb core.CredentialCallback) ([]ssh.Auth
 		hostKeySet[f] = true
 	}
 	for _, keyPath := range defaultKeyPaths() {
-		if hostKeySet[keyPath] {
-			continue // 重複を避ける
+		if hostKeySet[keyPath] || !fileExists(keyPath) {
+			continue // 重複・存在しない鍵は除外
 		}
-		if keyAuth, err := tryKeyFileWithPassphrase(keyPath, cb, host); err == nil {
-			methods = append(methods, keyAuth)
-		}
+		steps = append(steps, keyFileAuthStep(keyPath, cb, host, false))
 	}
 
-	// パスワード認証（コールバックがある場合のみ）
-	if cb != nil {
-		methods = append(methods, ssh.PasswordCallback(func() (string, error) {
+	if cb == nil {
+		return steps, agentCloser
+	}
+
+	// パスワード認証
+	steps = append(steps, authStep{authMethodPassword, ssh.PasswordCallback(func() (string, error) {
+		resp, err := cb(core.CredentialRequest{
+			Type:   core.CredentialPassword,
+			Host:   host.Name,
+			Prompt: "Password:",
+		})
+		if err != nil {
+			return "", err
+		}
+		if resp.Cancelled {
+			return "", fmt.Errorf("password input cancelled")
+		}
+		return resp.Value, nil
+	})})
+
+	// keyboard-interactive 認証
+	steps = append(steps, authStep{authMethodKeyboardInteractive, ssh.KeyboardInteractive(
+		func(name, instruction string, questions []string, echos []bool) ([]string, error) {
+			prompts := make([]core.PromptInfo, len(questions))
+			for i, q := range questions {
+				prompts[i] = core.PromptInfo{Prompt: q, Echo: echos[i]}
+			}
 			resp, err := cb(core.CredentialRequest{
-				Type:   core.CredentialPassword,
-				Host:   host.Name,
-				Prompt: "Password:",
+				Type:    core.CredentialKeyboardInteractive,
+				Host:    host.Name,
+				Prompts: prompts,
 			})
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			if resp.Cancelled {
-				return "", fmt.Errorf("password input cancelled")
+				return nil, fmt.Errorf("keyboard-interactive input cancelled")
 			}
-			return resp.Value, nil
-		}))
-	}
+			return resp.Answers, nil
+		},
+	)})
 
-	// keyboard-interactive 認証（コールバックがある場合のみ）
-	if cb != nil {
-		methods = append(methods, ssh.KeyboardInteractive(
-			func(name, instruction string, questions []string, echos []bool) ([]string, error) {
-				prompts := make([]core.PromptInfo, len(questions))
-				for i, q := range questions {
-					prompts[i] = core.PromptInfo{Prompt: q, Echo: echos[i]}
-				}
-				resp, err := cb(core.CredentialRequest{
-					Type:    core.CredentialKeyboardInteractive,
-					Host:    host.Name,
-					Prompts: prompts,
-				})
-				if err != nil {
-					return nil, err
-				}
-				if resp.Cancelled {
-					return nil, fmt.Errorf("keyboard-interactive input cancelled")
-				}
-				return resp.Answers, nil
-			},
-		))
-	}
+	return steps, agentCloser
+}
 
-	return methods, agentCloser
+// fileExists は path が存在するかを返す（読み込みは行わない）。
+func fileExists(path string) bool {
+	_, err := os.Stat(filepath.Clean(path))
+	return err == nil
 }
