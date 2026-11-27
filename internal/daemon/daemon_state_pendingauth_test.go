@@ -43,3 +43,33 @@ func TestStartEventRouting_ReconnectAborted(t *testing.T) {
 		}
 	})
 }
+
+// 自動再接続が無効なホストの切断では Reconnecting が届かないため、当該ホストの転送を停止する（#162）。
+func TestStartEventRouting_DisconnectWithReconnectDisabledStopsForwards(t *testing.T) {
+	run := func(evt core.SSHEvent) []string {
+		sshCh, fwdCh := make(chan core.SSHEvent, 1), make(chan core.ForwardEvent, 1)
+		fwd := &mockForwardManagerForState{subscribeCh: fwdCh, getAllSessionsFn: func() []core.ForwardSession {
+			return []core.ForwardSession{
+				{Status: core.Active, Rule: core.ForwardRule{Name: "web", Host: "h1"}},
+				{Status: core.Active, Rule: core.ForwardRule{Name: "other", Host: "h2"}},
+			}
+		}}
+		d := &Daemon{sshMgr: &mockSSHManagerForState{subscribeCh: sshCh}, fwdMgr: fwd, broker: newBrokerStub()}
+		d.startEventRouting()
+		sshCh <- evt
+		close(sshCh)
+		close(fwdCh)
+		d.wg.Wait()
+		fwd.mu.Lock()
+		defer fwd.mu.Unlock()
+		return fwd.stopCalls
+	}
+
+	if got := run(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: "h1", ReconnectDisabled: true}); len(got) != 1 || got[0] != "web" {
+		t.Errorf("stopCalls = %v, want [web]", got)
+	}
+	// 再接続が有効、またはユーザーの切断では転送に触れない（Reconnecting / 手動停止の経路に任せる）
+	if got := run(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: "h1"}); len(got) != 0 {
+		t.Errorf("stopCalls = %v, want none", got)
+	}
+}

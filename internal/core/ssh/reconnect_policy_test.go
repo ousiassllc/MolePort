@@ -109,8 +109,12 @@ func TestSSHManager_PerHostReconnectDisabled(t *testing.T) {
 	}
 
 	for _, want := range []core.SSHEventType{core.SSHEventConnected, core.SSHEventDisconnected} {
-		if ev := recvWithTimeout(t, events, want.String()); ev.Type != want {
+		ev := recvWithTimeout(t, events, want.String())
+		if ev.Type != want {
 			t.Fatalf("expected %v, got %v", want, ev.Type)
+		}
+		if want == core.SSHEventDisconnected && !ev.ReconnectDisabled {
+			t.Error("Disconnected event ReconnectDisabled = false, want true")
 		}
 	}
 	// Reconnecting イベントが来ないことを確認（再接続がスキップされる）

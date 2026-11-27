@@ -53,6 +53,7 @@
 - Keep rules that the background session restore had not yet processed in `state.yaml` when the daemon stops mid-restore, so they are restored on the next start / セッション復元の途中でデーモンを停止しても、未処理のルールを `state.yaml` に残し次回起動で復元されるよう修正 (#159, #154)
 - Do not interrupt an automatic reconnect when a forward is started on a host that is waiting to reconnect: `StartForward` (including `auto_connect`) now fails with a not-connected error instead of opening a manual connection / 再接続待機中のホストで転送を開始しても自動再接続を打ち切らないよう修正（`StartForward`（`auto_connect` 含む）は手動接続せず未接続エラーで失敗する）(#160)
 - Fall back to a 1s initial delay when `reconnect.initial_delay` is 0 or negative so `max_retries: 0` no longer retries in a busy loop / `reconnect.initial_delay` が 0 以下のとき 1 秒を使い、`max_retries: 0` で待機なしの再接続ループにならないよう修正 (#161)
+- Stop the host's forwards when a dropped connection is detected on a host with `reconnect.enabled: false` (previously they stayed Active on a dead client and were saved to `state.yaml`), save forwards waiting for reconnect (`SessionReconnecting`) to `state.yaml` on daemon stop, and record pending-restore rules before `Start` returns so an immediate stop no longer empties `state.yaml` / `reconnect.enabled: false` のホストで接続断を検知したとき当該ホストの転送を停止するよう修正（死んだクライアントを掴んだまま Active で残り `state.yaml` に保存されていた）。あわせて、デーモン停止時に再接続待ち（`SessionReconnecting`）の転送も `state.yaml` に保存し、`Start` の復帰前に復元待ちルールを記録して起動直後の停止で `state.yaml` が空になる問題を修正 (#162, #163, #164)
 
 ## [v1.0.0] - 2026-03-15
 

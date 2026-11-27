@@ -129,6 +129,8 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
   - 最大リトライ回数（`max_retries`、0 の場合は無制限で本分岐に入らない）に達した場合: SSH 状態を `Error`、全フォワード状態を `Error` にし通知する
   - 認証失敗（パスワード認証のみのホスト）: SSH 状態を `PendingAuth` にし、ユーザーの手動 `connect` を待つ（UC-14 と同様の挙動）
   - 再接続中にユーザーが `disconnect` を実行した場合: 再接続ループを中止し、`Disconnected` にする
+  - `reconnect.enabled` が `false`（グローバル設定またはホスト別オーバーライド）のホストで接続切断を検知した場合: 再接続は行わず、SSH 状態を `Disconnected` にし、当該ホストの転送を停止する（死んだ接続を掴んだ転送を `Active` のまま残さない）
+  - 再接続待ち（`SessionReconnecting`）の転送は、デーモン停止時も `state.yaml` に保存され、`auto_restore` で復元される（UC-9）
   - デーモンがシャットダウン中の場合: 再接続ループを中止する
 - **制限事項**:
   - パスワード認証・keyboard-interactive 認証のみのホストは、自動再接続時にクレデンシャルを提供できないため `PendingAuth` 状態になる。鍵認証または SSH エージェント利用が推奨される

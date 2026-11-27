@@ -82,7 +82,7 @@ func TestRestoreState(t *testing.T) {
 	t.Run("auto_restore_disabled", func(t *testing.T) {
 		fwd := &mockForwardManagerForState{}
 		d := newDaemonForStateTest(&core.Config{Session: core.SessionConfig{AutoRestore: false}}, fwd)
-		d.restoreState()
+		d.restoreState(d.loadPendingRestore())
 		if len(fwd.startCalls) != 0 {
 			t.Fatalf("startCalls = %v, want none", fwd.startCalls)
 		}
@@ -90,7 +90,7 @@ func TestRestoreState(t *testing.T) {
 	t.Run("load_state_error", func(t *testing.T) {
 		fwd := &mockForwardManagerForState{}
 		d := newDaemonForStateTest(&core.Config{Session: core.SessionConfig{AutoRestore: true}}, fwd)
-		d.restoreState()
+		d.restoreState(d.loadPendingRestore())
 		if len(fwd.startCalls) != 0 {
 			t.Fatalf("startCalls = %v, want none", fwd.startCalls)
 		}
@@ -104,7 +104,7 @@ func TestRestoreState(t *testing.T) {
 			},
 		}
 		d := newDaemonForStateTestFull(cfgMgr, fwd)
-		d.restoreState()
+		d.restoreState(d.loadPendingRestore())
 		if len(fwd.startCalls) != 2 || fwd.startCalls[0] != "web" || fwd.startCalls[1] != "db" {
 			t.Fatalf("startCalls = %v, want [web db]", fwd.startCalls)
 		}
@@ -123,7 +123,7 @@ func TestRestoreState(t *testing.T) {
 			},
 		}
 		d := newDaemonForStateTestFull(cfgMgr, fwd)
-		d.restoreState()
+		d.restoreState(d.loadPendingRestore())
 		if len(fwd.startCalls) != 2 {
 			t.Fatalf("startCalls = %d, want 2", len(fwd.startCalls))
 		}

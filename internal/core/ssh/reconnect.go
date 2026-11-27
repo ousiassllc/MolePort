@@ -43,7 +43,7 @@ func (m *sshManager) handleDisconnect(hostName string, hc *hostConnection) {
 		return
 	}
 
-	m.events.Emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName, ReconnectDisabled: !ds.reconnectCfg.Enabled})
 
 	if !ds.reconnectCfg.Enabled {
 		return
