@@ -161,6 +161,11 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 		return nil, err
 	}
 
+	// 切断済みクライアントを掴んだ転送が残らないよう、先に当該ホストの転送を停止する。
+	if err := core.StopHostForwards(h.fwdMgr, p.Host); err != nil {
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
+	}
+
 	if err := h.sshMgr.Disconnect(p.Host); err != nil {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
