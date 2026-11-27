@@ -245,8 +245,9 @@ active_forwards:
     remote_host: "localhost"
     remote_port: 5432
 
-# 最後に選択していたホスト（TUI 復元用）
-selected_host: "prod-server"
+# 最後に選択していたホスト（TUI 復元用）※未実装: フィールドは定義のみで、デーモンも TUI も
+# 設定・参照しない。常に空文字で保存される（`selected_host: ""`）
+selected_host: ""
 ```
 
 ### Go 型定義
@@ -258,6 +259,8 @@ type State struct {
     SelectedHost   string        `yaml:"selected_host"`
 }
 ```
+
+> **Note**: `SelectedHost`（`selected_host`）は将来の TUI 選択ホスト復元用の予約フィールドで、現状は未実装（書き込み・読み出しともに行わない）。保存形式は変更しない。
 
 ## PID ファイル（moleport.pid）
 
@@ -1078,3 +1081,4 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |
 | 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
 | 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |
+| 3.7 | 2026-11-28 | `state.yaml` の `selected_host` が未実装（常に空文字）であることを明記 | #145 ドキュメント乖離修正 |

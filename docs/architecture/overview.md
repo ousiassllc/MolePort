@@ -861,8 +861,10 @@ sequenceDiagram
 
     participant TUI as TUI クライアント
     TUI->>Daemon: events.subscribe
-    Daemon-->>TUI: event.ssh {"type":"pending_auth","host":"2fa-server"}
-    TUI->>TUI: ホスト一覧に "⏳ Pending Auth" を表示
+    Note over Daemon,TUI: 接続時に pending_auth ホストをまとめて通知する処理は未実装。<br/>購読後は PendingAuth への遷移が event.ssh で届く
+    TUI->>Daemon: host.list
+    Daemon-->>TUI: hosts[2fa-server].state = "pending_auth"
+    TUI->>TUI: ホスト一覧に状態記号 "◎" を表示
 
     Note over TUI: ユーザーが connect を実行
     TUI->>Daemon: ssh.connect {"host":"2fa-server"}
@@ -957,7 +959,7 @@ sequenceDiagram
     SSH->>SSH: 接続状態を PendingAuth に更新
     SSH-->>Daemon: SSHEvent{PendingAuth, "2fa-server"}
     Daemon-->>TUI: event.ssh {"type":"pending_auth"}
-    TUI->>TUI: "⏳ Pending Auth" を表示
+    TUI->>TUI: 状態記号 "◎" を表示
 
     Note over TUI: ユーザーが手動で connect → UC-13 フローへ
 ```
@@ -1228,3 +1230,4 @@ GUI（`moleport-gui`）は CGO と OS ネイティブの WebView を必要とす
 | 5.0 | 2026-10-15 | GUI 構成を追加: 概要・技術選定（Wails / Templ / HTMX / Tailwind / systray / Windows API）、GUI 構成との関係、ディレクトリ構成（`cmd/moleport-gui`、`internal/gui/*`、`internal/version`、`daemon` / `infra` の OS 別ファイル分割）、並行処理モデル、ファイルレイアウト、GUI のリリース | #84 Wails 版 GUI アプリケーション |
 | 5.1 | 2026-10-15 | M1 基盤整備の実装反映: ディレクトリ構成の `daemon/pidfile/` サブパッケージ化（`daemon_host.go` / `fork.go` 追加） | #85 M1 基盤整備 |
 | 5.2 | 2026-11-28 | ディレクトリ構成を実在ファイルに合わせて修正（`core/socks5/`・`infra/auth_*.go`・`proxycommand/proxycommand_*.go`・`cmd/moleport-gui/wails.json`・`gui/web/middleware/security.go`・`gui/service/` のサブパッケージ・`gui/shell/`・`gui/tray/` の主要ファイルを反映、存在しない `core/forward/events.go` を削除）、PID ファイル・ソケットパスに設定ディレクトリ解決順を追記 | #124, #129, #134 ドキュメント乖離修正 |
+| 5.3 | 2026-11-28 | pending_auth フロー図を実装に合わせて修正（クライアント接続時の一括通知は未実装、`host.list` で取得、TUI は状態記号 `◎` を表示） | #146 ドキュメント乖離修正 |
