@@ -148,6 +148,11 @@ func New(configDir string, version string) (*Daemon, error) {
 		return d.server.SendNotification(clientID, notification)
 	})
 
+	// 送信キューが溢れた（読み取りが滞っている）クライアントは切断する
+	broker.SetOnOverflow(func(clientID string) {
+		d.server.DisconnectClient(clientID)
+	})
+
 	handler := ipchandler.NewHandler(sshMgr, fwdMgr, cfgMgr, broker, d, versionChecker)
 	server := ipc.NewIPCServer(SocketPath(configDir), handler.Handle)
 

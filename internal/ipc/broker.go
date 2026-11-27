@@ -21,12 +21,21 @@ type Subscription struct {
 // NotifySender はクライアントに通知を送信する関数の型。
 type NotifySender func(clientID string, notification protocol.Notification) error
 
+// clientQueueSize はクライアントごとの送信キューの上限。
+// これを超えて溜まるクライアントは読み取りが滞っているとみなして切断する。
+const clientQueueSize = 1024
+
 // EventBroker はクライアント単位のイベント購読を管理し、コアマネージャーからの通知を配信する。
+//
+// 通知はクライアントごとの有界キューと専用の送信 goroutine を介して送られるため、
+// 同一クライアントへは発行順に届く。
 type EventBroker struct {
 	mu            sync.RWMutex
 	subscriptions map[string]*Subscription // subscriptionID -> Subscription
 	clientSubs    map[string][]string      // clientID -> []subscriptionID
+	queues        map[string]chan protocol.Notification
 	sender        NotifySender
+	onOverflow    func(clientID string)
 	nextID        atomic.Int64
 }
 
@@ -35,8 +44,17 @@ func NewEventBroker(sender NotifySender) *EventBroker {
 	return &EventBroker{
 		subscriptions: make(map[string]*Subscription),
 		clientSubs:    make(map[string][]string),
+		queues:        make(map[string]chan protocol.Notification),
 		sender:        sender,
 	}
+}
+
+// SetOnOverflow は送信キューが溢れたクライアントを切断するためのコールバックを設定する。
+// Subscribe の前に呼ぶこと。
+func (b *EventBroker) SetOnOverflow(fn func(clientID string)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.onOverflow = fn
 }
 
 // Subscribe はクライアントのイベント購読を登録し、購読 ID を返す。
@@ -60,6 +78,12 @@ func (b *EventBroker) Subscribe(clientID string, types []string) string {
 
 	b.subscriptions[subID] = sub
 	b.clientSubs[clientID] = append(b.clientSubs[clientID], subID)
+
+	if _, ok := b.queues[clientID]; !ok {
+		q := make(chan protocol.Notification, clientQueueSize)
+		b.queues[clientID] = q
+		go b.writeLoop(clientID, q)
+	}
 
 	return subID
 }
@@ -86,6 +110,7 @@ func (b *EventBroker) Unsubscribe(subscriptionID string) bool {
 	}
 	if len(b.clientSubs[sub.ClientID]) == 0 {
 		delete(b.clientSubs, sub.ClientID)
+		b.closeQueueLocked(sub.ClientID)
 	}
 
 	return true
@@ -101,6 +126,24 @@ func (b *EventBroker) RemoveClient(clientID string) {
 		delete(b.subscriptions, id)
 	}
 	delete(b.clientSubs, clientID)
+	b.closeQueueLocked(clientID)
+}
+
+// closeQueueLocked はクライアントの送信キューを閉じる。b.mu をロックして呼ぶこと。
+func (b *EventBroker) closeQueueLocked(clientID string) {
+	if q, ok := b.queues[clientID]; ok {
+		close(q)
+		delete(b.queues, clientID)
+	}
+}
+
+// writeLoop はクライアントのキューから通知を取り出し、発行順に送信する。
+func (b *EventBroker) writeLoop(clientID string, q <-chan protocol.Notification) {
+	for notif := range q {
+		if err := b.sender(clientID, notif); err != nil {
+			slog.Debug("failed to send notification", "client", clientID, "error", err)
+		}
+	}
 }
 
 // HandleSSHEvent は SSH イベントを変換し、購読者に配信する。
@@ -132,7 +175,7 @@ func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent) {
 	b.distribute("forward", protocol.EventForward, notif)
 }
 
-// distribute は指定イベント種別の購読者全員に通知を送信する。
+// distribute は指定イベント種別の購読者全員の送信キューに通知を積む。
 func (b *EventBroker) distribute(eventType string, method string, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -146,20 +189,31 @@ func (b *EventBroker) distribute(eventType string, method string, payload any) {
 		Params:  data,
 	}
 
-	// ロック中にターゲットを収集し、ロック解放後に送信する
+	// ロック中に各クライアントのキューへ非ブロッキングで積む。
+	// 満杯のクライアントは読み取りが滞っているため、ロック解放後に切断する。
+	var overflowed []string
 	b.mu.RLock()
 	sent := make(map[string]bool)
-	var targets []string
 	for _, sub := range b.subscriptions {
-		if sub.Types[eventType] && !sent[sub.ClientID] {
-			sent[sub.ClientID] = true
-			targets = append(targets, sub.ClientID)
+		if !sub.Types[eventType] || sent[sub.ClientID] {
+			continue
+		}
+		sent[sub.ClientID] = true
+		select {
+		case b.queues[sub.ClientID] <- notif:
+		default:
+			overflowed = append(overflowed, sub.ClientID)
 		}
 	}
+	onOverflow := b.onOverflow
 	b.mu.RUnlock()
 
-	for _, clientID := range targets {
-		go b.sender(clientID, notif)
+	for _, clientID := range overflowed {
+		slog.Warn("client notification queue is full; disconnecting", "client", clientID)
+		b.RemoveClient(clientID)
+		if onOverflow != nil {
+			onOverflow(clientID)
+		}
 	}
 }
 

@@ -201,3 +201,30 @@ func TestIPCClient_CallContextTimeout(t *testing.T) {
 		t.Errorf("error = %v, want %v", err, context.DeadlineExceeded)
 	}
 }
+
+func TestIPCServer_DisconnectClient(t *testing.T) {
+	srv, sockPath := startTestServer(t, echoHandler)
+	client := connectTestClient(t, sockPath)
+
+	waitFor(t, func() bool { return srv.ConnectedClients() == 1 })
+
+	srv.mu.RLock()
+	var cid string
+	for id := range srv.clients {
+		cid = id
+	}
+	srv.mu.RUnlock()
+
+	srv.DisconnectClient(cid)
+	srv.DisconnectClient("nonexistent") // 存在しない ID は無視される
+
+	waitFor(t, func() bool { return srv.ConnectedClients() == 0 })
+	select {
+	case _, ok := <-client.Events():
+		if ok {
+			t.Fatal("unexpected notification")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("client should observe the disconnect")
+	}
+}
