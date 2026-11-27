@@ -47,8 +47,12 @@ func TestSSHManager_HandleDisconnect_WithReconnect(t *testing.T) {
 		core.SSHEventReconnecting, // 再接続開始
 		core.SSHEventConnected,    // 再接続成功
 	} {
-		if ev := recvWithTimeout(t, events, fmt.Sprintf("event[%d]", i)); ev.Type != want {
+		ev := recvWithTimeout(t, events, fmt.Sprintf("event[%d]", i))
+		if ev.Type != want {
 			t.Errorf("event[%d] type = %v, want %v", i, ev.Type, want)
+		}
+		if ev.ReconnectDisabled {
+			t.Errorf("event[%d] ReconnectDisabled = true, want false", i)
 		}
 	}
 }
