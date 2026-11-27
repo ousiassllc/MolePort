@@ -1,6 +1,11 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/ousiassllc/moleport/internal/ipc/client"
+)
 
 func TestRunStart_NameRequired(t *testing.T) {
 	stubExit(t)
@@ -39,5 +44,41 @@ func TestRunStart_MockDaemon(t *testing.T) {
 
 	if output == "" {
 		t.Error("RunStart should produce output with mock daemon")
+	}
+}
+
+func TestRunStart_SetsCredentialHandler(t *testing.T) {
+	stubConnectDaemon(t)
+	inner := ConnectDaemon
+	var captured *client.IPCClient
+	ConnectDaemon = func(configDir string) *client.IPCClient {
+		captured = inner(configDir)
+		return captured
+	}
+
+	captureStdout(t, func() {
+		RunStart("", []string{"my-forward"})
+	})
+
+	if captured == nil {
+		t.Fatal("ConnectDaemon was not called")
+	}
+	if captured.CredentialHandler() == nil {
+		t.Error("RunStart should set a credential handler so that auth prompts can be answered")
+	}
+}
+
+func TestDaemonCallWithCredentials_Timeout(t *testing.T) {
+	stubConnectDaemon(t)
+
+	_, ctx, cleanup := DaemonCallWithCredentials("")
+	defer cleanup()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("context should have a deadline")
+	}
+	if remaining := time.Until(deadline); remaining <= defaultCallTimeout || remaining > connectCallTimeout {
+		t.Errorf("remaining = %v, want in (%v, %v]", remaining, defaultCallTimeout, connectCallTimeout)
 	}
 }

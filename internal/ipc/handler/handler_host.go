@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
 
@@ -10,10 +11,19 @@ func (h *Handler) hostList() (any, *protocol.RPCError) {
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
+	// ActiveForwardCount はセッションから集計する（SSHManager は保持しない）
+	activeCounts := make(map[string]int)
+	for _, s := range h.fwdMgr.GetAllSessions() {
+		if s.Status == core.Active {
+			activeCounts[s.Rule.Host]++
+		}
+	}
+
 	result := protocol.HostListResult{
 		Hosts: make([]protocol.HostInfo, len(hosts)),
 	}
 	for i, host := range hosts {
+		host.ActiveForwardCount = activeCounts[host.Name]
 		result.Hosts[i] = protocol.ToHostInfo(host)
 	}
 	return result, nil

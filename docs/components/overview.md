@@ -876,7 +876,7 @@ type SSHManager interface {
 
 | メソッド | 用途 | クレデンシャルが必要な場合 |
 |---------|------|------------------------|
-| `Connect` | セッション復元・auto_connect・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
+| `Connect` | セッション復元・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
 | `ConnectWithCallback` | `ssh.connect` / `forward.start` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
 
 ### ForwardManager (`core/forward/`)

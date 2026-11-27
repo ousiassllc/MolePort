@@ -14,7 +14,8 @@ func RunStart(configDir string, args []string) {
 	}
 
 	name := args[0]
-	client, ctx, cleanup := DaemonCall(configDir)
+	// 未接続ホストの認証でクレデンシャル入力を求められうるため、connect と同じ設定を使う
+	client, ctx, cleanup := DaemonCallWithCredentials(configDir)
 	defer cleanup()
 
 	params := protocol.ForwardStartParams{Name: name}
