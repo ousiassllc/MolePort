@@ -17,7 +17,16 @@ type SelectProps struct {
 
 // Select は選択欄。Selected と一致する選択肢を選択済みにする。
 templ Select(p SelectProps) {
-	<select class="mp-input" id={ FieldID(p.Name) } name={ p.Name } aria-invalid?={ p.Invalid } { p.Attrs... }>
+	<select
+		class="mp-input"
+		id={ FieldID(p.Name) }
+		name={ p.Name }
+		if p.Invalid {
+			aria-invalid="true"
+			aria-describedby={ ErrorID(p.Name) }
+		}
+		{ p.Attrs... }
+	>
 		for _, o := range p.Options {
 			<option value={ o.Value } selected?={ o.Value == p.Selected }>{ o.Label }</option>
 		}

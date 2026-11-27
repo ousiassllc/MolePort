@@ -84,7 +84,7 @@ graph TB
 ```
 Shell (gui タグ) → Web → GUI Service → Core (internal/core)
                     └→ Templ コンポーネント
-Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
+Shell (gui タグ) → daemon (Start / Stop / Services / Done) ・ daemon/control (Takeover)
 ```
 
 | レイヤー | パッケージ | ビルドタグ | 責務 | 依存してよいもの |
@@ -102,14 +102,14 @@ Shell (gui タグ) → daemon (Start / Stop / Services / Done / Takeover)
 
 ### `internal/daemon` の変更点
 
-GUI から再利用するため、`Daemon` に次を追加する。fork 起動（`StartDaemonProcess`）は headless 用として残す。
+GUI から再利用するため、`Daemon` に次を追加する。引き継ぎ（`Takeover`）は `internal/daemon/control` パッケージの関数で、`Daemon` のメソッドではない。fork 起動（`control.StartDaemonProcess`）は headless 用として残す。
 
 | 追加 API | 内容 |
 |----------|------|
 | `Services() Services` | Core の参照を返す構造体: `Config core.ConfigManager`, `SSH core.SSHManager`, `Forward core.ForwardManager`, `Version *update.VersionChecker` |
 | `Done() <-chan struct{}` | デーモンのコンテキスト終了を通知（`daemon.shutdown` IPC、`Shutdown()` 呼び出しで close）。GUI はこれを監視してアプリを終了する |
 | `Info() Info` | バージョン、PID、起動時刻（ヘッダー表示用） |
-| `Takeover(configDir string, timeout time.Duration) (prevPID int, err error)` | 稼働中の headless デーモンを `daemon.shutdown` で停止し PID ファイルの解放を待つ（後述） |
+| `control.Takeover(configDir string, timeout time.Duration) (prevPID int, err error)`（`internal/daemon/control`） | 稼働中の headless デーモンを `daemon.shutdown` で停止し PID ファイルの解放を待つ（後述）。`Daemon` のメソッドではなくパッケージ関数 |
 | `pidfile.IsLocked(pidPath string) (locked bool, pid int)`（`internal/daemon/pidfile`） | PID ファイルの排他ロックが他プロセスに保持されているかを非破壊で判定する（ロックを試行して即解放）。`kill(pid, 0)` による生存確認は PID 再利用で誤判定するため、引き継ぎ判定には使わない |
 
 - GUI は `Daemon.Wait()`（シグナル待ち）を使わず、`Start(ctx)` → `Done()` 監視 → `Stop()` の順で制御する。OS シグナル（SIGTERM/SIGINT）は Shell が受けて Wails の終了フローに接続する
@@ -247,18 +247,18 @@ HALT の 3 パターンのうち、JSON API ルート（Huma）は初期リリ�
 - すべての HTML は Templ で生成する（NFR-35: 自動エスケープ）
 - **実行可能なアクションだけをレンダリングする**。例: 状態が `Active` の転送行は「停止」のみ、`Stopped` / `Error` の行は「開始」のみ、`Pending Auth` / `Disconnected` のホストは「接続」のみを描画する（UC-29, UC-30）。ボタンの `hx-post` URL はサーバーが生成する（クライアントに URL 規則を持たせない）
 - アクションの可否は `service` の ViewModel が `Actions` フィールド（`CanStart`, `CanStop`, `CanDelete`, `CanConnect`, `CanDisconnect`）として計算し、Templ は条件分岐のみを行う
-- 検証エラーはフォームを再レンダリングして `422` で返す（`hx-target-422` + response-targets 拡張）。業務エラーは OOB でトーストを返す
-- 二重送信防止は `hx-disabled-elt="this"`、進行表示は `hx-indicator`（スケルトンスクリーンは使わない）
+- 検証エラーはフォームを再レンダリングして `422` で返す（`HX-Retarget` / `HX-Reswap` レスポンスヘッダーでモーダルへ差し替える。response-targets 拡張は使わない）。業務エラーは OOB でトーストを返す
+- 二重送信防止は `hx-disabled-elt="this"`、進行表示は `hx-disabled-elt`（送信中のボタンを無効化する。`hx-indicator` は使わず、スケルトンスクリーンも使わない）
 
 ### Atomic Design
 
 | 階層 | コンポーネント |
 |------|---------------|
-| atoms | `StatusBadge`、`PortLabel`、`Spinner`、`KeyHint`、`DataSize`、`Duration`、`Button`、`TextInput`、`Select`、`Toast`、`Icon` |
+| atoms | `StatusBadge`、`PortLabel`、`DataSize`、`Duration`、`Button`、`TextInput`、`Select`、`Checkbox`、`Toast` |
 | molecules | `HostRow`、`ForwardRow`、`FormField`（ラベル + 入力 + エラー）、`ConfirmDialog`、`CredentialPrompt`、`ThemeSwatch` |
-| organisms | `Header`、`HostPanel`、`ForwardPanel`、`StatusBar`、`ToastStack`、`ForwardForm`、`SettingsForm`、`CredentialDialog` |
+| organisms | `Header`、`HostPanel`、`ForwardPanel`、`StatusBar`、`ToastStack`、`ToastMessages`、`ForwardForm`、`SettingsForm`、`CredentialDialog`、`CredentialRemaining` |
 | pages | `DashboardPage` |
-| layout | `BaseLayout`（`<head>`、meta トークン、CSP、`ModalRoot`、`ToastStack`） |
+| layout | `BaseLayout`（`<head>`、meta トークン、CSP、`ModalRoot`、`ToastStack`、`ToastMessages`） |
 
 Templ コンポーネントのインターフェース規約は HALT に従う（引数 3 個以下は直接パラメータ、それ以上は `Props` 構造体、バリエーションは型付き const、子要素は `children...`）。
 
@@ -554,3 +554,4 @@ Linux は `libgtk-3-dev` と `libwebkit2gtk-4.1-dev` が必要で、`-tags gui,w
 | 1.5 | 2026-10-15 | 設定の拡張の実装反映: 既存 `config.yaml` の互換・値の補完、起動前ページのテーマ、`update_check` の即時反映を追記 | #90 M3-3 設定・更新バッジ |
 | 1.6 | 2026-10-15 | 配布の実装反映: `gui-publish` ジョブによる `checksums_gui.txt` 生成と一括アップロード、`release` ジョブの `tag` 出力、`wails build -s` と Wails CLI のバージョン固定、アセット名のバージョン表記（`v` なし）、Linux の `webkit2_41` タグ、CI の `gui-build` ジョブ、`make gui-build` の `GUI_TAGS` / `LDFLAGS`、実ランナー検証待ちの明記 | #92 M4 配布 |
 | 1.7 | 2026-10-15 | Windows の配布を zip から NSIS インストーラー（ユーザー単位、`project.nsi` をリポジトリで管理）に変更。CI でもインストーラー生成を検証。実機検証待ちの明記 | Windows 配布形態の変更 #92 |
+| 1.8 | 2026-11-28 | `Takeover` を `Daemon` のメソッドではなく `internal/daemon/control` のパッケージ関数として記載 | #148 ドキュメント乖離修正 |

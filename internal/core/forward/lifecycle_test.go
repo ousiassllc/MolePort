@@ -2,6 +2,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -26,6 +27,32 @@ func TestForwardManager_StartForward_ConnectError(t *testing.T) {
 	})
 	if err := fm.StartForward("web", nil); err == nil {
 		t.Fatal("StartForward() should return error when SSH connect fails")
+	}
+}
+
+// 再接続待機中のホストでは接続を張り直さず（自動再接続を打ち切らず）、NotConnectedError で失敗する。
+func TestForwardManager_StartForward_HostReconnecting(t *testing.T) {
+	sm := forwardtest.NewMockSSHManager()
+	sm.SetHostState("server1", core.Reconnecting)
+	connectCalled := false
+	sm.ConnectWithCbFn = func(string, core.CredentialCallback) error {
+		connectCalled = true
+		return nil
+	}
+	fm := NewForwardManager(context.Background(), sm)
+	_, _ = fm.AddRule(core.ForwardRule{
+		Name: "web", Host: "server1", Type: core.Local, LocalPort: 8080, RemoteHost: "localhost", RemotePort: 80,
+	})
+	err := fm.StartForward("web", nil)
+	var notConnected *core.NotConnectedError
+	if !errors.As(err, &notConnected) {
+		t.Fatalf("StartForward() error = %v, want NotConnectedError", err)
+	}
+	if connectCalled {
+		t.Error("StartForward() must not connect a reconnecting host")
+	}
+	if sess, _ := fm.GetSession("web"); sess.Status != core.Stopped {
+		t.Errorf("session status = %v, want Stopped", sess.Status)
 	}
 }
 

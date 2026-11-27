@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/service/settings"
+	"github.com/ousiassllc/moleport/internal/i18n"
 )
 
 // fakeSettings は settings.Settings のテスト用実装。
@@ -40,6 +41,7 @@ func (f *fakeSettings) Save(in service.SettingsView) (service.FormErrors, error)
 	}
 	f.saved = append(f.saved, in)
 	f.view = in
+	_ = i18n.SetLang(i18n.Lang(in.Language)) // 実 Service と同じく、保存で言語を切り替える。
 	return nil, nil
 }
 
@@ -109,6 +111,7 @@ func TestSettingsSave_Success(t *testing.T) {
 	setEnglish(t)
 	set := savedSettings()
 	e := &actionEnv{h: settingsRouter(set, guiconfig.Theme{})}
+	before := i18n.T("gui.error.generic")
 	rec := e.post(http.MethodPost, "/actions/settings", url.Values{
 		"language": {"ja"}, "theme_base": {"light"}, "theme_accent": {"orange"},
 	})
@@ -137,6 +140,19 @@ func TestSettingsSave_Success(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), oobToast) {
 		t.Errorf("OOB トーストが無い: %s", rec.Body.String())
+	}
+	// 汎用エラートーストの文言は新しい言語で OOB 差し替えされ、#toast-stack 自体は置換しない。
+	after := i18n.T("gui.error.generic")
+	if after == before {
+		t.Fatalf("言語が切り替わっていない: %q", after)
+	}
+	for _, want := range []string{`id="toast-messages"`, `hx-swap-oob="true"`, `data-error-message="` + after + `"`, `data-dismiss-label="` + i18n.T("gui.toast.dismiss") + `"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("本文に %q が無い: %s", want, rec.Body.String())
+		}
+	}
+	if strings.Contains(rec.Body.String(), `id="toast-stack"`) {
+		t.Errorf("#toast-stack を置換してはならない: %s", rec.Body.String())
 	}
 }
 

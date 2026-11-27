@@ -93,6 +93,44 @@ func TestCredentialFragment(t *testing.T) {
 	}
 }
 
+// 同じ要求のまま待機数が変わったときは、入力欄を保ったまま「残り」行だけを OOB で更新する。
+func TestCredentialFragment_RemainingUpdatedOutOfBand(t *testing.T) {
+	setEnglish(t)
+	e := newActionEnv(service.LifecycleReady)
+	req := passwordReq
+	req.Remaining = 2
+	e.cred.pending = []service.CredentialView{req}
+
+	hdr := map[string]string{"HX-Request": "true", handler.CredentialShownHeader: "gcr-1", handler.CredentialRemainingHeader: "0"}
+	rec := serve(e.h, http.MethodGet, "/fragments/credential", hdr)
+	if rec.Code != http.StatusOK || rec.Header().Get("HX-Reswap") != "none" {
+		t.Fatalf("待機数が変化: status = %d HX-Reswap=%q, want 200 / none", rec.Code, rec.Header().Get("HX-Reswap"))
+	}
+	body := rec.Body.String()
+	for _, s := range []string{`id="credential-remaining"`, `hx-swap-oob="true"`, `data-remaining="2"`, "Other pending requests: 2"} {
+		if !strings.Contains(body, s) {
+			t.Errorf("本文に %q が無い:\n%s", s, body)
+		}
+	}
+	if strings.Contains(body, "<dialog") || strings.Contains(body, "<input") {
+		t.Errorf("ダイアログ本体（入力欄）は返さない:\n%s", body)
+	}
+
+	// 待機数が同じなら従来どおり 204。
+	hdr[handler.CredentialRemainingHeader] = "2"
+	if rec := serve(e.h, http.MethodGet, "/fragments/credential", hdr); rec.Code != http.StatusNoContent {
+		t.Errorf("待機数も同じ: status = %d, want 204", rec.Code)
+	}
+
+	// 待機が解消して 0 になったら、空の「残り」行で更新する。
+	e.cred.pending[0].Remaining = 0
+	hdr[handler.CredentialRemainingHeader] = "2"
+	body = serve(e.h, http.MethodGet, "/fragments/credential", hdr).Body.String()
+	if !strings.Contains(body, `data-remaining="0"`) || strings.Contains(body, "Other pending") {
+		t.Errorf("0 件は空の「残り」行:\n%s", body)
+	}
+}
+
 // captureLogs は slog の既定ロガーを Debug レベルでバッファに向ける。
 func captureLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()

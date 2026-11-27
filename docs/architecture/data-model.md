@@ -56,7 +56,7 @@ ssh_config_path: "~/.ssh/config"
 reconnect:
   enabled: true              # 自動再接続の有効/無効
   max_retries: 10            # 最大リトライ回数（0 = 無制限）
-  initial_delay: "1s"        # 初回リトライ待機時間
+  initial_delay: "1s"        # 初回リトライ待機時間（0 以下は 1s として扱い、max_delay が正ならそれを超えない）
   max_delay: "60s"           # 最大リトライ待機時間
   keepalive_interval: "30s"  # KeepAlive 送信間隔
 
@@ -220,7 +220,7 @@ type ForwardRule struct {
 
 ## 状態ファイル（state.yaml）
 
-デーモン停止時のセッション状態を保持する。デーモン起動時の自動復元に使用する。
+デーモン停止時のセッション状態を保持する。デーモン起動時の自動復元に使用する。起動時の復元は非同期（NFR-01）で行うため、復元が完了する前に停止した場合は、未処理（復元待ち）のルールも `active_forwards` に保存し、次回起動で復元する。
 
 ### 構造
 
@@ -245,8 +245,9 @@ active_forwards:
     remote_host: "localhost"
     remote_port: 5432
 
-# 最後に選択していたホスト（TUI 復元用）
-selected_host: "prod-server"
+# 最後に選択していたホスト（TUI 復元用）※未実装: フィールドは定義のみで、デーモンも TUI も
+# 設定・参照しない。常に空文字で保存される（`selected_host: ""`）
+selected_host: ""
 ```
 
 ### Go 型定義
@@ -258,6 +259,8 @@ type State struct {
     SelectedHost   string        `yaml:"selected_host"`
 }
 ```
+
+> **Note**: `SelectedHost`（`selected_host`）は将来の TUI 選択ホスト復元用の予約フィールドで、現状は未実装（書き込み・読み出しともに行わない）。保存形式は変更しない。
 
 ## PID ファイル（moleport.pid）
 
@@ -379,7 +382,7 @@ SSH config から読み込んだホスト情報と、実行時の接続状態を
 
 | フィールド | 型 | 説明 |
 |-----------|------|------|
-| ID | string | セッション一意 ID（`<host>-<type>-<localport>` 形式で自動生成） |
+| ID | string | セッション一意 ID（`<ruleName>-<開始時刻 UnixNano>` 形式。開始のたびに変わる不透明な値として扱い、形式に依存しない） |
 | Rule | ForwardRule | 転送ルール |
 | Status | SessionStatus | セッション状態 |
 | ConnectedAt | time.Time | 接続開始時刻 |
@@ -451,7 +454,7 @@ type SSHHost struct {
 
 // 転送セッション（実行時状態 + メトリクス）
 type ForwardSession struct {
-    ID             string        // 一意 ID（<host>-<type>-<localport>）
+    ID             string        // 一意 ID（<ruleName>-<開始時刻 UnixNano>。不透明な値）
     Rule           ForwardRule   // 転送ルール
     Status         SessionStatus // セッション状態
     ConnectedAt    time.Time     // 接続開始時刻
@@ -478,7 +481,7 @@ type VersionCheckResult struct {
 
 ```
 
-**ForwardRule.Name の一意性**: ルール名はグローバルユニーク（全ホスト横断で一意）とする。`ForwardManager` がルール名のみで操作するため。省略時は `<host>-<type>-<localport>` 形式で自動生成される。
+**ForwardRule.Name の一意性**: ルール名はグローバルユニーク（全ホスト横断で一意）とする。`ForwardManager` がルール名のみで操作するため。省略時の自動生成名は経路により異なる。CLI / IPC（`forward.add`）では `ForwardManager` が `forward-<N>`（`N` はデーモン起動中の連番）を割り当て、TUI のウィザードと GUI では `<host>-<type>-<localport>` を補完して渡す。
 
 ## 状態遷移図
 
@@ -629,7 +632,7 @@ type ForwardInfo struct {
 
 // forward.add
 type ForwardAddParams struct {
-    Name           string `json:"name,omitempty"`            // 省略時は自動生成
+    Name           string `json:"name,omitempty"`            // 省略時は Core が forward-<N> を自動生成
     Host           string `json:"host"`
     Type           string `json:"type"`
     LocalPort      int    `json:"local_port"`
@@ -886,7 +889,7 @@ type ForwardEventNotification struct {
     Error string `json:"error,omitempty"`
 }
 
-// event.metrics（デーモン → クライアント通知、定期送信）
+// event.metrics（デーモン → クライアント通知。型のみ定義、未実装でデーモンは発行しない）
 type MetricsEventNotification struct {
     Sessions []SessionMetrics `json:"sessions"`
 }
@@ -939,8 +942,8 @@ type CredentialResponseResult struct {
 | -32602 | InvalidParams | 不正なパラメータ |
 | -32603 | InternalError | 内部エラー |
 | 1001 | HostNotFound | 指定ホストが見つからない |
-| 1002 | AlreadyConnected | 既に接続済み |
-| 1003 | NotConnected | 未接続 |
+| 1002 | AlreadyConnected | 指定ルールが既にアクティブ（`forward.start`）。`ssh.connect` は接続済みでも成功を返す |
+| 1003 | NotConnected | 再接続待機中（`Reconnecting`）のホストのルールに対する `forward.start`（進行中の自動再接続を打ち切らないため、手動では接続しない）、および接続確立直後に切断された場合 |
 | 1004 | RuleNotFound | 転送ルールが見つからない |
 | 1005 | RuleAlreadyExists | ルール名が重複 |
 | 1006 | PortConflict | ポートが使用中 |
@@ -1078,3 +1081,5 @@ EventBridge が Wails Events で送るトピック名（文字列）。ペイロ
 | 3.4 | 2026-10-15 | `HostView.State` に `connecting`、`ForwardView.Status` に `starting` を追記、`ActiveCount` の算出元を明記 | #88 M3-1 ダッシュボード |
 | 3.5 | 2026-10-15 | GUI の進行中操作（`Activity`）による `connecting` / `starting` / `error` の重ね合わせを追記 | #89 M3-2 操作系 |
 | 3.6 | 2026-10-15 | `gui:` セクションの型を `internal/core/guiconfig`（`Config` / `Theme`）に配置 | #90 M3-3 設定・更新バッジ |
+| 3.7 | 2026-11-28 | `state.yaml` の `selected_host` が未実装（常に空文字）であることを明記 | #145 ドキュメント乖離修正 |
+| 3.8 | 2026-11-28 | エラーコード 1003 (NotConnected) の返却条件を更新、`reconnect.initial_delay` が 0 以下のとき 1s にフォールバックすることを追記、state.yaml に復元待ちのルールも保存されることを追記 | #165, #166 ドキュメント乖離修正 |

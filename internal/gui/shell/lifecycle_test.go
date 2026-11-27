@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 )
 
@@ -108,14 +108,14 @@ func TestLifecycle_StartFailures(t *testing.T) {
 	}{
 		{
 			name:    "引き継ぎ: 応答なし",
-			setup:   func(h *harness) { h.takeErr = daemon.ErrTakeoverUnresponsive },
-			wantErr: daemon.ErrTakeoverUnresponsive,
+			setup:   func(h *harness) { h.takeErr = control.ErrTakeoverUnresponsive },
+			wantErr: control.ErrTakeoverUnresponsive,
 			wantKey: "gui.dialog.takeover_unresponsive",
 		},
 		{
 			name:    "引き継ぎ: タイムアウト",
-			setup:   func(h *harness) { h.takeErr = daemon.ErrTakeoverTimeout },
-			wantErr: daemon.ErrTakeoverTimeout,
+			setup:   func(h *harness) { h.takeErr = control.ErrTakeoverTimeout },
+			wantErr: control.ErrTakeoverTimeout,
 			wantKey: "gui.dialog.takeover_timeout",
 		},
 		{

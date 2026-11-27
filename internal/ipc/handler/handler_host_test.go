@@ -35,6 +35,29 @@ func TestHandler_HostList(t *testing.T) {
 	}
 }
 
+func TestHandler_HostList_ActiveForwardCount(t *testing.T) {
+	h, _, fwdMgr, _ := newTestHandler()
+	fwdMgr.sessions = []core.ForwardSession{
+		{Rule: core.ForwardRule{Name: "web", Host: "prod"}, Status: core.Active},
+		{Rule: core.ForwardRule{Name: "db", Host: "prod"}, Status: core.Active},
+		{Rule: core.ForwardRule{Name: "old", Host: "prod"}, Status: core.Stopped},
+		{Rule: core.ForwardRule{Name: "other", Host: "staging"}, Status: core.SessionError},
+	}
+
+	result, rpcErr := h.Handle("client-1", "host.list", nil)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr)
+	}
+	hostList := result.(protocol.HostListResult)
+
+	if got := hostList.Hosts[0].ActiveForwardCount; got != 2 {
+		t.Errorf("prod ActiveForwardCount = %d, want 2", got)
+	}
+	if got := hostList.Hosts[1].ActiveForwardCount; got != 0 {
+		t.Errorf("staging ActiveForwardCount = %d, want 0", got)
+	}
+}
+
 func TestHandler_HostReload(t *testing.T) {
 	h, _, _, _ := newTestHandler()
 

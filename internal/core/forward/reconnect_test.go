@@ -2,6 +2,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -152,6 +153,34 @@ func TestForwardManager_FailReconnecting(t *testing.T) {
 	session, _ := fm.GetSession("web")
 	if session.LastError == "" {
 		t.Error("session LastError should not be empty")
+	}
+	fm.Close()
+}
+
+// 再接続失敗で Error になった転送は、Stopped を経由せずに StartForward で再開できる。
+func TestForwardManager_StartForward_RestartsErrorForward(t *testing.T) {
+	fm, events := setupReconnectTest(t, forwardtest.NewMockConn(true, false))
+	fm.FailReconnecting("server1")
+	forwardtest.DrainEvent(t, events) // Error
+
+	if err := fm.StartForward("web", nil); err != nil {
+		t.Fatalf("StartForward() on Error forward error = %v", err)
+	}
+	ev := forwardtest.DrainEvent(t, events)
+	if ev.Type != core.ForwardEventStarted {
+		t.Errorf("event type = %v, want %v (no Stopped event for the discarded forward)", ev.Type, core.ForwardEventStarted)
+	}
+	forwardtest.AssertSessionStatus(t, fm, "web", core.Active)
+	fm.Close()
+}
+
+// 再接続中（SessionReconnecting）の転送は従来どおり AlreadyActive で開始できない。
+func TestForwardManager_StartForward_ReconnectingIsAlreadyActive(t *testing.T) {
+	fm, _ := setupReconnectTest(t, forwardtest.NewMockConn(true, false))
+	err := fm.StartForward("web", nil)
+	var alreadyActive *core.AlreadyActiveError
+	if !errors.As(err, &alreadyActive) {
+		t.Fatalf("StartForward() error = %v, want AlreadyActiveError", err)
 	}
 	fm.Close()
 }

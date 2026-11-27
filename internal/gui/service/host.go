@@ -1,6 +1,6 @@
 package service
 
-import "fmt"
+import "github.com/ousiassllc/moleport/internal/core"
 
 // Hosts はホストの接続・切断（UC-30）。
 type Hosts interface {
@@ -84,13 +84,8 @@ func (s *HostService) Disconnect(name string) error {
 	if !hostDisconnectable(h.State) {
 		return ErrStateConflict
 	}
-	for _, sess := range b.Forward.GetAllSessions() {
-		if sess.Rule.Host != name || !forwardStoppable(sess.Status) {
-			continue
-		}
-		if err := b.Forward.StopForward(sess.Rule.Name); err != nil {
-			return fmt.Errorf("stop forward %q: %w", sess.Rule.Name, err)
-		}
+	if err := core.StopHostForwards(b.Forward, name); err != nil {
+		return err
 	}
 	if err := b.SSH.Disconnect(name); err != nil {
 		return err

@@ -1,0 +1,18 @@
+package organisms
+
+import "github.com/ousiassllc/moleport/internal/i18n"
+
+// ToastMessages は app.ts がサーバー無応答時の汎用エラートーストに使うローカライズ済み文言の置き場。
+// #toast-stack と分けてあるのは、言語の保存時に oob=true（hx-swap-oob="true"）で差し替えても
+// 表示中のトーストを消さないため。
+templ ToastMessages(oob bool) {
+	<div
+		id="toast-messages"
+		hidden
+		data-error-message={ i18n.T("gui.error.generic") }
+		data-dismiss-label={ i18n.T("gui.toast.dismiss") }
+		if oob {
+			hx-swap-oob="true"
+		}
+	></div>
+}

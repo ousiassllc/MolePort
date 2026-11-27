@@ -36,11 +36,11 @@ func NewSSHConnection() core.SSHConnection {
 
 // Dial は指定ホストへ SSH 接続を確立する。
 func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ssh.Client, error) {
-	authMethods, agentCloser := buildAuthMethods(host, cb)
-	// authMethods が空でも早期リターンしない。
+	authSteps, agentCloser := buildAuthMethods(host, cb)
+	// authSteps が空でも早期リターンしない。
 	// Go の crypto/ssh は常に "none" 認証を最初に試行するため、
 	// Tailscale SSH のように none 認証で動作するサーバーへの接続が可能。
-	if len(authMethods) == 0 {
+	if len(authSteps) == 0 {
 		slog.Debug("no explicit auth methods configured, relying on none auth", "host", host.Name)
 	}
 
@@ -59,8 +59,9 @@ func (c *sshConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*ss
 	}
 
 	config := &ssh.ClientConfig{
-		User:            host.User,
-		Auth:            authMethods,
+		User: host.User,
+		// 認証の段階は AuthCallback で 1 段階ずつ選ぶ（鍵の読み込みやパスフレーズの要求を遅延させるため）
+		AuthCallback:    sequentialAuthCallback(authSteps),
 		HostKeyCallback: hostKeyCallback,
 	}
 

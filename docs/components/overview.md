@@ -249,8 +249,12 @@ func (d *Daemon) Wait() error      // 終了シグナルを待機（headless 用
 func (d *Daemon) Services() Services       // Core マネージャーの参照（Config / SSH / Forward / Version）。Start 後に有効
 func (d *Daemon) Done() <-chan struct{}    // コンテキスト終了（daemon.shutdown / Shutdown）で close
 func (d *Daemon) Info() Info               // Version / PID / StartedAt
+```
 
-// headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
+headless デーモンの引き継ぎ（`Takeover` / `TakeoverTimeout`）は `daemon` ではなく `internal/daemon/control` サブパッケージにある（後述の「DaemonControl」を参照）。
+
+```go
+// control.Takeover: headless デーモンの引き継ぎ。ロックされていなければ (0, nil)。ErrTakeoverUnresponsive / ErrTakeoverTimeout を返す
 func Takeover(configDir string, timeout time.Duration) (prevPID int, err error)
 
 const TakeoverTimeout = 10 * time.Second // 標準の待機時間（Shell が Takeover に渡す）
@@ -293,18 +297,18 @@ func IsLocked(path string) (locked bool, pid int) // 排他ロックを他プロ
 - `KillProcess` は Unix では `SIGKILL`、Windows では `TerminateProcess` で停止する
 - Windows の `LockFileEx` は強制ロックのため、PID の読み取りを妨げないようファイル先頭ではなくオフセット `0x7FFFFFFF` の 1 バイトをロックする
 
-### Fork
+### DaemonControl
 
-デーモンの自己フォーク処理を提供する。
+デーモンの起動・引き継ぎ・自己フォークを提供する。`daemon` 本体と分離した `internal/daemon/control` パッケージ（Linterly の 2000 行/ディレクトリ制限のため分離）に置き、CLI / TUI / GUI から `control.EnsureDaemon` のように参照する。`Takeover`（上記）と `EnsureDaemon` / `EnsureDaemonWithRetry`（`ensure.go`）もこのパッケージに属する。
 
-#### インターフェース
+#### インターフェース（Fork）
 
 ```go
-// StartDaemonProcess は現在のバイナリを --daemon-mode フラグ付きで再起動し、
+// control.StartDaemonProcess は現在のバイナリを --daemon-mode フラグ付きで再起動し、
 // バックグラウンドプロセスとして動作させる
 func StartDaemonProcess(configDir string) (int, error)
 
-// IsDaemonMode は --daemon-mode フラグが指定されているかを返す
+// control.IsDaemonMode は --daemon-mode フラグが指定されているかを返す
 func IsDaemonMode() bool
 ```
 
@@ -440,6 +444,7 @@ JSON-RPC メソッドを Core Layer のマネージャに委譲する。ドメ�
 | `handler_daemon.go` | `daemon.status`, `daemon.shutdown` |
 | `handler_version.go` | `version.check` |
 | `handler_events.go` | `events.subscribe/unsubscribe` |
+| `forwardint/` | テスト専用サブパッケージ（IPC ハンドラと実 ForwardManager の結合テスト） |
 
 #### 責務
 
@@ -558,7 +563,6 @@ Core Layer からのイベントを集約し、サブスクライブ中のクラ
 
 - サブスクリプションの管理（追加・削除）
 - Core Layer イベント（SSHEvent / ForwardEvent）の受信
-- メトリクス更新の定期送信
 - クライアントへの通知配信
 
 #### インターフェース
@@ -594,10 +598,9 @@ func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent)
 flowchart TD
     SSHMgr["SSHManager<br/>SSHEvent channel"] --> Broker["EventBroker"]
     FwdMgr["ForwardManager<br/>ForwardEvent channel"] --> Broker
-    Ticker["time.Ticker (1s)<br/>メトリクス収集"] --> Broker
 
     Broker --> Filter["イベントタイプでフィルタ"]
-    Filter --> Sub1["Subscription #1 (TUI)<br/>ssh, forward, metrics"]
+    Filter --> Sub1["Subscription #1 (TUI)<br/>ssh, forward"]
     Filter --> Sub2["Subscription #2 (TUI)<br/>ssh, forward"]
 ```
 
@@ -617,7 +620,7 @@ flowchart TD
 
 ```go
 func main() {
-    if daemon.IsDaemonMode() {
+    if control.IsDaemonMode() {
         // デーモンプロセスとして起動
         runDaemon()
         return
@@ -876,7 +879,7 @@ type SSHManager interface {
 
 | メソッド | 用途 | クレデンシャルが必要な場合 |
 |---------|------|------------------------|
-| `Connect` | セッション復元・auto_connect・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
+| `Connect` | セッション復元・自動再接続 | `PendingAuth` 状態にしてイベント通知 |
 | `ConnectWithCallback` | `ssh.connect` / `forward.start` IPC リクエスト経由 | コールバックでクライアントに入力を要求 |
 
 ### ForwardManager (`core/forward/`)
@@ -885,11 +888,11 @@ type SSHManager interface {
 
 | ファイル | 責務 |
 |---------|------|
-| `manager.go` | インターフェース定義・初期化・ルール管理 |
+| `manager.go` | インターフェース定義・初期化・ルール管理・セッション照会（`GetSession`/`GetAllSessions`）・イベント購読（`Subscribe`） |
 | `lifecycle.go` | `StartForward`/`StopForward`/`StopAllForwards` |
 | `bridge.go` | 接続ブリッジ（`acceptLoop`/`dialRemote`/`bridge`/SOCKS5） |
 | `reconnect.go` | `MarkReconnecting`/`RestoreForwards`/`FailReconnecting` |
-| `events.go` | セッション照会・イベント管理 |
+| `forward_helper.go` | ヘルパー関数（`openListener` 等） |
 
 #### 責務
 
@@ -1258,7 +1261,7 @@ func (m *MainModel) checkDaemonVersion() tea.Cmd {
 }
 ```
 
-不一致時は `ConfirmDialog` を表示し、ユーザーの選択に応じてデーモンの再起動（`daemon.shutdown` → `daemon.StartDaemonProcess` → 再接続）またはステータスバー警告表示を行う。
+不一致時は `ConfirmDialog` を表示し、ユーザーの選択に応じてデーモンの再起動（`daemon.shutdown` → `control.StartDaemonProcess` → 再接続）またはステータスバー警告表示を行う。
 
 #### TUI ⟷ デーモン通信フロー
 
@@ -1277,17 +1280,17 @@ sequenceDiagram
     Daemon-->>IPC: {"version":"...", ...}
     TUI->>TUI: バージョン比較 → 一致 or ユーザー確認
 
-    TUI->>IPC: Subscribe(["ssh","forward","metrics"])
+    TUI->>IPC: Subscribe(["ssh","forward"])
     IPC->>Daemon: events.subscribe
     Daemon-->>IPC: subscription_id
 
     loop イベント受信ループ
-        Daemon-->>IPC: event.ssh / event.forward / event.metrics
+        Daemon-->>IPC: event.ssh / event.forward
         IPC-->>TUI: Events() channel
         TUI->>TUI: Msg に変換 → Update() → View()
     end
 
-    Note over TUI: ユーザーがコマンド入力
+    Note over TUI: ユーザーがキー操作
     TUI->>IPC: Call("forward.start", {name: "prod-web"})
     IPC->>Daemon: forward.start
     Daemon-->>IPC: result
@@ -1373,7 +1376,7 @@ func TitleStyle() lipgloss.Style {
 
 ### ThemePage (`pages/theme.go`)
 
-テーマ選択画面を表示する Page コンポーネント。初回起動時と `/theme` コマンドの両方で使用される。
+テーマ選択画面を表示する Page コンポーネント。初回起動時と `t` キーの両方で使用される。
 
 #### 責務
 
@@ -1408,7 +1411,7 @@ type ThemeCancelledMsg struct{}
 
 ### LangPage (`pages/lang.go`)
 
-言語選択画面を表示する Page コンポーネント。初回起動時と `/lang` コマンドの両方で使用される。
+言語選択画面を表示する Page コンポーネント。初回起動時と `l` キーの両方で使用される。
 
 #### 責務
 
@@ -1650,8 +1653,8 @@ GUI プロセスの起動・引き継ぎ・終了を統括する。Wails・実�
 
 #### 責務
 
-- 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `~/.config/moleport`）と i18n 言語の解決
-- `daemon.Takeover` による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
+- 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport`）と i18n 言語の解決
+- `control.Takeover`（`internal/daemon/control`）による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
 - `Daemon.Done()` の監視（`daemon.shutdown` 起因の終了を Wails の終了フローへ接続）
 - 状態（`starting` / `ready` / `failed`）の保持と、`ready` 遷移時の全トピック通知
 - `RequestQuit(confirm bool)` による終了処理（確認ダイアログ → `Daemon.Stop()` → トレイ破棄 → `runtime.Quit`）。`quitting` フラグで `OnBeforeClose` を素通しにする
@@ -1844,18 +1847,20 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | 階層 | コンポーネント | 引数 |
 |------|---------------|------|
 | atoms | `StatusBadge` | `kind string, label string` |
-| atoms | `Button` | `ButtonProps{Label, Variant, Attrs templ.Attributes}`（`ButtonPrimary` / `ButtonSecondary` / `ButtonDanger`） |
+| atoms | `Button` | `ButtonProps{Label, Variant, Type, Attrs templ.Attributes}`（`ButtonPrimary` / `ButtonSecondary` / `ButtonDanger`。`Type` は空なら `button`、`"submit"` でフォーム送信。送信ボタンは `Type: "submit"` を渡す） |
 | molecules | `HostRow` | `HostView`（`Actions` に応じて接続 / 切断 / 転送追加を描画） |
 | molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
 | molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
 | atoms | `PortLabel` / `DataSize` / `Duration` | 整形済み文字列（`DataSize` / `Duration` はラベル付き。`Duration` は空なら何も描画しない）。`atoms.ElementID(prefix, name)` が安定した `id` を作る（英数字以外は `_` + 16 進） |
-| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid`）/ `name, checked` |
+| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid="true"` と `aria-describedby`（エラー `<p>` の id は `atoms.ErrorID(name)`）を出す）/ `name, checked` |
 | molecules | `ConfirmDialog` | `ConfirmDialogProps{ID, Title, Message, ConfirmLabel, CancelLabel, ConfirmVariant, ConfirmAttrs}` |
 | molecules | `CredentialPrompt` | `CredentialPromptProps{Label, Name, Echo, Autofocus}`（`Echo=false` は `type="password"`、値を描画しない） |
 | organisms | `HostPanel` / `ForwardPanel` | `[]HostView` / `[]ForwardView`, `ready bool`（`ready` でない間は一覧・ボタンを描画しない） |
 | organisms | `StatusBar` / `Header` / `Toasts`（`/fragments/toasts` の OOB 本文） | 対応する ViewModel |
+| organisms | `ToastMessages` | `oob bool`（`#toast-messages`。`app.ts` がサーバー無応答時の汎用エラートーストに使う文言の置き場。`BaseLayout` と設定保存の OOB が描画し、`oob` が真なら `hx-swap-oob` で差し替えて表示中のトーストを消さない） |
 | organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
 | organisms | `CredentialDialog` / `ForwardDeleteDialog` | `CredentialView` / ルール名 |
+| organisms | `CredentialRemaining` | `remaining int, oob bool`（`#credential-remaining`。待機中の他要求数。OOB でも描画し、入力途中の値を保つ） |
 | organisms | `SettingsForm` | `SettingsView, FormErrors` |
 | pages | `DashboardPage` | `DashboardProps{Layout, State, Header, Hosts, Forwards, Status}` |
 | layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |
@@ -1870,7 +1875,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 
 | コンポーネント | 変更内容 |
 |---------------|---------|
-| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `pidfile.IsLocked` 追加（PID ファイル管理は `daemon/pidfile` サブパッケージ） |
+| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `pidfile.IsLocked` 追加（PID ファイル管理は `daemon/pidfile`、`Takeover` / `EnsureDaemon` / fork は `daemon/control` サブパッケージ） |
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
 | `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |
@@ -1945,14 +1950,14 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | パッケージ | 分割前ファイル | 行数 | 分割後ファイル数 |
 |-----------|-------------|------|--------------|
 | `core/ssh/` | `ssh.go` | 600 | 4 |
-| `core/forward/` | `forward.go` | 520 | 5 (`manager.go`, `lifecycle.go`, `bridge.go`, `reconnect.go`, `events.go`) |
+| `core/forward/` | `forward.go` | 520 | 5 (`manager.go`, `lifecycle.go`, `bridge.go`, `reconnect.go`, `forward_helper.go`) |
 | `core/` | `types.go` | 340 | 4 (`types_enums.go`, `types_models.go`, `types_events.go`, `types_credentials.go`) |
 | `ipc/handler/` | `handler.go` | 587 | 8 |
 | `ipc/protocol/` | `protocol.go` | 432 | 9 (`protocol.go`, `convert.go`, `protocol_host.go`, `protocol_ssh.go`, `protocol_forward.go`, `protocol_session.go`, `protocol_config.go`, `protocol_daemon.go`, `protocol_events.go`) |
 | `tui/app/` | `app.go` | 470 | 9 (`app.go`, `app_forward.go`, `app_help.go`, `app_ipc.go`, `app_lang.go`, `app_lifecycle.go`, `app_theme.go`, `app_version.go`, `convert.go`) |
 | `tui/organisms/` | `setuppanel.go` | 534 | 3 (`setuppanel.go`, `setuppanel_update.go`, `setuppanel_view.go`) |
-| `daemon/` | `daemon.go` | 321 | 3 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `ensure.go`) |
-| `gui/service/` | （新規） | — | 8 (`dashboard.go`, `host.go`, `forward.go`, `settings.go`, `credential.go`, `notification.go`, `bridge.go`, `viewmodel.go`) |
+| `daemon/` | `daemon.go` | 321 | 6 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `daemon_host.go`, `daemon_paths.go`, `daemon_shutdown.go`, `doc.go`)。`Takeover` / `EnsureDaemon` / fork は `daemon/control/`（`ensure.go`, `takeover.go`, `fork.go`, `fork_unix.go`, `fork_windows.go`）、PID ファイルは `daemon/pidfile/` |
+| `gui/service/` | （新規） | — | 12 ファイル（`dashboard.go`, `host.go`, `forward.go`, `operations.go`, `activity.go`, `backend.go`, `lifecycle.go`, `notification.go`, `topic.go`, `errors.go`, `errmsg.go`, `viewmodel.go`）＋サブパッケージ 5（`settings/`, `credential/`（`broker.go`）, `bridge/`, `trayops/`, `servicetest/`） |
 
 ## 改訂履歴
 
@@ -1983,3 +1988,5 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |
 | 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |
 | 6.5 | 2026-10-15 | M3-3 の実装反映: `Settings`（`gui/service/settings`。`View` / `Save` / `OpenUpdate`）、`Opener`、`Backend.Version`（`VersionSource`）と `AvailableUpdate`、`Deps.Theme`、`VersionChecker.SetEnabled` / `Cached`、`gui:` セクションの型を `core/guiconfig` サブパッケージ（`Config` / `Theme` / `Normalized`）に置くことを追記 | #90 M3-3 設定・更新バッジ |
+| 6.6 | 2026-11-28 | ドキュメント乖離修正: ForwardManager のファイル表・分割サマリーを実在ファイル（`events.go` は存在せず `forward_helper.go`、セッション照会・イベント購読は `manager.go`）に修正、`gui/service/` の分割サマリーをサブパッケージ構成（`settings/` `credential/` `bridge/` `trayops/` `servicetest/`）に更新、設定ディレクトリの解決順に `XDG_CONFIG_HOME` を追記 | #124, #129, #134 ドキュメント乖離修正 |
+| 6.7 | 2026-11-28 | ドキュメント乖離修正: `Takeover` / `TakeoverTimeout` / `StartDaemonProcess` / `IsDaemonMode` / `EnsureDaemon` を `daemon/control` サブパッケージのものとして記載し、`daemon/` の分割サマリーを実在ファイルに更新 | #148 ドキュメント乖離修正 |

@@ -1,4 +1,4 @@
-package daemon
+package control
 
 import (
 	"os"

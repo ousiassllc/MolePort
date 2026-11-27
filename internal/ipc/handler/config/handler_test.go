@@ -45,7 +45,7 @@ func (m *mockConfigManager) ConfigDir() string               { return "/tmp/mole
 
 func newTestHandler() (*Handler, *mockConfigManager) {
 	cfgMgr := &mockConfigManager{}
-	return New(cfgMgr), cfgMgr
+	return New(cfgMgr, nil), cfgMgr
 }
 
 func mustMarshal(t *testing.T, v any) json.RawMessage {

@@ -23,7 +23,7 @@ Unix ドメインソケット上で JSON-RPC 2.0 を使用する。
 
 | 項目 | 値 |
 |------|-----|
-| **ソケットパス** | `~/.config/moleport/moleport.sock` |
+| **ソケットパス** | `<設定ディレクトリ>/moleport.sock`（既定: `~/.config/moleport/moleport.sock`）。設定ディレクトリは `--config-dir` > 環境変数 `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport` の順に解決する |
 | **プロトコル** | JSON-RPC 2.0 |
 | **メッセージ区切り** | 改行（`\n`）— NDJSON 形式 |
 | **エンコーディング** | UTF-8 |
@@ -48,7 +48,7 @@ TUI が使用するパターン。`events.subscribe` 後、デーモンから通
 デーモン → クライアント:  {"jsonrpc":"2.0","id":1,"result":{"subscription_id":"sub-1"}}
 デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.ssh","params":{...}}      ← 通知（id なし）
 デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.forward","params":{...}}  ← 通知（id なし）
-デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.metrics","params":{...}}  ← 通知（id なし）
+デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.metrics","params":{...}}  ← 通知（id なし。未実装のため実際には送られない）
 ```
 
 ## API メソッド
@@ -134,7 +134,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### ssh.connect
 
-指定ホストに SSH 接続を確立する。auto_connect ルールがあれば自動的にフォワーディングも開始する。
+指定ホストに SSH 接続を確立する。接続成功後、当該ホストの auto_connect ルールのうち未開始のもの（`stopped` / `error`）のフォワーディングも自動的に開始する。ルールの開始に失敗しても `ssh.connect` 自体は成功を返す（失敗はデーモンのログに警告として記録される）。接続済みのホストに対する呼び出しも成功を返す（接続自体は再確立しない冪等な呼び出し）が、未開始の auto_connect ルール（`moleport stop` で止めたものを含む）は上記と同様に開始される。
 
 **リクエスト**:
 
@@ -251,11 +251,23 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "remote_host": "localhost",
         "remote_port": 5432,
         "auto_connect": true
+      },
+      {
+        "name": "prod-reverse",
+        "host": "prod-server",
+        "type": "remote",
+        "local_port": 3000,
+        "remote_host": "localhost",
+        "remote_port": 9000,
+        "remote_bind_addr": "0.0.0.0",
+        "auto_connect": false
       }
     ]
   }
 }
 ```
+
+`remote_bind_addr` は `type` が `remote` のルールで、リモート側でリッスンするバインドアドレス（F-51）。ルールに設定されている場合のみ含まれる（`omitempty`）。`local` / `dynamic` のルールでは含まれない。
 
 ---
 
@@ -278,6 +290,39 @@ SSH config を再読み込みし、ホスト一覧を更新する。
     "remote_host": "localhost",
     "remote_port": 80,
     "auto_connect": true
+  }
+}
+```
+
+**パラメータ**:
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `name` | string | No | ルール名。省略時は自動生成する |
+| `host` | string | Yes | SSH ホスト名 |
+| `type` | string | Yes | `local` / `remote` / `dynamic` |
+| `local_port` | number | Yes | ローカルポート（1 以上） |
+| `remote_host` | string | No | リモートホスト（`local` / `remote` で使用） |
+| `remote_port` | number | No | リモートポート（`local` / `remote` で使用） |
+| `remote_bind_addr` | string | No | リモート側のバインドアドレス。`remote` 転送でのみ有効。省略時は `127.0.0.1`（F-51） |
+| `auto_connect` | boolean | No | 起動時に自動接続するか（省略時 `false`） |
+
+`remote` 転送でリモート側を `0.0.0.0` にバインドさせる例:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "forward.add",
+  "params": {
+    "name": "prod-reverse",
+    "host": "prod-server",
+    "type": "remote",
+    "local_port": 3000,
+    "remote_host": "localhost",
+    "remote_port": 9000,
+    "remote_bind_addr": "0.0.0.0",
+    "auto_connect": false
   }
 }
 ```
@@ -355,7 +400,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### forward.start
 
-転送ルールのポートフォワーディングを開始する。SSH 未接続の場合はクレデンシャルコールバック付きで自動的に接続する（パスワード認証・Tailscale SSH 等の none 認証にも対応）。
+転送ルールのポートフォワーディングを開始する。SSH 未接続の場合はクレデンシャルコールバック付きで自動的に接続する（パスワード認証・Tailscale SSH 等の none 認証にも対応）。ホストが再接続待機中（`Reconnecting`）の場合は、進行中の自動再接続を打ち切らないため接続せず、エラーコード 1003 (NotConnected) で失敗する（再接続の完了後に再実行する）。
 
 **リクエスト**:
 
@@ -448,7 +493,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### session.list
 
-全アクティブセッションの状態とメトリクスを返す。
+登録済みの全ルールのセッションの状態とメトリクスを、ルールの追加順に返す。非アクティブ（開始処理中を含む）のルールは `status` が `stopped` のセッションとして含まれ、その `id` は空文字列、`connected_at` は含まれない。
 
 **リクエスト**:
 
@@ -470,7 +515,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "result": {
     "sessions": [
       {
-        "id": "prod-server-local-8080",
+        "id": "prod-web-1764300000000000000",
         "name": "prod-web",
         "host": "prod-server",
         "type": "local",
@@ -483,17 +528,37 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "bytes_received": 348160,
         "reconnect_count": 0,
         "last_error": ""
+      },
+      {
+        "id": "prod-reverse-1764300001000000000",
+        "name": "prod-reverse",
+        "host": "prod-server",
+        "type": "remote",
+        "local_port": 3000,
+        "remote_host": "localhost",
+        "remote_port": 9000,
+        "remote_bind_addr": "0.0.0.0",
+        "status": "active",
+        "connected_at": "2026-02-11T10:00:01+09:00",
+        "bytes_sent": 0,
+        "bytes_received": 0,
+        "reconnect_count": 0,
+        "last_error": ""
       }
     ]
   }
 }
 ```
 
+`id` はセッション一意 ID で、`<ルール名>-<開始時刻 UnixNano>` 形式。転送を開始するたびに変わる不透明な値であり、クライアントは形式に依存してはならない（セッションの指定には `name` を使う）。
+
+`remote_bind_addr` は `remote` 転送のルールにバインドアドレスが設定されている場合のみ含まれる（`omitempty`。F-51）。
+
 ---
 
 ### session.get
 
-指定ルール名のセッション詳細を返す。
+指定ルール名のセッション詳細を返す。`remote` 転送でバインドアドレスが設定されている場合は `remote_bind_addr` も含まれる（`session.list` と同じ形式）。
 
 **リクエスト**:
 
@@ -639,6 +704,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 }
 ```
 
+> **Note**: 設定の反映タイミングはフィールドにより異なる。`config.update` は変更を `config.yaml` へ保存し、稼働中のデーモンへ即時反映するのは `update_check.enabled` のみ（定期チェックを `false` で停止、`true` で再開）。`update_check.interval`・`reconnect`・`hosts`・`ssh_config_path`・`session`・`log` は保存されるが、デーモンは起動時の値を保持し続けるため、次回のデーモン起動時に反映される。`language`・`tui.theme` はクライアントが `config.get` で読み直したときに反映される。
+
 **テーマ更新の例**:
 
 ```json
@@ -716,7 +783,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 | `connected_clients` | int | 接続中のクライアント数 |
 | `active_ssh_connections` | int | アクティブな SSH 接続数 |
 | `active_forwards` | int | アクティブなポートフォワーディング数 |
-| `warnings` | string[] | 警告メッセージのリスト（省略可能） |
+| `warnings` | string[] | 警告メッセージのリスト（省略可能）。`config.yaml` の読み込み失敗、`update_check.interval` の補正、設定ディレクトリ・設定ファイル・SSH config のパーミッションが緩い場合（Unix のみ）、フォワードルール・SSH ホストの読み込み失敗などが載る |
 
 > **Note**: TUI は起動時に `version` フィールドを自身のバージョンと比較し、不一致の場合はデーモン再起動を提案する（UC-17 参照）。`version` が `"dev"` の場合はチェックをスキップする。
 
@@ -1153,8 +1220,8 @@ SSH 接続状態の変化。
 | コード | 名前 | 説明 |
 |-------|------|------|
 | 1001 | HostNotFound | 指定ホストが SSH config に存在しない |
-| 1002 | AlreadyConnected | 指定ホストに既に接続済み |
-| 1003 | NotConnected | 指定ホストに未接続 |
+| 1002 | AlreadyConnected | 指定ルールが既にアクティブ（`forward.start`）。`ssh.connect` は接続済みのホストに対して冪等に成功を返すため、このコードは返さない |
+| 1003 | NotConnected | 再接続待機中（`Reconnecting`）のホストのルールに対する `forward.start`（進行中の自動再接続を打ち切らないため、手動では接続しない）、および接続確立直後に切断された場合 |
 | 1004 | RuleNotFound | 指定転送ルールが存在しない |
 | 1005 | RuleAlreadyExists | ルール名が重複している |
 | 1006 | PortConflict | ポートが他のルールまたはシステムで使用中 |
@@ -1176,3 +1243,7 @@ SSH 接続状態の変化。
 | 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |
 | 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |
 | 2.2 | 2026-10-15 | GUI 内蔵デーモン稼働時の挙動セクションを追加（接続先共通、`daemon.shutdown`、`config` の `gui` 非公開、認証要求の扱い）。プロトコル自体の変更なし | #84 Wails 版 GUI アプリケーション |
+| 2.3 | 2026-11-28 | forward.list / forward.add / session.list / session.get に `remote_bind_addr`（F-51）を追記、forward.add のパラメータ表を追加、ソケットパスの設定ディレクトリ解決順を明記。プロトコル自体の変更なし | #124, #131 ドキュメント乖離修正 |
+| 2.4 | 2026-11-28 | `ssh.connect` を接続済みホストに呼んでも未開始の auto_connect ルールは開始されることを明記、`config.update` の反映タイミング（即時反映は `update_check.enabled` のみ、他は保存のみで再起動後に反映）を明記。プロトコル自体の変更なし | #144, #149 ドキュメント乖離修正 |
+| 2.5 | 2026-11-28 | `session.list` が登録済みの全ルール（停止中は `status=stopped`、`id` は空、`connected_at` なし）を返すことを明記、`event.metrics` が未実装で配信されないことを通知例に追記。プロトコル自体の変更なし | #156, #157 ドキュメント乖離修正 |
+| 2.6 | 2026-11-28 | エラーコード 1003 (NotConnected) の説明を更新し、`forward.start` が再接続待機中（`Reconnecting`）のホストのルールに対して接続せず 1003 を返すことを明記。プロトコル自体の変更なし | #165 ドキュメント乖離修正 |

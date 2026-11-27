@@ -1,4 +1,4 @@
-package daemon
+package control
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -39,13 +40,13 @@ var (
 //
 // エラー時も判明している旧デーモンの PID を返す。
 func Takeover(configDir string, timeout time.Duration) (prevPID int, err error) {
-	pidPath := PIDFilePath(configDir)
+	pidPath := daemon.PIDFilePath(configDir)
 	locked, pid := pidfile.IsLocked(pidPath)
 	if !locked {
 		return 0, nil
 	}
 
-	if err := requestShutdown(SocketPath(configDir)); err != nil {
+	if err := requestShutdown(daemon.SocketPath(configDir)); err != nil {
 		// 応答直前にデーモンが終了して接続が切れた場合は引き継ぎ成功として扱う。
 		if stillLocked, _ := pidfile.IsLocked(pidPath); !stillLocked {
 			return pid, nil

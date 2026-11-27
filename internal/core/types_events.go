@@ -35,6 +35,9 @@ type SSHEvent struct {
 	Type     SSHEventType
 	HostName string
 	Error    error
+
+	// ReconnectDisabled は、切断を検知したが自動再接続が無効のため再接続されない場合に true となる（Disconnected のみ）。
+	ReconnectDisabled bool
 }
 
 // ForwardEventType はポートフォワーディングイベントの種別を表す。

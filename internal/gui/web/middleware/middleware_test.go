@@ -131,6 +131,11 @@ func TestSecurityHeaders(t *testing.T) {
 		if !strings.Contains(ContentSecurityPolicy, "script-src 'self'") {
 			t.Errorf("CSP に script-src 'self' が含まれない: %q", ContentSecurityPolicy)
 		}
+		for _, d := range []string{"object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"} {
+			if !strings.Contains(ContentSecurityPolicy, d) {
+				t.Errorf("CSP に %s が含まれない: %q", d, ContentSecurityPolicy)
+			}
+		}
 		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 			t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
 		}

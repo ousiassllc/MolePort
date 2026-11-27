@@ -53,6 +53,13 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		return nil
 	}
 
+	// 再接続待機中の手動接続を優先し、進行中の再接続を打ち切る。
+	// 打ち切らないと、後続の再接続成功がこの接続を上書きしてリークさせる。
+	if cancelReconnect, reconnecting := m.reconnectCancels[hostName]; reconnecting {
+		cancelReconnect()
+		delete(m.reconnectCancels, hostName)
+	}
+
 	// 接続処理中として登録（同一ホストへの並行 Connect を防ぐ）
 	hcConnecting := &hostConnection{state: core.Connecting}
 	m.conns[hostName] = hcConnecting
@@ -65,10 +72,14 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	client, err := conn.Dial(host, cb)
 	if err != nil {
 		m.mu.Lock()
-		// Connecting プレースホルダーを削除
-		if current, exists := m.conns[hostName]; exists && current == hcConnecting {
-			delete(m.conns, hostName)
+		// Dial 中に Disconnect / Close された場合は、その結果（Disconnected）を上書きしない
+		current, exists := m.conns[hostName]
+		if !exists || current != hcConnecting {
+			m.mu.Unlock()
+			return fmt.Errorf("failed to connect to %s: %w", hostName, err)
 		}
+		// Connecting プレースホルダーを削除
+		delete(m.conns, hostName)
 
 		// 認証失敗の場合は PendingAuth 状態にする（コールバックなしの場合のみ）
 		if cb == nil && isAuthFailure(err) {
@@ -98,6 +109,14 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 	}
 
 	m.mu.Lock()
+	// Dial 中に Disconnect / Close された場合（プレースホルダーが自分のものでない）は
+	// 確立した接続を破棄する。登録すると誰にも閉じられずに残ってしまう。
+	if current, exists := m.conns[hostName]; m.closed || !exists || current != hcConnecting {
+		m.mu.Unlock()
+		cancel()
+		_ = conn.Close()
+		return fmt.Errorf("connection to %s cancelled: %w", hostName, context.Canceled)
+	}
 	m.conns[hostName] = hc
 	if i, ok := m.hostsMap[hostName]; ok {
 		m.hosts[i].State = core.Connected
@@ -116,7 +135,7 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 		case <-ctx.Done():
 			return
 		default:
-			m.handleDisconnect(hostName)
+			m.handleDisconnect(hostName, hc)
 		}
 	}()
 
@@ -127,14 +146,25 @@ func (m *sshManager) connectInternal(hostName string, cb core.CredentialCallback
 func (m *sshManager) Disconnect(hostName string) error {
 	m.mu.Lock()
 	// 進行中の再接続をキャンセル
-	if reconnectCancel, exists := m.reconnectCancels[hostName]; exists {
+	reconnectCancel, reconnecting := m.reconnectCancels[hostName]
+	if reconnecting {
 		reconnectCancel()
 		delete(m.reconnectCancels, hostName)
 	}
 
 	hc, exists := m.conns[hostName]
 	if !exists {
+		if reconnecting {
+			// 再接続待ちだったホストは Reconnecting のままにせず切断済みにする
+			if i, ok := m.hostsMap[hostName]; ok {
+				m.hosts[i].State = core.Disconnected
+			}
+		}
 		m.mu.Unlock()
+		if reconnecting {
+			m.events.Emit(core.SSHEvent{Type: core.SSHEventDisconnected, HostName: hostName})
+			slog.Info("SSH reconnect cancelled", "host", hostName)
+		}
 		return nil
 	}
 

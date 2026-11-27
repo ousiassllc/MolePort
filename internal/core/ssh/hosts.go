@@ -7,22 +7,9 @@ import (
 )
 
 // LoadHosts は SSH config を解析してホスト一覧を構築する。
+// 既に構築済みのホストの接続状態は保持される（ReloadHosts と同じ）。
 func (m *sshManager) LoadHosts() ([]core.SSHHost, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	hosts, err := m.parser.Parse(m.configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse SSH config: %w", err)
-	}
-
-	m.hosts = hosts
-	m.hostsMap = make(map[string]int, len(hosts))
-	for i, h := range hosts {
-		m.hostsMap[h.Name] = i
-	}
-
-	return m.copyHosts(), nil
+	return m.ReloadHosts()
 }
 
 // ReloadHosts は SSH config を再解析し、既存の接続状態を保持する。

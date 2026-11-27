@@ -3,6 +3,7 @@ package daemon
 import (
 	"log/slog"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
@@ -25,13 +26,24 @@ func (d *Daemon) startEventRouting() {
 			case core.SSHEventReconnecting:
 				reconnecting[evt.HostName] = true
 				d.fwdMgr.MarkReconnecting(evt.HostName)
+			case core.SSHEventDisconnected:
+				// 再接続待ち中にユーザーが切断した場合、再接続中フラグを残さない
+				// （通常の切断検知では Disconnected の後に Reconnecting が届く）
+				delete(reconnecting, evt.HostName)
+				if evt.ReconnectDisabled {
+					// 自動再接続が無効なホストは Reconnecting が届かない。死んだクライアントを掴んだ転送を残さない。
+					if err := core.StopHostForwards(d.fwdMgr, evt.HostName); err != nil {
+						slog.Warn("failed to stop forwards after disconnect", "host", evt.HostName, "error", err)
+					}
+				}
 			case core.SSHEventConnected:
 				if reconnecting[evt.HostName] {
 					delete(reconnecting, evt.HostName)
 					results := d.fwdMgr.RestoreForwards(evt.HostName)
 					d.logRestoreSummary(evt.HostName, results)
 				}
-			case core.SSHEventError:
+			case core.SSHEventError, core.SSHEventPendingAuth:
+				// 再接続の失敗、または認証失敗による再接続の打ち切り（手動 connect 待ち）
 				if reconnecting[evt.HostName] {
 					delete(reconnecting, evt.HostName)
 					d.fwdMgr.FailReconnecting(evt.HostName)
@@ -65,24 +77,79 @@ func (d *Daemon) logRestoreSummary(hostName string, results []core.ForwardRestor
 	slog.Info("forward restore summary", "host", hostName, "total", len(results), "succeeded", succeeded, "failed", failed)
 }
 
-// restoreState は前回の状態を復元する。auto_restore が有効な場合のみ。
-func (d *Daemon) restoreState() {
+// startBackgroundRestore はセッション復元と auto_connect の接続を d.wg 管理下の
+// goroutine で実行する。SSH ダイヤルに時間がかかっても Start をブロックしない（NFR-01）。
+// 復元待ちルールの記録は（ファイル読み込みのみなので）goroutine 起動前に同期で済ませ、
+// 直後に Stop が走っても saveState が復元対象を失わないようにする。
+func (d *Daemon) startBackgroundRestore() {
+	rules := d.loadPendingRestore()
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		d.restoreState(rules)
+		d.autoStartForwards()
+	}()
+}
+
+// shuttingDown はデーモンの停止が始まっているかを返す。
+func (d *Daemon) shuttingDown() bool {
+	return d.ctx != nil && d.ctx.Err() != nil
+}
+
+// loadPendingRestore は auto_restore が有効なとき前回の状態を読み込み、復元待ちとして記録して返す。
+func (d *Daemon) loadPendingRestore() []core.ForwardRule {
 	cfg := d.cfgMgr.GetConfig()
 	if !cfg.Session.AutoRestore {
-		return
+		return nil
 	}
 
 	state, err := d.cfgMgr.LoadState()
 	if err != nil {
 		slog.Debug("no state to restore", "error", err)
-		return
+		return nil
 	}
 
-	for _, rule := range state.ActiveForwards {
-		if err := d.fwdMgr.StartForward(rule.Name, nil); err != nil {
+	d.setPendingRestore(state.ActiveForwards)
+	return state.ActiveForwards
+}
+
+// restoreState は loadPendingRestore が返したルールを順に開始する。
+func (d *Daemon) restoreState(rules []core.ForwardRule) {
+	for _, rule := range rules {
+		if d.shuttingDown() {
+			return
+		}
+		err := d.fwdMgr.StartForward(rule.Name, nil)
+		if err != nil && d.shuttingDown() {
+			// 停止による中断は失敗ではない。未復元として残し、saveState が state.yaml に引き継ぐ。
+			return
+		}
+		if err != nil {
 			slog.Warn("failed to restore forward", "rule", rule.Name, "error", err)
 		}
+		d.markRestoreProcessed(rule.Name)
 	}
+}
+
+// setPendingRestore は復元待ちのルール一覧を記録する。
+func (d *Daemon) setPendingRestore(rules []core.ForwardRule) {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	d.pendingRestore = append([]core.ForwardRule(nil), rules...)
+}
+
+// markRestoreProcessed は復元の処理が終わったルールを復元待ちから外す。
+func (d *Daemon) markRestoreProcessed(name string) {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	d.pendingRestore = slices.DeleteFunc(d.pendingRestore, func(r core.ForwardRule) bool { return r.Name == name })
+}
+
+// pendingRestoreSnapshot は復元待ちのルールのコピーを返す。
+func (d *Daemon) pendingRestoreSnapshot() []core.ForwardRule {
+	d.restoreMu.Lock()
+	defer d.restoreMu.Unlock()
+	return append([]core.ForwardRule(nil), d.pendingRestore...)
 }
 
 // autoStartForwards は config.yaml で auto_connect が有効なフォワードルールを自動開始する。
@@ -92,6 +159,9 @@ func (d *Daemon) autoStartForwards() {
 
 	var started, skipped, failed int
 	for _, rule := range cfg.Forwards {
+		if d.shuttingDown() {
+			break
+		}
 		if !rule.AutoConnect {
 			continue
 		}
@@ -115,12 +185,24 @@ func (d *Daemon) autoStartForwards() {
 }
 
 // saveState はアクティブなフォワード状態を保存する。
+// 再接続待ち（SessionReconnecting）の転送はユーザーが開始した意図が残っているため保存対象に含める。
+// 非同期の復元が終わる前に停止した場合に備え、未復元のルールも保存対象に含める（NFR-16 / UC-9）。
 func (d *Daemon) saveState() {
+	// 復元の完了でルールが復元待ちから外れる前に Active になっているため、
+	// 復元待ちを先に取得してからセッションを読めば、どちらにも載らないルールは出ない。
+	pending := d.pendingRestoreSnapshot()
 	sessions := d.fwdMgr.GetAllSessions()
 	var activeRules []core.ForwardRule
+	saved := make(map[string]bool)
 	for _, s := range sessions {
-		if s.Status == core.Active {
+		if s.Status == core.Active || s.Status == core.SessionReconnecting {
 			activeRules = append(activeRules, s.Rule)
+			saved[s.Rule.Name] = true
+		}
+	}
+	for _, rule := range pending {
+		if !saved[rule.Name] {
+			activeRules = append(activeRules, rule)
 		}
 	}
 

@@ -33,6 +33,7 @@ func (m *mockSSHConfigParser) Parse(configPath string) ([]core.SSHHost, error) {
 type mockSSHConnection struct {
 	mu         sync.Mutex
 	dialErr    error
+	dialF      func(host core.SSHHost) (*cryptossh.Client, error) // 設定時は dialErr より優先
 	client     *cryptossh.Client
 	closed     bool
 	isAlive    bool
@@ -44,6 +45,9 @@ type mockSSHConnection struct {
 }
 
 func (m *mockSSHConnection) Dial(host core.SSHHost, cb core.CredentialCallback) (*cryptossh.Client, error) {
+	if m.dialF != nil {
+		return m.dialF(host)
+	}
 	if m.dialErr != nil {
 		return nil, m.dialErr
 	}
@@ -55,6 +59,12 @@ func (m *mockSSHConnection) Close() error {
 	defer m.mu.Unlock()
 	m.closed = true
 	return nil
+}
+
+func (m *mockSSHConnection) isClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closed
 }
 
 func (m *mockSSHConnection) LocalForward(ctx context.Context, localPort int, remoteAddr string) (net.Listener, error) {

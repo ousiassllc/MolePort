@@ -186,7 +186,7 @@ sequenceDiagram
 
 ### PID ファイル管理
 
-- パス: `~/.config/moleport/moleport.pid`
+- パス: `<設定ディレクトリ>/moleport.pid`（既定: `~/.config/moleport/moleport.pid`。設定ディレクトリは `--config-dir` > `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport` の順に解決する）
 - 起動時に PID ファイルを作成（排他ロック `flock`）
 - 既存 PID ファイルがある場合は、プロセスの生存確認を行う
   - 生存中 → 起動を拒否
@@ -199,7 +199,7 @@ sequenceDiagram
 
 クライアント（CLI/TUI）とデーモン間は Unix ドメインソケット上で JSON-RPC 2.0 プロトコルにより通信する。
 
-- **ソケットパス**: `~/.config/moleport/moleport.sock`
+- **ソケットパス**: `<設定ディレクトリ>/moleport.sock`（既定: `~/.config/moleport/moleport.sock`）
 - **プロトコル**: JSON-RPC 2.0（改行区切り NDJSON）
 - **方向**:
   - クライアント → デーモン: リクエスト（`method` + `params`）
@@ -228,20 +228,19 @@ sequenceDiagram
     participant TUI as TUI クライアント
     participant Daemon as デーモン
 
-    TUI->>Daemon: {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"types":["forward","ssh","metrics"]}}
+    TUI->>Daemon: {"jsonrpc":"2.0","id":1,"method":"events.subscribe","params":{"types":["forward","ssh"]}}
     Daemon-->>TUI: {"jsonrpc":"2.0","id":1,"result":{"subscription_id":"sub-1"}}
 
     Note over Daemon,TUI: 以降、状態変化時にデーモンから通知が送られる
 
-    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.forward","params":{"type":"started","rule":"prod-web",...}}
-    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.metrics","params":{"sessions":[...]}}
+    Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.forward","params":{"type":"started","name":"prod-web",...}}
     Daemon-->>TUI: {"jsonrpc":"2.0","method":"event.ssh","params":{"type":"disconnected","host":"prod-server",...}}
 
     TUI->>Daemon: {"jsonrpc":"2.0","id":2,"method":"events.unsubscribe","params":{"subscription_id":"sub-1"}}
     Daemon-->>TUI: {"jsonrpc":"2.0","id":2,"result":{"ok":true}}
 ```
 
-TUI は `events.subscribe` でイベントストリームを開始し、接続中はデーモンから通知を受け続ける。
+TUI は `events.subscribe`（`ssh` / `forward`）でイベントストリームを開始し、接続中はデーモンから通知を受け続ける。メトリクス（稼働時間・転送量）は `event.metrics` では配信されず、TUI が `session.list` を 2 秒間隔でポーリングして取得する（`event.metrics` は未実装）。
 
 ### JSON-RPC メソッド一覧
 
@@ -257,7 +256,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
 | `forward.start` | req/res | ポートフォワーディングを開始 |
 | `forward.stop` | req/res | ポートフォワーディングを停止 |
 | `forward.stopAll` | req/res | 全ポートフォワーディングを停止 |
-| `session.list` | req/res | アクティブセッション一覧を取得 |
+| `session.list` | req/res | 全ルールのセッション一覧を取得（停止中は `stopped`） |
 | `session.get` | req/res | セッション詳細を取得 |
 | `config.get` | req/res | 設定を取得 |
 | `config.update` | req/res | 設定を更新 |
@@ -270,7 +269,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
 | `credential.response` | req/res | クレデンシャル入力応答（クライアント → デーモン） |
 | `event.ssh` | notification | SSH 状態変化通知 |
 | `event.forward` | notification | 転送状態変化通知 |
-| `event.metrics` | notification | メトリクス更新通知 |
+| `event.metrics` | notification | メトリクス更新通知（**未実装**。購読は受理されるがデーモンは発行しない） |
 
 ## レイヤー構造
 
@@ -305,6 +304,7 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
   - `YAMLStore`: YAML ファイルの読み書き
 - **サブパッケージ構成**:
   - `infra/`（ベース）: `SSHConnection`、認証メソッド構築
+  - `infra/permcheck/`: パーミッション検査（`Warnings`。NFR-09/10）
   - `infra/proxycommand/`: `ProxyCommand`（ProxyCommand 経由接続）
   - `infra/sshconfig/`: `SSHConfigParser`（SSH config 解析）
   - `infra/yamlstore/`: `YAMLStore`（YAML ファイル I/O）
@@ -322,11 +322,11 @@ TUI は `events.subscribe` でイベントストリームを開始し、接続�
   - `theme/` パッケージでテーマ定義・パレット管理・グローバルテーマ参照を提供
   - ベーステーマ（Dark / Light）× 5 アクセントカラー = 10 プリセット
   - `styles.go` のハードコードカラーを `theme.Current()` 経由の動的参照に置き換え
-  - 初回起動時のセットアップ画面 + `/theme` コマンドによる変更に対応
+  - 初回起動時のセットアップ画面 + `t` キーによる変更に対応
   - テーマ選択は `config.yaml` の `tui.theme` セクションに永続化
 - **多言語対応**: `i18n` パッケージを通じた翻訳テキストの動的取得
   - 全 UI テキスト（ラベル、メッセージ、キーヒント）を `i18n.T("key")` 経由に置き換え
-  - 初回起動時の言語選択画面（LangPage）+ `/lang` コマンドによる変更に対応
+  - 初回起動時の言語選択画面（LangPage）+ `l` キーによる変更に対応
   - 言語選択は `config.yaml` の `language` フィールドに永続化
   - 初回セットアップ順序: 言語選択 → テーマ選択
 
@@ -512,17 +512,22 @@ moleport/
 │   ├── moleport/
 │   │   └── main.go                    # エントリポイント（CLI ルーター）
 │   └── moleport-gui/                  # GUI エントリポイント（build tag: gui）
-│       └── main.go                    # wails.Run、フラグ解析、Shell 初期化
+│       ├── main.go                    # フラグ解析、設定ディレクトリ解決、Shell 初期化
+│       ├── wails.json                 # Wails 設定（GUI ビルド）
+│       └── build/                     # アイコン・Windows インストーラー等のビルド資材
 ├── internal/
 │   ├── daemon/                        # デーモンプロセス
 │   │   ├── daemon.go                  # Daemon（起動・停止・Services/Done/Info）
 │   │   ├── daemon_state.go            # 状態保存・復元
-│   │   ├── ensure.go                  # デーモン起動確認・IPC 接続ヘルパー
-│   │   ├── takeover.go                # headless デーモンの引き継ぎ（GUI 用）
-│   │   ├── fork_unix.go               # フォーク処理（self-fork）。Unix のみ
-│   │   ├── fork_windows.go            # フォーク非対応スタブ
+│   │   ├── daemon_paths.go            # SocketPath / PIDFilePath / ResolveLogConfig
+│   │   ├── daemon_shutdown.go         # 切断処理（closeComponents、NFR-16 のタイムアウト）
 │   │   ├── daemon_host.go             # 内蔵ホスト向け API（Services / Info）
-│   │   ├── fork.go                    # --daemon-mode 判定（共通）
+│   │   ├── control/                   # デーモンの外部制御（サブパッケージ。Linterly の 2000 行/ディレクトリ制限のため分離）
+│   │   │   ├── ensure.go              # デーモン起動確認・IPC 接続ヘルパー
+│   │   │   ├── takeover.go            # headless デーモンの引き継ぎ（GUI 用）
+│   │   │   ├── fork_unix.go           # フォーク処理（self-fork）。Unix のみ
+│   │   │   ├── fork_windows.go        # フォーク非対応スタブ
+│   │   │   └── fork.go                # --daemon-mode 判定（共通）
 │   │   └── pidfile/                   # PID ファイル管理（サブパッケージ。Linterly の 2000 行/ディレクトリ制限のため分離）
 │   │       ├── pidfile.go             # PIDFile / IsRunning / IsLocked / KillProcess（共通）
 │   │       ├── pidfile_unix.go        # flock / kill(2)
@@ -551,7 +556,10 @@ moleport/
 │   │   │   ├── config/handler.go      # config.get, config.update（サブパッケージ）
 │   │   │   ├── handler_daemon.go      # daemon.status, daemon.shutdown
 │   │   │   ├── handler_version.go    # version.check
-│   │   │   └── handler_events.go      # events.subscribe/unsubscribe
+│   │   │   ├── handler_events.go      # events.subscribe/unsubscribe
+│   │   │   └── forwardint/            # IPC ハンドラと実 ForwardManager（モック SSH 上）の結合テスト専用パッケージ
+│   │   │       ├── doc.go
+│   │   │       └── handler_forward_test.go
 │   │   └── client/                    # JSON-RPC クライアント
 │   │       ├── client.go              # IPCClient（メソッド呼び出し・イベント受信）
 │   │       └── client_credential.go   # クレデンシャルハンドラ（設定・応答処理）
@@ -626,34 +634,46 @@ moleport/
 │   │   ├── types_events.go            # イベント型（SSHEvent, ForwardEvent）
 │   │   ├── types_credentials.go       # クレデンシャル型
 │   │   ├── config.go                  # ConfigManager
+│   │   ├── config_clone.go            # Config.Clone（Hosts マップ・ReconnectOverride・Forwards を複製するディープコピー）
 │   │   ├── errors.go                  # コアエラー型定義
-│   │   ├── socks5.go                  # SOCKS5 プロキシ
+│   │   ├── event_emitter.go           # EventEmitter[E]（イベント購読・配信の共通実装）
+│   │   ├── forward_persist.go         # PersistForwardRules（ルールの config.yaml 保存。IPC ハンドラと GUI Service で共用）
+│   │   ├── socks5/                    # SOCKS5 プロキシ（サブパッケージ）
+│   │   │   └── socks5.go
+│   │   ├── guiconfig/                 # core.Config.GUI の型・既定値・検証（サブパッケージ）
+│   │   │   └── guiconfig.go
+│   │   ├── forwardtest/               # SSHManager 等のテスト用モック（サブパッケージ）
+│   │   │   └── mock.go
 │   │   ├── ssh/                       # SSH 接続管理
 │   │   │   ├── manager.go             # SSHManager インターフェース・初期化
 │   │   │   ├── lifecycle.go           # Connect/Disconnect ライフサイクル
 │   │   │   ├── reconnect.go           # 自動再接続（ジッター付き指数バックオフ）
 │   │   │   └── hosts.go              # ホスト管理（Load/Reload/Get）
 │   │   ├── forward/                   # フォワード管理
-│   │   │   ├── manager.go             # ForwardManager インターフェース・初期化
+│   │   │   ├── manager.go             # ForwardManager インターフェース・初期化・ルール管理・セッション照会・イベント購読
 │   │   │   ├── lifecycle.go           # Start/Stop ライフサイクル
 │   │   │   ├── bridge.go             # 接続ブリッジ（accept/dial/copy）
 │   │   │   ├── reconnect.go          # フォワード復元（MarkReconnecting/RestoreForwards/FailReconnecting）
-│   │   │   ├── events.go             # セッション照会・イベント管理
 │   │   │   └── forward_helper.go     # ヘルパー関数（openListener 等）
 │   │   └── update/                    # バージョンチェック・セルフアップデート
 │   │       ├── checker.go            # VersionChecker（GitHub API・キャッシュ・比較）
+│   │       ├── download_client.go    # ダウンロード用 HTTP クライアント（サイズ上限・タイムアウト）
 │   │       └── updater.go            # Updater（ダウンロード・検証・バイナリ置換）
 │   ├── format/                        # フォーマットユーティリティ
-│   │   └── bytes.go                   # バイト数フォーマット関数
+│   │   ├── bytes.go                   # バイト数フォーマット関数
+│   │   └── duration.go                # 経過時間フォーマット関数
 │   ├── infra/                         # Infrastructure Layer
 │   │   ├── sshconn.go                 # SSHConnection（x/crypto/ssh ラッパー）
+│   │   ├── sshconn_forward.go         # SSHConnection のポートフォワード関連
 │   │   ├── auth.go                    # SSH 認証メソッド構築
-│   │   ├── agent_unix.go              # SSH_AUTH_SOCK（Unix ソケット）
-│   │   ├── agent_windows.go           # OpenSSH agent（named pipe）
+│   │   ├── auth_unix.go               # SSH_AUTH_SOCK（Unix ソケット）
+│   │   ├── auth_windows.go            # OpenSSH agent（named pipe）
+│   │   ├── permcheck/                 # 設定ディレクトリ・設定ファイル・状態ファイル・SSH config のパーミッション検査（NFR-09/10。サブパッケージ）
+│   │   │   └── permcheck.go           # Warnings（検査のみ。Windows は対象外）
 │   │   ├── proxycommand/              # ProxyCommand 経由接続（サブパッケージ）
 │   │   │   ├── proxycommand.go
-│   │   │   ├── proc_unix.go           # sh -c / プロセスグループ kill
-│   │   │   └── proc_windows.go        # cmd /C / Job Object
+│   │   │   ├── proxycommand_unix.go   # sh -c / プロセスグループ kill
+│   │   │   └── proxycommand_windows.go # cmd /C / Job Object
 │   │   ├── util.go                    # ユーティリティ
 │   │   ├── sshconfig/                 # SSH config 解析（サブパッケージ）
 │   │   │   └── sshconfig.go           # SSHConfigParser
@@ -661,34 +681,76 @@ moleport/
 │   │       └── yamlstore.go           # YAMLStore
 │   ├── gui/                           # GUI（デスクトップ）。詳細は gui.md
 │   │   ├── service/                   # GUI Service Layer（Wails 非依存）
-│   │   │   ├── dashboard.go           # DashboardService（ViewModel 組み立て）
-│   │   │   ├── host.go                # HostService（接続・切断）
-│   │   │   ├── forward.go             # ForwardService（追加・開始・停止・削除）
-│   │   │   ├── settings.go            # SettingsService（言語・テーマ・update_check）
-│   │   │   ├── credential.go          # CredentialBroker
-│   │   │   ├── bridge.go              # EventBridge（Core イベント → トピック、コアレス、ティッカー）
+│   │   │   ├── dashboard.go           # Dashboard（ViewModel 組み立て）
+│   │   │   ├── host.go                # Hosts（接続・切断）
+│   │   │   ├── forward.go             # Forwards（追加・開始・停止・削除）
+│   │   │   ├── operations.go          # 非同期操作の実行（接続・転送開始・ポート競合の候補提示）
+│   │   │   ├── activity.go            # Activity（進行中の非同期操作と直近の転送開始失敗）
+│   │   │   ├── backend.go             # Backend（Core を束ねる依存）・VersionSource・ReleaseURLPrefix
+│   │   │   ├── lifecycle.go           # 内蔵デーモンの起動状態（LifecycleState）
 │   │   │   ├── notification.go        # NotificationQueue（非同期通知の FIFO）
-│   │   │   └── viewmodel.go           # ViewModel 型（Actions フラグ含む）
+│   │   │   ├── topic.go               # Topic（WebView への更新トピック）
+│   │   │   ├── errors.go              # Service のエラー型
+│   │   │   ├── errmsg.go              # LocalizeError（Core エラーのローカライズ）
+│   │   │   ├── viewmodel.go           # ViewModel 型（Actions フラグ含む）
+│   │   │   ├── settings/              # Settings（言語・テーマ・update_check。サブパッケージ）
+│   │   │   │   └── settings.go
+│   │   │   ├── credential/            # CredentialBroker（認証要求の仲介。サブパッケージ）
+│   │   │   │   └── broker.go
+│   │   │   ├── bridge/                # EventBridge（Core イベント → トピック、コアレス、ティッカー。サブパッケージ）
+│   │   │   │   └── bridge.go
+│   │   │   ├── trayops/               # トレイメニューからの転送操作（UC-33。サブパッケージ）
+│   │   │   │   └── trayops.go
+│   │   │   └── servicetest/           # Service テスト用の Core fake（サブパッケージ）
+│   │   │       ├── fakes.go
+│   │   │       └── version.go
 │   │   ├── web/                       # Web Layer（Wails 非依存）
 │   │   │   ├── router.go              # net/http ServeMux、ルート登録
-│   │   │   ├── handler/               # page / fragment / action ハンドラ
-│   │   │   ├── middleware/            # token.go / csp.go / logging.go
+│   │   │   ├── handler/               # page / fragment / action / settings / static ハンドラ
+│   │   │   │   ├── page.go            # GET /（フルページ）
+│   │   │   │   ├── fragment_dashboard.go # 読み取り専用フラグメント
+│   │   │   │   ├── fragment_forms.go  # 操作系フラグメント（フォーム・削除ダイアログ）
+│   │   │   │   ├── action_common.go   # アクション共通処理
+│   │   │   │   ├── action_hosts.go    # ホストのアクション
+│   │   │   │   ├── action_forwards.go # 転送のアクション
+│   │   │   │   ├── action_credential.go # クレデンシャル送信
+│   │   │   │   ├── settings.go        # 設定画面
+│   │   │   │   ├── render.go          # Templ 描画
+│   │   │   │   └── static.go          # 静的アセット配信
+│   │   │   ├── middleware/            # Token / HXRequired / SecurityHeaders / Recover / Logging
+│   │   │   │   ├── chain.go           # ミドルウェアの合成
+│   │   │   │   ├── token.go           # セッショントークンの生成・検証
+│   │   │   │   ├── hxrequired.go      # /fragments/ に HX-Request を要求
+│   │   │   │   ├── security.go        # SecurityHeaders（CSP 等）
+│   │   │   │   ├── recover.go         # panic 回復
+│   │   │   │   └── logging.go         # リクエストログ（クレデンシャル系ルートを除外）
 │   │   │   ├── view/                  # Templ コンポーネント
 │   │   │   │   ├── atoms/ molecules/ organisms/ pages/ layout/
-│   │   │   └── static/                # src/（TS・CSS）・dist/（go:embed、git 管理外）
+│   │   │   └── static/                # embed.go・src/（TS・CSS）・dist/（go:embed、git 管理外）
 │   │   ├── shell/                     # Shell Layer（build tag: gui）
 │   │   │   ├── app.go                 # Wails オプション・OnStartup/OnBeforeClose
 │   │   │   ├── lifecycle.go           # 起動・引き継ぎ・終了
+│   │   │   ├── close.go               # ウィンドウを閉じる操作の決定（CloseAction）
+│   │   │   ├── dialog.go              # 確認ダイアログの結果判定
+│   │   │   ├── ports.go               # Window 等の Wails 非依存インターフェース
+│   │   │   ├── wails_ports.go         # ports の Wails 実装
+│   │   │   ├── settingshook.go        # 設定保存後のフック（言語変更をトレイへ反映）
+│   │   │   ├── trayhint.go            # 初回トレイ格納時の通知
 │   │   │   └── notifier.go            # EventsEmit 実装
 │   │   └── tray/                      # トレイ（build tag: gui）
-│   │       └── tray.go                # fyne.io/systray ラッパー、メニュー更新
+│   │       ├── tray.go                # fyne.io/systray ラッパー、メニュー更新
+│   │       ├── menu.go                # メニュー項目・転送項目プール
+│   │       ├── debounce.go            # メニュー更新のデバウンス
+│   │       ├── watch.go               # Core イベントを伴わない変更の定期照合
+│   │       ├── availability.go        # トレイ登録完了の待機
+│   │       ├── host_linux.go          # Linux のトレイホスト（StatusNotifierWatcher）確認
+│   │       └── host_other.go          # macOS / Windows ではトレイホスト確認なし
 │   └── version/                       # ビルド時バージョン変数（CLI / GUI 共通）
 │       └── version.go                 # Version（ldflags -X で設定）
 ├── .linterly.yml                      # Linterly 設定（デフォルト）
 ├── .linterlyignore                    # Linterly 除外設定
 ├── go.mod
 ├── go.sum
-├── wails.json                         # Wails 設定（GUI ビルド）
 └── docs/
 ```
 
@@ -712,10 +774,10 @@ sequenceDiagram
     Infra->>Remote: SSH Handshake
     Remote-->>Infra: 認証成功
     Infra-->>Core: Connection established
-    Core->>Core: auto_connect ルールのフォワーディング開始
     Core-->>Daemon: 接続完了
+    Daemon->>Core: ForwardManager.StartForward(auto_connect ルール)<br/>（失敗しても接続は成功扱い）
     Daemon-->>CLI: {"result":{"status":"connected","host":"prod-server"}}
-    CLI-->>User: "prod-server に接続しました (2 forwards started)"
+    CLI-->>User: "prod-server に接続しました"
 ```
 
 ### クレデンシャルコールバック（パスワード認証の例）
@@ -751,8 +813,8 @@ sequenceDiagram
     Infra->>Remote: パスワードで認証
     Remote-->>Infra: 認証成功
     Infra-->>Core: Connection established
-    Core->>Core: auto_connect ルールのフォワーディング開始
     Core-->>Daemon: 接続完了
+    Daemon->>Core: ForwardManager.StartForward(auto_connect ルール)<br/>（失敗しても接続は成功扱い）
     Daemon-->>CLI: {"result":{"status":"connected","host":"prod-server"}}
     CLI-->>User: "prod-server に接続しました"
 ```
@@ -806,8 +868,10 @@ sequenceDiagram
 
     participant TUI as TUI クライアント
     TUI->>Daemon: events.subscribe
-    Daemon-->>TUI: event.ssh {"type":"pending_auth","host":"2fa-server"}
-    TUI->>TUI: ホスト一覧に "⏳ Pending Auth" を表示
+    Note over Daemon,TUI: 接続時に pending_auth ホストをまとめて通知する処理は未実装。<br/>購読後は PendingAuth への遷移が event.ssh で届く
+    TUI->>Daemon: host.list
+    Daemon-->>TUI: hosts[2fa-server].state = "pending_auth"
+    TUI->>TUI: ホスト一覧に状態記号 "◎" を表示
 
     Note over TUI: ユーザーが connect を実行
     TUI->>Daemon: ssh.connect {"host":"2fa-server"}
@@ -822,7 +886,7 @@ sequenceDiagram
     participant Daemon as デーモン
     participant Core as Core Layer
 
-    TUI->>Daemon: events.subscribe {"types":["ssh","forward","metrics"]}
+    TUI->>Daemon: events.subscribe {"types":["ssh","forward"]}
     Daemon-->>TUI: {"subscriptionId":"sub-1"}
 
     Note over Daemon: SSH 接続断を検知
@@ -902,7 +966,7 @@ sequenceDiagram
     SSH->>SSH: 接続状態を PendingAuth に更新
     SSH-->>Daemon: SSHEvent{PendingAuth, "2fa-server"}
     Daemon-->>TUI: event.ssh {"type":"pending_auth"}
-    TUI->>TUI: "⏳ Pending Auth" を表示
+    TUI->>TUI: 状態記号 "◎" を表示
 
     Note over TUI: ユーザーが手動で connect → UC-13 フローへ
 ```
@@ -934,7 +998,7 @@ sequenceDiagram
             TUI->>IPC: Call("daemon.shutdown", {"purge": false})
             Daemon-->>IPC: {"ok": true}
             Daemon->>Daemon: グレースフルシャットダウン
-            TUI->>TUI: daemon.StartDaemonProcess()
+            TUI->>TUI: control.StartDaemonProcess()
             TUI->>IPC: 新デーモンに再接続
             IPC->>NewDaemon: Unix Socket 接続
             TUI->>TUI: 通常フロー
@@ -1172,3 +1236,5 @@ GUI（`moleport-gui`）は CGO と OS ネイティブの WebView を必要とす
 | 4.2 | 2026-03-09 | ドキュメント乖離修正: ディレクトリ構成に updatecmd/ サブパッケージ・updater.go・errors.go・panel_helper.go を追加、ipc/protocol/ ファイル数を 11 に修正 | #62 ドキュメント乖離修正 |
 | 5.0 | 2026-10-15 | GUI 構成を追加: 概要・技術選定（Wails / Templ / HTMX / Tailwind / systray / Windows API）、GUI 構成との関係、ディレクトリ構成（`cmd/moleport-gui`、`internal/gui/*`、`internal/version`、`daemon` / `infra` の OS 別ファイル分割）、並行処理モデル、ファイルレイアウト、GUI のリリース | #84 Wails 版 GUI アプリケーション |
 | 5.1 | 2026-10-15 | M1 基盤整備の実装反映: ディレクトリ構成の `daemon/pidfile/` サブパッケージ化（`daemon_host.go` / `fork.go` 追加） | #85 M1 基盤整備 |
+| 5.2 | 2026-11-28 | ディレクトリ構成を実在ファイルに合わせて修正（`core/socks5/`・`infra/auth_*.go`・`proxycommand/proxycommand_*.go`・`cmd/moleport-gui/wails.json`・`gui/web/middleware/security.go`・`gui/service/` のサブパッケージ・`gui/shell/`・`gui/tray/` の主要ファイルを反映、存在しない `core/forward/events.go` を削除）、PID ファイル・ソケットパスに設定ディレクトリ解決順を追記 | #124, #129, #134 ドキュメント乖離修正 |
+| 5.3 | 2026-11-28 | pending_auth フロー図を実装に合わせて修正（クライアント接続時の一括通知は未実装、`host.list` で取得、TUI は状態記号 `◎` を表示） | #146 ドキュメント乖離修正 |

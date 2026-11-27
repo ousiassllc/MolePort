@@ -1,4 +1,4 @@
-package daemon
+package control
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/ipc"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -31,14 +32,14 @@ type fakeHeadlessDaemon struct {
 func startFakeHeadlessDaemon(t *testing.T, dir string, releaseOnShutdown bool, shutdownDelay time.Duration) *fakeHeadlessDaemon {
 	t.Helper()
 	f := &fakeHeadlessDaemon{
-		pidFile:  pidfile.NewPIDFile(PIDFilePath(dir)),
+		pidFile:  pidfile.NewPIDFile(daemon.PIDFilePath(dir)),
 		released: make(chan struct{}),
 	}
 	if err := f.pidFile.Acquire(); err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
 
-	f.server = ipc.NewIPCServer(SocketPath(dir), func(_ string, method string, params json.RawMessage) (any, *protocol.RPCError) {
+	f.server = ipc.NewIPCServer(daemon.SocketPath(dir), func(_ string, method string, params json.RawMessage) (any, *protocol.RPCError) {
 		if method != "daemon.shutdown" {
 			return nil, &protocol.RPCError{Code: protocol.MethodNotFound, Message: "unexpected " + method}
 		}
@@ -81,7 +82,7 @@ func (f *fakeHeadlessDaemon) receivedPurge() (purge, received bool) {
 }
 
 func TestTakeover_NoPIDFile(t *testing.T) {
-	pid, err := Takeover(createTestConfigDir(t), time.Second)
+	pid, err := Takeover(t.TempDir(), time.Second)
 	if pid != 0 || err != nil {
 		t.Errorf("Takeover() = (%d, %v), want (0, nil)", pid, err)
 	}
@@ -89,8 +90,8 @@ func TestTakeover_NoPIDFile(t *testing.T) {
 
 func TestTakeover_StalePIDFile(t *testing.T) {
 	// PID が再利用されて生存して見える（自プロセスの PID）が、誰もロックしていない PID ファイル。
-	dir := createTestConfigDir(t)
-	if err := os.WriteFile(PIDFilePath(dir), []byte(strconv.Itoa(os.Getpid())+"\n"), 0600); err != nil {
+	dir := t.TempDir()
+	if err := os.WriteFile(daemon.PIDFilePath(dir), []byte(strconv.Itoa(os.Getpid())+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,14 +99,14 @@ func TestTakeover_StalePIDFile(t *testing.T) {
 	if pid != 0 || err != nil {
 		t.Errorf("Takeover() = (%d, %v), want (0, nil)", pid, err)
 	}
-	if _, statErr := os.Stat(PIDFilePath(dir)); statErr != nil {
+	if _, statErr := os.Stat(daemon.PIDFilePath(dir)); statErr != nil {
 		t.Errorf("stale PID file should be left for Acquire() to overwrite: %v", statErr)
 	}
 }
 
 func TestTakeover_LockedButSocketUnresponsive(t *testing.T) {
-	dir := createTestConfigDir(t)
-	pf := pidfile.NewPIDFile(PIDFilePath(dir))
+	dir := t.TempDir()
+	pf := pidfile.NewPIDFile(daemon.PIDFilePath(dir))
 	if err := pf.Acquire(); err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -119,13 +120,13 @@ func TestTakeover_LockedButSocketUnresponsive(t *testing.T) {
 		t.Errorf("Takeover() pid = %d, want %d", pid, os.Getpid())
 	}
 	// 強制終了・PID ファイル削除をしていないこと。
-	if locked, _ := pidfile.IsLocked(PIDFilePath(dir)); !locked {
+	if locked, _ := pidfile.IsLocked(daemon.PIDFilePath(dir)); !locked {
 		t.Error("lock should still be held (takeover must not kill or remove the PID file)")
 	}
 }
 
 func TestTakeover_Success(t *testing.T) {
-	dir := createTestConfigDir(t)
+	dir := t.TempDir()
 	fake := startFakeHeadlessDaemon(t, dir, true, 250*time.Millisecond)
 
 	start := time.Now()
@@ -148,13 +149,13 @@ func TestTakeover_Success(t *testing.T) {
 	if purge, received := fake.receivedPurge(); !received || purge {
 		t.Errorf("daemon.shutdown received=%v purge=%v, want received with purge=false", received, purge)
 	}
-	if locked, _ := pidfile.IsLocked(PIDFilePath(dir)); locked {
+	if locked, _ := pidfile.IsLocked(daemon.PIDFilePath(dir)); locked {
 		t.Error("lock should be released after Takeover")
 	}
 }
 
 func TestTakeover_Timeout(t *testing.T) {
-	dir := createTestConfigDir(t)
+	dir := t.TempDir()
 	fake := startFakeHeadlessDaemon(t, dir, false, 0)
 
 	pid, err := Takeover(dir, 300*time.Millisecond)
@@ -167,33 +168,7 @@ func TestTakeover_Timeout(t *testing.T) {
 	if _, received := fake.receivedPurge(); !received {
 		t.Error("daemon.shutdown should have been sent before waiting")
 	}
-	if locked, _ := pidfile.IsLocked(PIDFilePath(dir)); !locked {
+	if locked, _ := pidfile.IsLocked(daemon.PIDFilePath(dir)); !locked {
 		t.Error("lock should still be held after timeout (no forced kill)")
 	}
-}
-
-func TestTakeover_RealDaemon(t *testing.T) {
-	old, dir := startTestDaemon(t, "old")
-	// headless デーモンの Wait() 相当: Done() を待って Stop() する。
-	stopped := make(chan struct{})
-	go func() {
-		<-old.Done()
-		_ = old.Stop()
-		close(stopped)
-	}()
-
-	if _, err := Takeover(dir, TakeoverTimeout); err != nil {
-		t.Fatalf("Takeover() error = %v", err)
-	}
-	<-stopped
-
-	// 引き継ぎ後は新しいデーモンが PID を取得できる。
-	next, err := New(dir, "new")
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	if err := next.Start(context.Background()); err != nil {
-		t.Fatalf("Start() after takeover error: %v", err)
-	}
-	_ = next.Stop()
 }

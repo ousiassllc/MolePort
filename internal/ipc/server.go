@@ -112,6 +112,20 @@ func (s *IPCServer) Stop() error {
 	return firstErr
 }
 
+// DisconnectClient は指定クライアントの接続を閉じる。
+// 後始末（clients からの削除・切断コールバック）は readLoop が行う。
+func (s *IPCServer) DisconnectClient(clientID string) {
+	s.mu.RLock()
+	c, ok := s.clients[clientID]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	if err := c.conn.Close(); err != nil {
+		slog.Debug("failed to close client connection", "client", clientID, "error", err)
+	}
+}
+
 // ConnectedClients は接続中のクライアント数を返す。
 func (s *IPCServer) ConnectedClients() int {
 	s.mu.RLock()
@@ -266,10 +280,20 @@ func (s *IPCServer) readLoop(c *clientConn) {
 	}
 }
 
+// writeTimeout は 1 回の送信に許容する時間。読み取りが止まったクライアントで
+// 送信が無期限にブロックし、c.mu を握り続けるのを防ぐ。
+const writeTimeout = 10 * time.Second
+
+// send はメッセージを送信する。書き込みに失敗（タイムアウト含む）した場合、
+// 途中まで書かれたデータでストリームが壊れるため接続を閉じる。
 func (c *clientConn) send(v any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		slog.Debug("failed to set write deadline", "client", c.id, "error", err)
+	}
 	if err := c.enc.Encode(v); err != nil {
+		_ = c.conn.Close()
 		return fmt.Errorf("send: %w", err)
 	}
 	return nil

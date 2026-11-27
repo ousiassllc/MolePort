@@ -145,7 +145,7 @@ func stubMockResponses(t *testing.T, m map[string]json.RawMessage) {
 }
 
 // setupMockDaemonDir は configDir に PID ファイルとモックソケットを配置し、
-// daemon.EnsureDaemon が正常に接続できる環境を構築するヘルパー。
+// control.EnsureDaemon が正常に接続できる環境を構築するヘルパー。
 func setupMockDaemonDir(t *testing.T) string {
 	t.Helper()
 	configDir := t.TempDir()

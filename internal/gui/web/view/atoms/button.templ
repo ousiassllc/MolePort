@@ -9,14 +9,23 @@ const (
 	ButtonDanger    ButtonVariant = "danger"
 )
 
-// ButtonProps は Button の引数。Attrs には hx-* や id などの追加属性を渡す。
+// ButtonProps は Button の引数。Type が空なら "button"（フォーム送信は "submit"）。
+// Attrs には hx-* や id などの追加属性を渡す。
 type ButtonProps struct {
 	Label   string
 	Variant ButtonVariant
+	Type    string
 	Attrs   templ.Attributes
+}
+
+func buttonType(t string) string {
+	if t == "submit" {
+		return "submit"
+	}
+	return "button"
 }
 
 // Button は種別付きボタン。サーバーが hx-post の URL などを Attrs で渡す。
 templ Button(p ButtonProps) {
-	<button type="button" class="mp-btn" data-variant={ string(p.Variant) } { p.Attrs... }>{ p.Label }</button>
+	<button type={ buttonType(p.Type) } class="mp-btn" data-variant={ string(p.Variant) } { p.Attrs... }>{ p.Label }</button>
 }

@@ -43,7 +43,7 @@ templ SettingsForm(v service.SettingsView, errs service.FormErrors) {
 				Error: errs["language"],
 				Input: atoms.Select(atoms.SelectProps{Name: "language", Options: languageOptions(), Selected: v.Language, Invalid: errs["language"] != ""}),
 			})
-			<fieldset class="mp-field" id="settings-theme-base">
+			<fieldset class="mp-field" id="settings-theme-base" if errs["theme_base"] != "" { aria-describedby={ atoms.ErrorID("theme_base") } }>
 				<legend class="mp-field-label">{ i18n.T("gui.settings.theme_base") }</legend>
 				<div class="mp-swatches">
 					for _, b := range guiconfig.Bases() {
@@ -51,10 +51,10 @@ templ SettingsForm(v service.SettingsView, errs service.FormErrors) {
 					}
 				</div>
 				if errs["theme_base"] != "" {
-					<p class="mp-field-error" role="alert">{ errs["theme_base"] }</p>
+					<p class="mp-field-error" id={ atoms.ErrorID("theme_base") } role="alert">{ errs["theme_base"] }</p>
 				}
 			</fieldset>
-			<fieldset class="mp-field" id="settings-theme-accent">
+			<fieldset class="mp-field" id="settings-theme-accent" if errs["theme_accent"] != "" { aria-describedby={ atoms.ErrorID("theme_accent") } }>
 				<legend class="mp-field-label">{ i18n.T("gui.settings.theme_accent") }</legend>
 				<div class="mp-swatches">
 					for _, a := range guiconfig.Accents() {
@@ -62,7 +62,7 @@ templ SettingsForm(v service.SettingsView, errs service.FormErrors) {
 					}
 				</div>
 				if errs["theme_accent"] != "" {
-					<p class="mp-field-error" role="alert">{ errs["theme_accent"] }</p>
+					<p class="mp-field-error" id={ atoms.ErrorID("theme_accent") } role="alert">{ errs["theme_accent"] }</p>
 				}
 			</fieldset>
 			@molecules.FormField(molecules.FormFieldProps{
@@ -71,8 +71,8 @@ templ SettingsForm(v service.SettingsView, errs service.FormErrors) {
 				Input: atoms.Checkbox("update_check_enabled", v.UpdateCheckEnabled),
 			})
 			<div class="mp-modal-actions">
-				<button type="button" class="mp-btn" data-variant="secondary" id="settings-cancel" data-close-modal>{ i18n.T("gui.settings.cancel") }</button>
-				<button type="submit" class="mp-btn" data-variant="primary" id="settings-submit">{ i18n.T("gui.settings.submit") }</button>
+				@atoms.Button(atoms.ButtonProps{Label: i18n.T("gui.settings.cancel"), Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"id": "settings-cancel", "data-close-modal": true}})
+				@atoms.Button(atoms.ButtonProps{Label: i18n.T("gui.settings.submit"), Variant: atoms.ButtonPrimary, Type: "submit", Attrs: templ.Attributes{"id": "settings-submit"}})
 			</div>
 		</form>
 	</dialog>

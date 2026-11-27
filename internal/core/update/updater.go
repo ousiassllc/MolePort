@@ -24,33 +24,35 @@ var (
 	ErrAlreadyLatest = errors.New("already running the latest version")
 )
 
-const (
-	// maxDownloadSize はダウンロードファイルの最大サイズ (256 MiB)。
-	maxDownloadSize = 256 << 20
-
-	// maxReleaseResponseSize はリリース API レスポンスの最大サイズ (1 MiB)。
-	maxReleaseResponseSize = 1 << 20
-)
-
 // Updater はセルフアップデートを実行する。
 type Updater struct {
-	checker    *VersionChecker
-	httpClient *http.Client
-	repoOwner  string
-	repoName   string
-	apiBase    string
-	execPath   string // テスト用。空の場合は os.Executable() を使用
+	checker        *VersionChecker
+	httpClient     *http.Client // リリース情報の取得用（VersionChecker と共有、短い Timeout）
+	downloadClient *http.Client // アセットのダウンロード用（newDownloadClient 参照）
+	repoOwner      string
+	repoName       string
+	apiBase        string
+	execPath       string // テスト用。空の場合は os.Executable() を使用
+
+	beforeReplace func() error
 }
 
 // NewUpdater は VersionChecker から Updater を生成する。
 func NewUpdater(checker *VersionChecker) *Updater {
 	return &Updater{
-		checker:    checker,
-		httpClient: checker.httpClient,
-		repoOwner:  checker.repoOwner,
-		repoName:   checker.repoName,
-		apiBase:    checker.apiBase,
+		checker:        checker,
+		httpClient:     checker.httpClient,
+		downloadClient: newDownloadClient(),
+		repoOwner:      checker.repoOwner,
+		repoName:       checker.repoName,
+		apiBase:        checker.apiBase,
 	}
+}
+
+// SetBeforeReplace はバイナリ置換の直前に呼ばれるフックを設定する。
+// フックがエラーを返した場合、バイナリは置換されず Update はそのエラーで中断する。
+func (u *Updater) SetBeforeReplace(fn func() error) {
+	u.beforeReplace = fn
 }
 
 // FindAsset は指定バージョンのリリースからアセット URL を検索する。
@@ -138,6 +140,11 @@ func (u *Updater) Update(ctx context.Context, progress func(stage string)) error
 	}
 
 	// 8-10. バイナリを置換
+	if u.beforeReplace != nil {
+		if err := u.beforeReplace(); err != nil {
+			return fmt.Errorf("before replace: %w", err)
+		}
+	}
 	progress("replacing")
 	execPath := u.execPath
 	if execPath == "" {
@@ -180,34 +187,6 @@ func (u *Updater) fetchRelease(ctx context.Context, tag string) (*githubRelease,
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &release, nil
-}
-
-// downloadFile は指定 URL からファイルをダウンロードする。
-func (u *Updater) downloadFile(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", "MolePort/"+u.checker.currentVersion)
-
-	resp, err := u.httpClient.Do(req) //nolint:gosec // URL comes from GitHub API response
-	if err != nil {
-		return nil, fmt.Errorf("download file: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
-	if len(data) > maxDownloadSize {
-		return nil, fmt.Errorf("download exceeds maximum size (%d bytes)", maxDownloadSize)
-	}
-	return data, nil
 }
 
 // verifyChecksum は checksums.txt の内容とデータの SHA-256 ハッシュを照合する。

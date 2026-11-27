@@ -21,6 +21,7 @@ type mockForwardManagerForState struct {
 	markReconnectingCalls []string
 	restoreForwardsFn     func(string) []core.ForwardRestoreResult
 	failReconnectingCalls []string
+	stopCalls             []string
 	subscribeCh           chan core.ForwardEvent
 }
 
@@ -45,7 +46,12 @@ func (m *mockForwardManagerForState) StartForward(ruleName string, cb core.Crede
 	return nil
 }
 
-func (m *mockForwardManagerForState) StopForward(string) error { return nil }
+func (m *mockForwardManagerForState) StopForward(name string) error {
+	m.mu.Lock()
+	m.stopCalls = append(m.stopCalls, name)
+	m.mu.Unlock()
+	return nil
+}
 
 func (m *mockForwardManagerForState) StopAllForwards() error { return nil }
 

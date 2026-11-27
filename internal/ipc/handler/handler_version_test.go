@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -14,6 +16,12 @@ import (
 type mockVersionChecker struct {
 	result *core.VersionCheckResult
 	err    error
+
+	enabledCalls []bool
+}
+
+func (m *mockVersionChecker) SetEnabled(enabled bool) {
+	m.enabledCalls = append(m.enabledCalls, enabled)
 }
 
 func (m *mockVersionChecker) LatestVersion(_ context.Context) (*core.VersionCheckResult, error) {
@@ -70,5 +78,22 @@ func TestHandler_VersionCheck(t *testing.T) {
 				t.Errorf("UpdateAvailable = %v, want %v", vr.UpdateAvailable, tt.wantUpdate)
 			}
 		})
+	}
+}
+
+// config.update の update_check.enabled は Handler に渡された VersionChecker へ反映される（NFR-30）。
+func TestHandler_ConfigUpdate_AppliesUpdateCheckEnabledToVersionChecker(t *testing.T) {
+	vc := &mockVersionChecker{}
+	h := newVCHandler("v1.0.0", true, vc)
+
+	for _, enabled := range []bool{false, true} {
+		params := json.RawMessage(fmt.Sprintf(`{"update_check":{"enabled":%t}}`, enabled))
+		if _, rpcErr := h.Handle("client", "config.update", params); rpcErr != nil {
+			t.Fatalf("config.update error = %v", rpcErr)
+		}
+	}
+
+	if want := []bool{false, true}; !reflect.DeepEqual(vc.enabledCalls, want) {
+		t.Errorf("SetEnabled calls = %v, want %v", vc.enabledCalls, want)
 	}
 }

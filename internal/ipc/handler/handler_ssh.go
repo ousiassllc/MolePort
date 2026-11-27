@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -26,10 +27,33 @@ func (h *Handler) sshConnect(clientID string, params json.RawMessage) (any, *pro
 		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
+	h.startAutoConnectForwards(p.Host, cb)
+
 	return protocol.SSHConnectResult{
 		Host:   p.Host,
 		Status: protocol.StateConnected,
 	}, nil
+}
+
+// startAutoConnectForwards は host の auto_connect ルールのうち未開始のものを開始する。
+// 開始に失敗しても ssh.connect 自体は成功扱いとし、警告ログに留める。
+func (h *Handler) startAutoConnectForwards(host string, cb core.CredentialCallback) {
+	for _, rule := range h.fwdMgr.GetRulesByHost(host) {
+		if !rule.AutoConnect {
+			continue
+		}
+		session, err := h.fwdMgr.GetSession(rule.Name)
+		if err != nil || (session.Status != core.Stopped && session.Status != core.SessionError) {
+			continue
+		}
+		if err := h.fwdMgr.StartForward(rule.Name, cb); err != nil {
+			var alreadyActive *core.AlreadyActiveError
+			if errors.As(err, &alreadyActive) {
+				continue
+			}
+			slog.Warn("auto-connect forward start failed", "host", host, "rule", rule.Name, "error", err)
+		}
+	}
 }
 
 // buildCredentialCallback はクライアントへの通知とレスポンス待機を行うコールバックを構築する。
@@ -135,6 +159,11 @@ func (h *Handler) sshDisconnect(params json.RawMessage) (any, *protocol.RPCError
 	}
 	if err := validateRequired(requiredField{"host", p.Host}); err != nil {
 		return nil, err
+	}
+
+	// 切断済みクライアントを掴んだ転送が残らないよう、先に当該ホストの転送を停止する。
+	if err := core.StopHostForwards(h.fwdMgr, p.Host); err != nil {
+		return nil, protocol.ToRPCError(err, protocol.InternalError)
 	}
 
 	if err := h.sshMgr.Disconnect(p.Host); err != nil {

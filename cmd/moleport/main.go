@@ -9,14 +9,14 @@ import (
 	"github.com/ousiassllc/moleport/internal/cli/statuscmd"
 	"github.com/ousiassllc/moleport/internal/cli/updatecmd"
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 )
 
 func main() {
 	// デーモンモードの場合は直接デーモンとして起動
-	if daemon.IsDaemonMode() {
+	if control.IsDaemonMode() {
 		flagConfigDir, _ := cli.ParseGlobalFlags()
 		configDir := cli.ResolveConfigDir(flagConfigDir)
 		daemoncmd.RunDaemonMode(configDir)
