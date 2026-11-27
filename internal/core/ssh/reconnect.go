@@ -136,7 +136,9 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 		base = maxDelay
 	}
 
-	for attempt := 0; attempt < ds.reconnectCfg.MaxRetries; attempt++ {
+	// MaxRetries == 0 は無制限（Disconnect / Close まで再試行を続ける）
+	maxRetries := ds.reconnectCfg.MaxRetries
+	for attempt := 0; maxRetries == 0 || attempt < maxRetries; attempt++ {
 		wait := withJitter(base, maxDelay)
 		slog.Info("attempting reconnect", "host", hostName, "attempt", attempt+1, "delay", wait)
 
@@ -174,7 +176,7 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 	m.mu.Unlock()
 
 	m.events.Emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName,
-		Error: fmt.Errorf("reconnect failed after %d attempts", ds.reconnectCfg.MaxRetries)})
+		Error: fmt.Errorf("reconnect failed after %d attempts", maxRetries)})
 }
 
 // registerReconnectCancel は再接続キャンセル関数を登録し、既存のものがあればキャンセルする。
