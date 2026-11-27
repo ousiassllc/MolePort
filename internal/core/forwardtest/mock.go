@@ -121,6 +121,13 @@ func (m *MockSSHManager) SetConnected(hostName string, sshConn core.SSHConnectio
 	m.SSHConns[hostName] = sshConn
 }
 
+// SetHostState はテスト用にホストの接続状態を設定する（GetHost に反映される）。
+func (m *MockSSHManager) SetHostState(hostName string, state core.ConnectionState) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.hosts[hostName] = core.SSHHost{Name: hostName, State: state}
+}
+
 var _ core.SSHManager = (*MockSSHManager)(nil)
 
 // MockSSHConnection は core.SSHConnection のテスト用モック実装。

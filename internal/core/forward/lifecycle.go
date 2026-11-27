@@ -62,6 +62,12 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 	}
 
 	if !m.sshManager.IsConnected(rule.Host) {
+		// 再接続待機中のホストでは接続を張り直さない。手動接続は進行中の自動再接続を
+		// 打ち切り、失敗すると再接続が再開されないため、再接続の完了を待つ。
+		if host, err := m.sshManager.GetHost(rule.Host); err == nil && host.State == core.Reconnecting {
+			cleanup()
+			return fmt.Errorf("host %s is reconnecting: %w", rule.Host, &core.NotConnectedError{HostName: rule.Host})
+		}
 		if err := m.sshManager.ConnectWithCallback(rule.Host, cb); err != nil {
 			cleanup()
 			return fmt.Errorf("failed to connect to host %s: %w", rule.Host, err)
