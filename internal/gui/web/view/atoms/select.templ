@@ -21,8 +21,8 @@ templ Select(p SelectProps) {
 		class="mp-input"
 		id={ FieldID(p.Name) }
 		name={ p.Name }
-		aria-invalid?={ p.Invalid }
 		if p.Invalid {
+			aria-invalid="true"
 			aria-describedby={ ErrorID(p.Name) }
 		}
 		{ p.Attrs... }
