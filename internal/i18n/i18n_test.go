@@ -222,3 +222,31 @@ func TestT_NoTemplateData(t *testing.T) {
 		t.Errorf("T without data = %q, want %q", got, "Daemon stopped")
 	}
 }
+
+// TUI の Enter / d キーのヒントは転送の開始・停止を指す（TUI から SSH の接続・切断はできない）。
+func TestT_TUIKeyHints_DescribeStartStopNotConnect(t *testing.T) {
+	resetLang(t)
+
+	want := map[Lang]map[string]string{
+		LangEN: {
+			"tui.keys.disconnect": "Stop",
+			"tui.help.enter":      "Select / Toggle start/stop",
+			"tui.help.d":          "Stop forwarding",
+		},
+		LangJA: {
+			"tui.keys.disconnect": "停止",
+			"tui.help.enter":      "選択 / 開始・停止トグル",
+			"tui.help.d":          "転送を停止",
+		},
+	}
+	for lang, keys := range want {
+		if err := SetLang(lang); err != nil {
+			t.Fatalf("SetLang(%q): %v", lang, err)
+		}
+		for key, text := range keys {
+			if got := T(key); got != text {
+				t.Errorf("[%s] T(%q) = %q, want %q", lang, key, got, text)
+			}
+		}
+	}
+}
