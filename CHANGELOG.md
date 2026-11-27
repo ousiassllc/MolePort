@@ -16,6 +16,12 @@
 - Ship the Windows GUI as a per-user NSIS installer (`cmd/moleport-gui/build/windows/installer/project.nsi`, based on the Wails v2.16.0 template): no administrator rights, installs to `%LOCALAPPDATA%\Programs\MolePort`, HKCU uninstall entry, current-user shortcuts, in-place upgrade over the same install location, prompt to quit a running `moleport-gui.exe`, uninstall removes only installed files (settings under `.config\moleport` are kept). `release.yml` installs NSIS and uploads `moleport-gui_<version>_windows_amd64_installer.exe` (included in `checksums_gui.txt`); the `ci.yml` Windows GUI job also builds the installer and checks it exists. Still unsigned (SmartScreen: More info → Run anyway). Installing/upgrading on a real Windows machine is pending verification / Windows の GUI をユーザー単位の NSIS インストーラーで配布: 管理者権限不要、`%LOCALAPPDATA%\Programs\MolePort` にインストール、HKCU のアンインストール情報、現在のユーザー用ショートカット、同一インストール先への上書き更新、起動中の `moleport-gui.exe` の終了確認、アンインストールはインストールしたファイルのみ削除（`.config\moleport` の設定は残す）。`release.yml` が NSIS を導入して `moleport-gui_<version>_windows_amd64_installer.exe` を添付（`checksums_gui.txt` に含まれる）、`ci.yml` の Windows GUI ジョブでもインストーラー生成を検証。コード署名なし（SmartScreen は「詳細情報」→「実行」）。実機の Windows でのインストール・更新は実機検証待ち (#92)
 - Document PoC procedures (R-1 to R-8) and fallback policies; real-device results are pending / PoC の検証手順（R-1〜R-8）と縮退方針を仕様書に記載（実機検証結果は待ち） (#87)
 
+### 🐛 Bug Fixes / バグ修正
+- Deliver daemon event notifications in order through a bounded per-client queue and disconnect clients that stop reading / デーモンのイベント通知をクライアントごとの有界キューで順序どおり配信し、読み取りが滞ったクライアントを切断 (#107)
+- Release pending IPC client calls immediately when the connection drops / IPC クライアントの接続断時に保留中の Call を即座に解放 (#110)
+- Restore sessions and auto-connect in the background, and force-close after 5 seconds on shutdown (NFR-16) / セッション復元・auto_connect をバックグラウンド化し、停止処理に 5 秒の強制切断タイムアウトを追加 (#128, #116)
+- Make `moleport update` wait for the daemon to stop before replacing the binary and restart only a daemon it stopped / `moleport update` がデーモン停止完了を待ってからバイナリを置換し、停止したデーモンのみ再起動 (#111)
+
 ## [v1.0.0] - 2026-03-15
 
 ### ⚠️ Breaking Changes / 破壊的変更
