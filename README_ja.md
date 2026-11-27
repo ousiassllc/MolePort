@@ -120,7 +120,7 @@ moleport tui
 | `moleport daemon kill` | 応答しないデーモンを強制終了 |
 | `moleport connect <host>` | SSH ホストに接続 |
 | `moleport disconnect <host>` | SSH ホストを切断 |
-| `moleport add [flags]` | 転送ルールを追加 |
+| `moleport add [flags]` | 転送ルールを追加（フラグ: `--host`, `--type`, `--local-port`, `--remote-host`, `--remote-port`, `--name`, `--remote-bind-addr`, `--auto-connect`） |
 | `moleport delete <name>` | 転送ルールを削除 |
 | `moleport start <name>` | フォワーディングを開始 |
 | `moleport stop <name> / --all` | フォワーディングを停止（`--all`: 全停止） |
@@ -135,20 +135,21 @@ moleport tui
 
 ## TUI キーバインド
 
-| キー | 動作 |
-|------|------|
-| `↑`/`k` `↓`/`j` | 項目を選択 |
-| `Enter` | 転送の接続/切断トグル |
-| `Tab` | ペイン切り替え |
-| `d` | 選択中の転送を切断 |
-| `x` | 選択中の転送を削除 |
-| `t` | テーマ変更 |
-| `l` | 言語切替 |
-| `v` | バージョン情報表示 |
-| `/` | コマンド入力にフォーカス |
-| `?` | ヘルプ表示 |
-| `Esc` | キャンセル |
-| `q` / `Ctrl+C` | 終了 |
+| キー | コンテキスト | 動作 |
+|------|-------------|------|
+| `↑`/`k` `↓`/`j` | ホスト一覧 / 転送一覧 | 項目を選択 |
+| `Enter` | ホスト一覧 | フォワード追加ウィザードを開始 |
+| `Enter` | 転送一覧 | 選択中の転送をトグル（開始/停止） |
+| `Tab` | 全体 | ペイン切り替え |
+| `d` | 転送一覧 | 選択中の転送を停止 |
+| `x` | 転送一覧 | 選択中の転送を削除（確認あり） |
+| `t` | 全体 | テーマ変更 |
+| `l` | 全体 | 言語切替 |
+| `v` | 全体 | バージョン情報表示 |
+| `/` | 全体 | SetupPanel（ホスト一覧）にフォーカス |
+| `?` | 全体 | ヘルプ表示 |
+| `Esc` | ウィザード / パスワード入力 | キャンセル |
+| `q` / `Ctrl+C` | 全体 | 終了（デーモンは継続） |
 
 ## アーキテクチャ
 
@@ -167,6 +168,8 @@ graph TD
 ## 設定
 
 設定ファイル: `~/.config/moleport/config.yaml`
+
+設定ディレクトリ（既定は `~/.config/moleport`。ソケット・PID ファイル・`state.yaml` もここに置かれます）は、`--config-dir <path>` > 環境変数 `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport` の順で解決されます。
 
 ```yaml
 ssh_config_path: "~/.ssh/config"

@@ -885,11 +885,11 @@ type SSHManager interface {
 
 | ファイル | 責務 |
 |---------|------|
-| `manager.go` | インターフェース定義・初期化・ルール管理 |
+| `manager.go` | インターフェース定義・初期化・ルール管理・セッション照会（`GetSession`/`GetAllSessions`）・イベント購読（`Subscribe`） |
 | `lifecycle.go` | `StartForward`/`StopForward`/`StopAllForwards` |
 | `bridge.go` | 接続ブリッジ（`acceptLoop`/`dialRemote`/`bridge`/SOCKS5） |
 | `reconnect.go` | `MarkReconnecting`/`RestoreForwards`/`FailReconnecting` |
-| `events.go` | セッション照会・イベント管理 |
+| `forward_helper.go` | ヘルパー関数（`openListener` 等） |
 
 #### 責務
 
@@ -1650,7 +1650,7 @@ GUI プロセスの起動・引き継ぎ・終了を統括する。Wails・実�
 
 #### 責務
 
-- 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `~/.config/moleport`）と i18n 言語の解決
+- 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport`）と i18n 言語の解決
 - `daemon.Takeover` による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
 - `Daemon.Done()` の監視（`daemon.shutdown` 起因の終了を Wails の終了フローへ接続）
 - 状態（`starting` / `ready` / `failed`）の保持と、`ready` 遷移時の全トピック通知
@@ -1945,14 +1945,14 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | パッケージ | 分割前ファイル | 行数 | 分割後ファイル数 |
 |-----------|-------------|------|--------------|
 | `core/ssh/` | `ssh.go` | 600 | 4 |
-| `core/forward/` | `forward.go` | 520 | 5 (`manager.go`, `lifecycle.go`, `bridge.go`, `reconnect.go`, `events.go`) |
+| `core/forward/` | `forward.go` | 520 | 5 (`manager.go`, `lifecycle.go`, `bridge.go`, `reconnect.go`, `forward_helper.go`) |
 | `core/` | `types.go` | 340 | 4 (`types_enums.go`, `types_models.go`, `types_events.go`, `types_credentials.go`) |
 | `ipc/handler/` | `handler.go` | 587 | 8 |
 | `ipc/protocol/` | `protocol.go` | 432 | 9 (`protocol.go`, `convert.go`, `protocol_host.go`, `protocol_ssh.go`, `protocol_forward.go`, `protocol_session.go`, `protocol_config.go`, `protocol_daemon.go`, `protocol_events.go`) |
 | `tui/app/` | `app.go` | 470 | 9 (`app.go`, `app_forward.go`, `app_help.go`, `app_ipc.go`, `app_lang.go`, `app_lifecycle.go`, `app_theme.go`, `app_version.go`, `convert.go`) |
 | `tui/organisms/` | `setuppanel.go` | 534 | 3 (`setuppanel.go`, `setuppanel_update.go`, `setuppanel_view.go`) |
 | `daemon/` | `daemon.go` | 321 | 3 (`daemon.go`, `daemon_state.go`（SSH イベント→フォワード復元ルーティング + 状態保存・復元）, `ensure.go`) |
-| `gui/service/` | （新規） | — | 8 (`dashboard.go`, `host.go`, `forward.go`, `settings.go`, `credential.go`, `notification.go`, `bridge.go`, `viewmodel.go`) |
+| `gui/service/` | （新規） | — | 12 ファイル（`dashboard.go`, `host.go`, `forward.go`, `operations.go`, `activity.go`, `backend.go`, `lifecycle.go`, `notification.go`, `topic.go`, `errors.go`, `errmsg.go`, `viewmodel.go`）＋サブパッケージ 5（`settings/`, `credential/`（`broker.go`）, `bridge/`, `trayops/`, `servicetest/`） |
 
 ## 改訂履歴
 
@@ -1983,3 +1983,4 @@ Linterly のファイル行数制限（300行/ファイル）に準拠するた�
 | 6.3 | 2026-10-15 | M3-1 の実装反映: `Backend` / `BackendSource`、`WindowVisibility`、パネルの `ready` 引数、`DashboardProps`、`LifecycleDeps.Queue` / `OnReady`、翻訳ファイルの名前空間分割を追記 | #88 M3-1 ダッシュボード |
 | 6.4 | 2026-10-15 | M3-2 の実装反映: `Forwards` / `Hosts` のシグネチャ（`HostNames`、`Add` の戻り値）、`CallbackProvider`、`Activity`、CredentialBroker を `gui/service/credential`・EventBridge を `gui/service/bridge` サブパッケージへ移動（`Input` によるバッファ受け渡し）、`Deps.Cred` の型を更新 | #89 M3-2 操作系 |
 | 6.5 | 2026-10-15 | M3-3 の実装反映: `Settings`（`gui/service/settings`。`View` / `Save` / `OpenUpdate`）、`Opener`、`Backend.Version`（`VersionSource`）と `AvailableUpdate`、`Deps.Theme`、`VersionChecker.SetEnabled` / `Cached`、`gui:` セクションの型を `core/guiconfig` サブパッケージ（`Config` / `Theme` / `Normalized`）に置くことを追記 | #90 M3-3 設定・更新バッジ |
+| 6.6 | 2026-11-28 | ドキュメント乖離修正: ForwardManager のファイル表・分割サマリーを実在ファイル（`events.go` は存在せず `forward_helper.go`、セッション照会・イベント購読は `manager.go`）に修正、`gui/service/` の分割サマリーをサブパッケージ構成（`settings/` `credential/` `bridge/` `trayops/` `servicetest/`）に更新、設定ディレクトリの解決順に `XDG_CONFIG_HOME` を追記 | #124, #129, #134 ドキュメント乖離修正 |

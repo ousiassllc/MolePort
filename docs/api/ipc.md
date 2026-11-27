@@ -23,7 +23,7 @@ Unix ドメインソケット上で JSON-RPC 2.0 を使用する。
 
 | 項目 | 値 |
 |------|-----|
-| **ソケットパス** | `~/.config/moleport/moleport.sock` |
+| **ソケットパス** | `<設定ディレクトリ>/moleport.sock`（既定: `~/.config/moleport/moleport.sock`）。設定ディレクトリは `--config-dir` > 環境変数 `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport` の順に解決する |
 | **プロトコル** | JSON-RPC 2.0 |
 | **メッセージ区切り** | 改行（`\n`）— NDJSON 形式 |
 | **エンコーディング** | UTF-8 |
@@ -251,11 +251,23 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "remote_host": "localhost",
         "remote_port": 5432,
         "auto_connect": true
+      },
+      {
+        "name": "prod-reverse",
+        "host": "prod-server",
+        "type": "remote",
+        "local_port": 3000,
+        "remote_host": "localhost",
+        "remote_port": 9000,
+        "remote_bind_addr": "0.0.0.0",
+        "auto_connect": false
       }
     ]
   }
 }
 ```
+
+`remote_bind_addr` は `type` が `remote` のルールで、リモート側でリッスンするバインドアドレス（F-51）。ルールに設定されている場合のみ含まれる（`omitempty`）。`local` / `dynamic` のルールでは含まれない。
 
 ---
 
@@ -278,6 +290,39 @@ SSH config を再読み込みし、ホスト一覧を更新する。
     "remote_host": "localhost",
     "remote_port": 80,
     "auto_connect": true
+  }
+}
+```
+
+**パラメータ**:
+
+| パラメータ | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `name` | string | No | ルール名。省略時は自動生成する |
+| `host` | string | Yes | SSH ホスト名 |
+| `type` | string | Yes | `local` / `remote` / `dynamic` |
+| `local_port` | number | Yes | ローカルポート（1 以上） |
+| `remote_host` | string | No | リモートホスト（`local` / `remote` で使用） |
+| `remote_port` | number | No | リモートポート（`local` / `remote` で使用） |
+| `remote_bind_addr` | string | No | リモート側のバインドアドレス。`remote` 転送でのみ有効。省略時は `127.0.0.1`（F-51） |
+| `auto_connect` | boolean | No | 起動時に自動接続するか（省略時 `false`） |
+
+`remote` 転送でリモート側を `0.0.0.0` にバインドさせる例:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "forward.add",
+  "params": {
+    "name": "prod-reverse",
+    "host": "prod-server",
+    "type": "remote",
+    "local_port": 3000,
+    "remote_host": "localhost",
+    "remote_port": 9000,
+    "remote_bind_addr": "0.0.0.0",
+    "auto_connect": false
   }
 }
 ```
@@ -483,6 +528,22 @@ SSH config を再読み込みし、ホスト一覧を更新する。
         "bytes_received": 348160,
         "reconnect_count": 0,
         "last_error": ""
+      },
+      {
+        "id": "prod-reverse-1764300001000000000",
+        "name": "prod-reverse",
+        "host": "prod-server",
+        "type": "remote",
+        "local_port": 3000,
+        "remote_host": "localhost",
+        "remote_port": 9000,
+        "remote_bind_addr": "0.0.0.0",
+        "status": "active",
+        "connected_at": "2026-02-11T10:00:01+09:00",
+        "bytes_sent": 0,
+        "bytes_received": 0,
+        "reconnect_count": 0,
+        "last_error": ""
       }
     ]
   }
@@ -491,11 +552,13 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 `id` はセッション一意 ID で、`<ルール名>-<開始時刻 UnixNano>` 形式。転送を開始するたびに変わる不透明な値であり、クライアントは形式に依存してはならない（セッションの指定には `name` を使う）。
 
+`remote_bind_addr` は `remote` 転送のルールにバインドアドレスが設定されている場合のみ含まれる（`omitempty`。F-51）。
+
 ---
 
 ### session.get
 
-指定ルール名のセッション詳細を返す。
+指定ルール名のセッション詳細を返す。`remote` 転送でバインドアドレスが設定されている場合は `remote_bind_addr` も含まれる（`session.list` と同じ形式）。
 
 **リクエスト**:
 
@@ -1178,3 +1241,4 @@ SSH 接続状態の変化。
 | 2.0 | 2026-03-04 | version.check メソッド追加、config.get/update に update_check セクション追加 | #44 最新バージョンチェック機能 |
 | 2.1 | 2026-03-09 | daemon.status レスポンスに `warnings` フィールド追加 | #62 ドキュメント乖離修正 |
 | 2.2 | 2026-10-15 | GUI 内蔵デーモン稼働時の挙動セクションを追加（接続先共通、`daemon.shutdown`、`config` の `gui` 非公開、認証要求の扱い）。プロトコル自体の変更なし | #84 Wails 版 GUI アプリケーション |
+| 2.3 | 2026-11-28 | forward.list / forward.add / session.list / session.get に `remote_bind_addr`（F-51）を追記、forward.add のパラメータ表を追加、ソケットパスの設定ディレクトリ解決順を明記。プロトコル自体の変更なし | #124, #131 ドキュメント乖離修正 |

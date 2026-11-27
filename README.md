@@ -122,7 +122,7 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 | `moleport daemon kill` | Force terminate an unresponsive daemon |
 | `moleport connect <host>` | Connect to an SSH host |
 | `moleport disconnect <host>` | Disconnect from an SSH host |
-| `moleport add [flags]` | Add a forwarding rule |
+| `moleport add [flags]` | Add a forwarding rule (flags: `--host`, `--type`, `--local-port`, `--remote-host`, `--remote-port`, `--name`, `--remote-bind-addr`, `--auto-connect`) |
 | `moleport delete <name>` | Delete a forwarding rule |
 | `moleport start <name>` | Start forwarding |
 | `moleport stop <name> / --all` | Stop forwarding (`--all`: stop all) |
@@ -137,20 +137,21 @@ Running `moleport` without a subcommand launches the TUI dashboard (equivalent t
 
 ## TUI Key Bindings
 
-| Key | Action |
-|-----|--------|
-| `↑`/`k` `↓`/`j` | Select item |
-| `Enter` | Toggle connect/disconnect |
-| `Tab` | Switch pane |
-| `d` | Disconnect selected forwarding |
-| `x` | Delete selected forwarding |
-| `t` | Change theme |
-| `l` | Change language |
-| `v` | Show version info |
-| `/` | Focus command input |
-| `?` | Show help |
-| `Esc` | Cancel |
-| `q` / `Ctrl+C` | Quit |
+| Key | Context | Action |
+|-----|---------|--------|
+| `↑`/`k` `↓`/`j` | Host list / Forward list | Select item |
+| `Enter` | Host list | Start the add-forward wizard |
+| `Enter` | Forward list | Toggle selected forwarding (start/stop) |
+| `Tab` | Global | Switch pane |
+| `d` | Forward list | Stop selected forwarding |
+| `x` | Forward list | Delete selected forwarding (with confirmation) |
+| `t` | Global | Change theme |
+| `l` | Global | Change language |
+| `v` | Global | Show version info |
+| `/` | Global | Focus the SetupPanel (host list) |
+| `?` | Global | Show help |
+| `Esc` | Wizard / Password input | Cancel |
+| `q` / `Ctrl+C` | Global | Quit (the daemon keeps running) |
 
 ## Architecture
 
@@ -169,6 +170,8 @@ graph TD
 ## Configuration
 
 Config file: `~/.config/moleport/config.yaml`
+
+The config directory (default `~/.config/moleport`, also holding the socket, PID file and `state.yaml`) is resolved in this order: `--config-dir <path>` > `MOLEPORT_CONFIG_DIR` environment variable > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport`.
 
 ```yaml
 ssh_config_path: "~/.ssh/config"
