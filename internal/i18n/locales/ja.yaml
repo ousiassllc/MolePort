@@ -136,6 +136,7 @@ cli:
     failed: "アップデートに失敗しました: {{.Error}}"
     dev_build: "dev ビルドではアップデートできません（リリースビルドをインストールしてください）"
     restart_failed: "デーモンの再起動に失敗しました。moleport daemon start で手動起動してください。"
+    stop_failed: "デーモンの停止に失敗しました: {{.Error}}。更新を中止しました。moleport daemon kill を実行してから再試行してください。"
   tui:
     daemon_start_failed: "デーモンの起動に失敗しました: {{.Error}}"
     daemon_started: "デーモンを起動しました (PID: {{.PID}})"
