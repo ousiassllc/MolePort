@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
-	"math"
 	"math/big"
 	"time"
 
@@ -33,19 +32,30 @@ func resolveReconnectConfig(global core.ReconnectConfig, override *core.Reconnec
 	return result
 }
 
-// backoffWithJitter は指数バックオフにジッター（0-10%）を加えた遅延を計算する。
-func backoffWithJitter(current, maxDelay time.Duration) time.Duration {
-	base := time.Duration(math.Min(float64(current)*2, float64(maxDelay)))
+// nextBackoff は素の遅延（ジッター加算前）を倍化し、maxDelay でキャップした値を返す。
+// maxDelay が 0 以下の場合は上限なしとして扱う。
+func nextBackoff(base, maxDelay time.Duration) time.Duration {
+	next := base * 2
+	if maxDelay > 0 && next > maxDelay {
+		return maxDelay
+	}
+	return next
+}
+
+// withJitter は遅延 base に 0-10% のジッターを加えた待機時間を返す。
+// 加算後の値は maxDelay を超えない（maxDelay が 0 以下の場合は上限なし）。
+func withJitter(base, maxDelay time.Duration) time.Duration {
+	wait := base
 	// 0-10% のジッターを crypto/rand で生成
-	maxJitter := int64(float64(base) * 0.1)
-	if maxJitter <= 0 {
-		return base
+	if maxJitter := int64(float64(base) * 0.1); maxJitter > 0 {
+		if n, err := rand.Int(rand.Reader, big.NewInt(maxJitter)); err == nil {
+			wait += time.Duration(n.Int64())
+		}
 	}
-	n, err := rand.Int(rand.Reader, big.NewInt(maxJitter))
-	if err != nil {
-		return base
+	if maxDelay > 0 && wait > maxDelay {
+		return maxDelay
 	}
-	return base + time.Duration(n.Int64())
+	return wait
 }
 
 // disconnectState は handleDisconnect の初期状態を保持する。
@@ -119,16 +129,21 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 	m.events.Emit(core.SSHEvent{Type: core.SSHEventReconnecting, HostName: hostName})
 	m.setHostState(hostName, core.Reconnecting)
 
-	delay := ds.reconnectCfg.InitialDelay.Duration
+	// base はジッター加算前の遅延。ジッターを累積させないため、倍化は base に対して行う。
 	maxDelay := ds.reconnectCfg.MaxDelay.Duration
+	base := ds.reconnectCfg.InitialDelay.Duration
+	if maxDelay > 0 && base > maxDelay {
+		base = maxDelay
+	}
 
 	for attempt := 0; attempt < ds.reconnectCfg.MaxRetries; attempt++ {
-		slog.Info("attempting reconnect", "host", hostName, "attempt", attempt+1, "delay", delay)
+		wait := withJitter(base, maxDelay)
+		slog.Info("attempting reconnect", "host", hostName, "attempt", attempt+1, "delay", wait)
 
 		select {
 		case <-reconnectCtx.Done():
 			return
-		case <-time.After(delay):
+		case <-time.After(wait):
 		}
 
 		if m.isClosed() {
@@ -142,7 +157,7 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 		}
 
 		slog.Warn("reconnect failed", "host", hostName, "attempt", attempt+1)
-		delay = backoffWithJitter(delay, maxDelay)
+		base = nextBackoff(base, maxDelay)
 	}
 
 	// 再接続失敗

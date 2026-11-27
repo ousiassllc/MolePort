@@ -10,45 +10,79 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
-func TestBackoffWithJitter(t *testing.T) {
+func TestWithJitter(t *testing.T) {
 	tests := []struct {
 		name     string
-		current  time.Duration
+		base     time.Duration
 		maxDelay time.Duration
 		wantMin  time.Duration
 		wantMax  time.Duration
 	}{
 		{
-			name:     "normal doubling",
-			current:  1 * time.Second,
+			name:     "first retry gets jitter",
+			base:     1 * time.Second,
 			maxDelay: 60 * time.Second,
-			wantMin:  2 * time.Second,
-			wantMax:  2*time.Second + 200*time.Millisecond, // 2s + 10%
-		},
-		{
-			name:     "capped by maxDelay",
-			current:  40 * time.Second,
-			maxDelay: 60 * time.Second,
-			wantMin:  60 * time.Second,
-			wantMax:  60*time.Second + 6*time.Second, // 60s + 10%
+			wantMin:  1 * time.Second,
+			wantMax:  1*time.Second + 100*time.Millisecond, // +10%
 		},
 		{
 			name:     "small delay",
-			current:  10 * time.Millisecond,
+			base:     20 * time.Millisecond,
 			maxDelay: 1 * time.Second,
 			wantMin:  20 * time.Millisecond,
-			wantMax:  20*time.Millisecond + 2*time.Millisecond, // 20ms + 10%
+			wantMax:  22 * time.Millisecond,
+		},
+		{
+			name:     "never exceeds maxDelay",
+			base:     60 * time.Second,
+			maxDelay: 60 * time.Second,
+			wantMin:  60 * time.Second,
+			wantMax:  60 * time.Second,
+		},
+		{
+			name:     "no cap when maxDelay is zero",
+			base:     10 * time.Second,
+			maxDelay: 0,
+			wantMin:  10 * time.Second,
+			wantMax:  11 * time.Second,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for i := 0; i < 100; i++ {
-				got := backoffWithJitter(tt.current, tt.maxDelay)
+			sawJitter := false
+			for i := 0; i < 200; i++ {
+				got := withJitter(tt.base, tt.maxDelay)
 				if got < tt.wantMin || got > tt.wantMax {
-					t.Errorf("iteration %d: backoffWithJitter(%v, %v) = %v, want [%v, %v]",
-						i, tt.current, tt.maxDelay, got, tt.wantMin, tt.wantMax)
+					t.Fatalf("iteration %d: withJitter(%v, %v) = %v, want [%v, %v]",
+						i, tt.base, tt.maxDelay, got, tt.wantMin, tt.wantMax)
 				}
+				if got > tt.base {
+					sawJitter = true
+				}
+			}
+			if tt.wantMax > tt.wantMin && !sawJitter {
+				t.Errorf("withJitter(%v, %v) never added jitter in 200 iterations", tt.base, tt.maxDelay)
+			}
+		})
+	}
+}
+
+func TestNextBackoff(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     time.Duration
+		maxDelay time.Duration
+		want     time.Duration
+	}{
+		{"doubles", 1 * time.Second, 60 * time.Second, 2 * time.Second},
+		{"capped by maxDelay", 40 * time.Second, 60 * time.Second, 60 * time.Second},
+		{"no cap when maxDelay is zero", 40 * time.Second, 0, 80 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nextBackoff(tt.base, tt.maxDelay); got != tt.want {
+				t.Errorf("nextBackoff(%v, %v) = %v, want %v", tt.base, tt.maxDelay, got, tt.want)
 			}
 		})
 	}
