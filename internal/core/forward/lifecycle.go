@@ -27,9 +27,14 @@ func (m *forwardManager) StartForward(ruleName string, cb core.CredentialCallbac
 		return &core.NotFoundError{Resource: "rule", Name: ruleName}
 	}
 
-	if _, active := m.active[ruleName]; active {
-		m.mu.Unlock()
-		return &core.AlreadyActiveError{Name: ruleName}
+	if existing, active := m.active[ruleName]; active {
+		// 再接続失敗・復元失敗で Error になった転送は再開できる。旧リスナー・ctx を
+		// イベントなし（Stopped を出さない）で破棄してから開始処理を続ける。
+		if existing.starting || existing.session.Status != core.SessionError {
+			m.mu.Unlock()
+			return &core.AlreadyActiveError{Name: ruleName}
+		}
+		m.stopForwardLocked(ruleName)
 	}
 
 	// 開始中プレースホルダー。Stop / Delete / Close はこのエントリを active から外すため、
