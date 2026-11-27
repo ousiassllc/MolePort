@@ -155,6 +155,9 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 		switch m.tryReconnect(reconnectCtx, hostName, ds.host) {
 		case reconnectSucceeded, reconnectCancelled:
 			return
+		case reconnectAuthFailed:
+			m.pendAuthAfterReconnect(reconnectCtx, hostName)
+			return
 		case reconnectFailed:
 		}
 
@@ -177,6 +180,26 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 
 	m.events.Emit(core.SSHEvent{Type: core.SSHEventError, HostName: hostName,
 		Error: fmt.Errorf("reconnect failed after %d attempts", maxRetries)})
+}
+
+// pendAuthAfterReconnect は再接続中の認証失敗でホストを PendingAuth にし、リトライを打ち切る。
+// 再接続ではクレデンシャルを提供できず、同じ認証を繰り返しても成功しない（サーバー側の
+// ロックアウトも招く）ため、ユーザーの手動 connect を待つ。
+func (m *sshManager) pendAuthAfterReconnect(reconnectCtx context.Context, hostName string) {
+	m.mu.Lock()
+	if m.closed || reconnectCtx.Err() != nil {
+		// 試行中に Disconnect / Close された場合は、その結果を上書きしない
+		m.mu.Unlock()
+		return
+	}
+	delete(m.reconnectCancels, hostName)
+	if i, ok := m.hostsMap[hostName]; ok {
+		m.hosts[i].State = core.PendingAuth
+	}
+	m.mu.Unlock()
+
+	slog.Warn("reconnect stopped: authentication failed, manual connect required", "host", hostName)
+	m.events.Emit(core.SSHEvent{Type: core.SSHEventPendingAuth, HostName: hostName})
 }
 
 // registerReconnectCancel は再接続キャンセル関数を登録し、既存のものがあればキャンセルする。
@@ -213,6 +236,8 @@ const (
 	reconnectSucceeded reconnectResult = iota
 	// reconnectFailed は試行が失敗し、バックオフ後に再試行できることを表す。
 	reconnectFailed
+	// reconnectAuthFailed は認証失敗でリトライしても成功しないことを表す。
+	reconnectAuthFailed
 	// reconnectCancelled は試行中に Disconnect / Close されたため、再接続を打ち切ることを表す。
 	reconnectCancelled
 )
@@ -225,6 +250,9 @@ func (m *sshManager) tryReconnect(reconnectCtx context.Context, hostName string,
 	client, err := conn.Dial(host, nil)
 	if err != nil {
 		slog.Warn("reconnect dial failed", "host", hostName, "error", err)
+		if isAuthFailure(err) {
+			return reconnectAuthFailed
+		}
 		return reconnectFailed
 	}
 

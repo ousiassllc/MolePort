@@ -10,76 +10,30 @@ import (
 )
 
 func TestSSHManager_KeepAliveInterval(t *testing.T) {
-	hosts := testHosts()
-
-	t.Run("uses configured interval", func(t *testing.T) {
-		intervalCh := make(chan time.Duration, 1)
-		sm := NewSSHManager(
-			context.Background(),
-			&mockSSHConfigParser{hosts: hosts},
-			func() core.SSHConnection {
-				mock := &mockSSHConnection{client: nil, isAlive: true}
-				mock.keepAliveF = func(_ context.Context, interval time.Duration) {
+	tests := []struct {
+		name string
+		cfg  core.Duration
+		want time.Duration
+	}{
+		{"uses configured interval", core.Duration{Duration: 45 * time.Second}, 45 * time.Second},
+		{"falls back to default", core.Duration{}, 30 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			intervalCh := make(chan time.Duration, 1)
+			sm := newDialTestManager(t, func() core.SSHConnection {
+				return &mockSSHConnection{isAlive: true, keepAliveF: func(_ context.Context, interval time.Duration) {
 					intervalCh <- interval
-				}
-				return mock
-			},
-			"/fake/ssh/config",
-			core.ReconnectConfig{
-				Enabled:           false,
-				KeepAliveInterval: core.Duration{Duration: 45 * time.Second},
-			},
-			nil,
-		)
-		if _, err := sm.LoadHosts(); err != nil {
-			t.Fatalf("LoadHosts() error = %v", err)
-		}
-		if err := sm.Connect("server1"); err != nil {
-			t.Fatalf("Connect() error = %v", err)
-		}
-		select {
-		case got := <-intervalCh:
-			if got != 45*time.Second {
-				t.Errorf("KeepAlive interval = %v, want 45s", got)
+				}}
+			}, core.ReconnectConfig{KeepAliveInterval: tt.cfg})
+			if err := sm.Connect("server1"); err != nil {
+				t.Fatalf("Connect() error = %v", err)
 			}
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for KeepAlive interval")
-		}
-		sm.Close()
-	})
-
-	t.Run("falls back to default", func(t *testing.T) {
-		intervalCh := make(chan time.Duration, 1)
-		sm := NewSSHManager(
-			context.Background(),
-			&mockSSHConfigParser{hosts: hosts},
-			func() core.SSHConnection {
-				mock := &mockSSHConnection{client: nil, isAlive: true}
-				mock.keepAliveF = func(_ context.Context, interval time.Duration) {
-					intervalCh <- interval
-				}
-				return mock
-			},
-			"/fake/ssh/config",
-			core.ReconnectConfig{Enabled: false},
-			nil,
-		)
-		if _, err := sm.LoadHosts(); err != nil {
-			t.Fatalf("LoadHosts() error = %v", err)
-		}
-		if err := sm.Connect("server1"); err != nil {
-			t.Fatalf("Connect() error = %v", err)
-		}
-		select {
-		case got := <-intervalCh:
-			if got != 30*time.Second {
-				t.Errorf("KeepAlive interval = %v, want 30s (default)", got)
+			if got := recvWithTimeout(t, intervalCh, "KeepAlive interval"); got != tt.want {
+				t.Errorf("KeepAlive interval = %v, want %v", got, tt.want)
 			}
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for KeepAlive interval")
-		}
-		sm.Close()
-	})
+		})
+	}
 }
 
 func TestSSHManager_Connect_Disconnect(t *testing.T) {

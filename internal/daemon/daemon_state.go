@@ -25,13 +25,18 @@ func (d *Daemon) startEventRouting() {
 			case core.SSHEventReconnecting:
 				reconnecting[evt.HostName] = true
 				d.fwdMgr.MarkReconnecting(evt.HostName)
+			case core.SSHEventDisconnected:
+				// 再接続待ち中にユーザーが切断した場合、再接続中フラグを残さない
+				// （通常の切断検知では Disconnected の後に Reconnecting が届く）
+				delete(reconnecting, evt.HostName)
 			case core.SSHEventConnected:
 				if reconnecting[evt.HostName] {
 					delete(reconnecting, evt.HostName)
 					results := d.fwdMgr.RestoreForwards(evt.HostName)
 					d.logRestoreSummary(evt.HostName, results)
 				}
-			case core.SSHEventError:
+			case core.SSHEventError, core.SSHEventPendingAuth:
+				// 再接続の失敗、または認証失敗による再接続の打ち切り（手動 connect 待ち）
 				if reconnecting[evt.HostName] {
 					delete(reconnecting, evt.HostName)
 					d.fwdMgr.FailReconnecting(evt.HostName)

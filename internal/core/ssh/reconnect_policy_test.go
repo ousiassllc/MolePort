@@ -2,7 +2,7 @@ package ssh
 
 import (
 	"context"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,81 +89,37 @@ func TestResolveReconnectConfig(t *testing.T) {
 
 func TestSSHManager_PerHostReconnectDisabled(t *testing.T) {
 	// グローバルで再接続有効だが、ホスト別に無効にした場合、再接続をスキップする。
-	hosts := testHosts()
-	connectCount := 0
-	var mu sync.Mutex
-
-	parser := &mockSSHConfigParser{hosts: hosts}
-	sm := NewSSHManager(
-		context.Background(),
-		parser,
+	var connectCount atomic.Int32
+	sm := NewSSHManager(context.Background(), &mockSSHConfigParser{hosts: testHosts()},
 		func() core.SSHConnection {
-			mu.Lock()
-			connectCount++
-			mu.Unlock()
-
-			mock := &mockSSHConnection{client: nil, isAlive: true}
+			connectCount.Add(1)
 			// KeepAlive がすぐに返ることで切断をシミュレート
-			mock.keepAliveF = func(ctx context.Context, interval time.Duration) {}
-			return mock
+			return &mockSSHConnection{isAlive: true, keepAliveF: func(context.Context, time.Duration) {}}
 		},
-		"/fake/ssh/config",
-		core.ReconnectConfig{
-			Enabled:      true,
-			MaxRetries:   3,
-			InitialDelay: core.Duration{Duration: 10 * time.Millisecond},
-			MaxDelay:     core.Duration{Duration: 50 * time.Millisecond},
-		},
-		map[string]core.HostConfig{
-			"server1": {Reconnect: &core.ReconnectOverride{Enabled: boolPtr(false)}},
-		},
+		"/fake/ssh/config", fastReconnectConfig(3),
+		map[string]core.HostConfig{"server1": {Reconnect: &core.ReconnectOverride{Enabled: boolPtr(false)}}},
 	)
-
+	defer sm.Close()
 	if _, err := sm.LoadHosts(); err != nil {
 		t.Fatalf("LoadHosts() error = %v", err)
 	}
-
 	events := sm.Subscribe()
-
 	if err := sm.Connect("server1"); err != nil {
 		t.Fatalf("Connect() error = %v", err)
 	}
 
-	// Connected イベント
-	select {
-	case ev := <-events:
-		if ev.Type != core.SSHEventConnected {
-			t.Fatalf("expected Connected, got %v", ev.Type)
+	for _, want := range []core.SSHEventType{core.SSHEventConnected, core.SSHEventDisconnected} {
+		if ev := recvWithTimeout(t, events, want.String()); ev.Type != want {
+			t.Fatalf("expected %v, got %v", want, ev.Type)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for connected event")
 	}
-
-	// Disconnected イベント
-	select {
-	case ev := <-events:
-		if ev.Type != core.SSHEventDisconnected {
-			t.Fatalf("expected Disconnected, got %v", ev.Type)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout waiting for disconnected event")
-	}
-
 	// Reconnecting イベントが来ないことを確認（再接続がスキップされる）
 	select {
 	case ev := <-events:
 		t.Fatalf("expected no more events, got %v", ev.Type)
-	case <-time.After(200 * time.Millisecond):
-		// OK: 再接続イベントなし
+	case <-time.After(100 * time.Millisecond):
 	}
-
-	// 接続は初回の1回のみ
-	mu.Lock()
-	count := connectCount
-	mu.Unlock()
-	if count != 1 {
-		t.Errorf("connectCount = %d, want 1 (no reconnect attempts)", count)
+	if got := connectCount.Load(); got != 1 {
+		t.Errorf("connectCount = %d, want 1 (no reconnect attempts)", got)
 	}
-
-	sm.Close()
 }
