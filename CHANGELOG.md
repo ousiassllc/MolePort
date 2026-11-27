@@ -50,6 +50,8 @@
 - Stop reconnect retries on authentication failure and set the host to `PendingAuth` / 再接続中の認証失敗でリトライを止めて `PendingAuth` にする (#114)
 - Apply jitter to the first reconnect delay and never exceed `max_delay` / 再接続の初回遅延にもジッターを付け、待機時間が `max_delay` を超えないようにする (#133)
 - Defer key file loading and passphrase prompts until the key is actually needed (ssh-agent and earlier keys are tried first) / 鍵ファイルの読み込みとパスフレーズ要求を実際に必要になるまで遅延（エージェント・先行する鍵を先に試行） (#109)
+- Do not interrupt an automatic reconnect when a forward is started on a host that is waiting to reconnect: `StartForward` (including `auto_connect`) now fails with a not-connected error instead of opening a manual connection / 再接続待機中のホストで転送を開始しても自動再接続を打ち切らないよう修正（`StartForward`（`auto_connect` 含む）は手動接続せず未接続エラーで失敗する）(#160)
+- Fall back to a 1s initial delay when `reconnect.initial_delay` is 0 or negative so `max_retries: 0` no longer retries in a busy loop / `reconnect.initial_delay` が 0 以下のとき 1 秒を使い、`max_retries: 0` で待機なしの再接続ループにならないよう修正 (#161)
 
 ## [v1.0.0] - 2026-03-15
 
