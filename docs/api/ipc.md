@@ -470,7 +470,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   "result": {
     "sessions": [
       {
-        "id": "prod-server-local-8080",
+        "id": "prod-web-1764300000000000000",
         "name": "prod-web",
         "host": "prod-server",
         "type": "local",
@@ -488,6 +488,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
   }
 }
 ```
+
+`id` はセッション一意 ID で、`<ルール名>-<開始時刻 UnixNano>` 形式。転送を開始するたびに変わる不透明な値であり、クライアントは形式に依存してはならない（セッションの指定には `name` を使う）。
 
 ---
 

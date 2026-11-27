@@ -245,14 +245,14 @@ moleport add --host <host> --local-port <port> [options]
 | `--local-port` | Yes | — | ローカルポート (1–65535) |
 | `--remote-host` | No | `localhost` | リモートホスト |
 | `--remote-port` | ※ | — | リモートポート (1–65535)。`local`/`remote` 転送で必須 |
-| `--name` | No | 自動生成 | ルール名 |
+| `--name` | No | 自動生成（`forward-<N>`） | ルール名。省略時は追加時の出力でルール名を確認する |
 | `--auto-connect` | No | `false` | 起動時に自動接続 |
 
 **出力例**:
 
 ```
 $ moleport add --host prod-server --local-port 8080 --remote-port 80
-ルール 'prod-server-local-8080' を追加しました
+ルール 'forward-1' を追加しました
 
 $ moleport add --host prod-server --type dynamic --local-port 1080 --name socks
 ルール 'socks' を追加しました
@@ -639,7 +639,7 @@ SetupPanel（SSH ホスト一覧）でホストを選択し、`Enter` キーを�
 2. **ローカルポート**: ローカル側のポート番号を入力
 3. **リモートホスト**: リモート側のホスト名を入力（Dynamic 転送ではスキップ）
 4. **リモートポート**: リモート側のポート番号を入力（Dynamic 転送ではスキップ）
-5. **ルール名**: 転送ルールの名前を入力（空欄で自動生成）
+5. **ルール名**: 転送ルールの名前を入力（空欄で `<host>-<type>-<localport>` を採用）
 6. **確認**: 入力内容を確認し、Enter で追加を実行
 
 - `Esc` キーでウィザードをキャンセルし、ダッシュボードに戻る
