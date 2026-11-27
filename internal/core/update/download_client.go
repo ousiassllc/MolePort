@@ -6,6 +6,12 @@ import (
 )
 
 const (
+	// maxDownloadSize はダウンロードファイルの最大サイズ (256 MiB)。
+	maxDownloadSize = 256 << 20
+
+	// maxReleaseResponseSize はリリース API レスポンスの最大サイズ (1 MiB)。
+	maxReleaseResponseSize = 1 << 20
+
 	// downloadTimeout は 1 ファイルのダウンロード全体（接続から本文の読み取りまで）の上限。
 	downloadTimeout = 10 * time.Minute
 
