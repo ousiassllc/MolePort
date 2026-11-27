@@ -1153,8 +1153,8 @@ SSH 接続状態の変化。
 | コード | 名前 | 説明 |
 |-------|------|------|
 | 1001 | HostNotFound | 指定ホストが SSH config に存在しない |
-| 1002 | AlreadyConnected | 指定ホストに既に接続済み |
-| 1003 | NotConnected | 指定ホストに未接続 |
+| 1002 | AlreadyConnected | 指定ルールが既にアクティブ（`forward.start`）。`ssh.connect` は接続済みのホストに対して冪等に成功を返すため、このコードは返さない |
+| 1003 | NotConnected | 予約（通常、IPC メソッドからは返らない。接続確立直後に切断された場合のみ `forward.start` が返しうる） |
 | 1004 | RuleNotFound | 指定転送ルールが存在しない |
 | 1005 | RuleAlreadyExists | ルール名が重複している |
 | 1006 | PortConflict | ポートが他のルールまたはシステムで使用中 |

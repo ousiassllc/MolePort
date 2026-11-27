@@ -939,8 +939,8 @@ type CredentialResponseResult struct {
 | -32602 | InvalidParams | 不正なパラメータ |
 | -32603 | InternalError | 内部エラー |
 | 1001 | HostNotFound | 指定ホストが見つからない |
-| 1002 | AlreadyConnected | 既に接続済み |
-| 1003 | NotConnected | 未接続 |
+| 1002 | AlreadyConnected | 指定ルールが既にアクティブ（`forward.start`）。`ssh.connect` は接続済みでも成功を返す |
+| 1003 | NotConnected | 予約（通常、IPC メソッドからは返らない。接続確立直後に切断された場合のみ `forward.start` が返しうる） |
 | 1004 | RuleNotFound | 転送ルールが見つからない |
 | 1005 | RuleAlreadyExists | ルール名が重複 |
 | 1006 | PortConflict | ポートが使用中 |

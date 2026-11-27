@@ -205,10 +205,9 @@ Password: ^C
 ```
 $ moleport connect unknown-host
 エラー: ホスト 'unknown-host' が見つかりません
-
-$ moleport connect prod-server
-prod-server は既に接続済みです
 ```
+
+接続済みのホストに対して再度実行してもエラーにならず、そのまま成功する（冪等）。
 
 ---
 
