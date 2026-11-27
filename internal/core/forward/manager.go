@@ -52,12 +52,7 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if rule.Name == "" {
-		m.nextID++
-		rule.Name = fmt.Sprintf("forward-%d", m.nextID)
-	}
-
-	if _, exists := m.rules[rule.Name]; exists {
+	if _, exists := m.rules[rule.Name]; rule.Name != "" && exists {
 		return "", &core.AlreadyExistsError{Resource: "rule", Name: rule.Name}
 	}
 
@@ -78,6 +73,16 @@ func (m *forwardManager) AddRule(rule core.ForwardRule) (string, error) {
 		}
 	}
 
+	// 自動採番は検証通過後に行い、失敗時に ID を消費しない。既存名（永続化済みルール含む）とは衝突させない。
+	if rule.Name == "" {
+		for {
+			m.nextID++
+			rule.Name = fmt.Sprintf("forward-%d", m.nextID)
+			if _, exists := m.rules[rule.Name]; !exists {
+				break
+			}
+		}
+	}
 	m.rules[rule.Name] = rule
 	m.ruleOrder = append(m.ruleOrder, rule.Name)
 	return rule.Name, nil
