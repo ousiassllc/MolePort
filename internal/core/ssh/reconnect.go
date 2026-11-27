@@ -135,8 +135,10 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 			return
 		}
 
-		if m.tryReconnect(hostName, ds.host) {
+		switch m.tryReconnect(reconnectCtx, hostName, ds.host) {
+		case reconnectSucceeded, reconnectCancelled:
 			return
+		case reconnectFailed:
 		}
 
 		slog.Warn("reconnect failed", "host", hostName, "attempt", attempt+1)
@@ -145,6 +147,11 @@ func (m *sshManager) reconnectLoop(hostName string, ds disconnectState) {
 
 	// 再接続失敗
 	m.mu.Lock()
+	if reconnectCtx.Err() != nil {
+		// 最後の試行中に Disconnect / Close された場合はエラーにしない
+		m.mu.Unlock()
+		return
+	}
 	delete(m.reconnectCancels, hostName)
 	if i, ok := m.hostsMap[hostName]; ok {
 		m.hosts[i].State = core.ConnectionError
@@ -181,13 +188,27 @@ func (m *sshManager) isClosed() bool {
 	return m.closed
 }
 
-// tryReconnect は1回の再接続を試行し、成功時は true を返す。
-func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
+// reconnectResult は 1 回の再接続試行の結果を表す。
+type reconnectResult int
+
+const (
+	// reconnectSucceeded は再接続に成功し、接続が登録されたことを表す。
+	reconnectSucceeded reconnectResult = iota
+	// reconnectFailed は試行が失敗し、バックオフ後に再試行できることを表す。
+	reconnectFailed
+	// reconnectCancelled は試行中に Disconnect / Close されたため、再接続を打ち切ることを表す。
+	reconnectCancelled
+)
+
+// tryReconnect は1回の再接続を試行する。
+// Dial 中に ctx がキャンセルされた（Disconnect）、またはマネージャーが閉じられた場合は、
+// 確立した接続を破棄して reconnectCancelled を返す。
+func (m *sshManager) tryReconnect(reconnectCtx context.Context, hostName string, host core.SSHHost) reconnectResult {
 	conn := m.connFactory()
 	client, err := conn.Dial(host, nil)
 	if err != nil {
 		slog.Warn("reconnect dial failed", "host", hostName, "error", err)
-		return false
+		return reconnectFailed
 	}
 
 	ctx, cancel := context.WithCancel(m.ctx) //nolint:gosec // cancel は hc.cancel に保持され Disconnect 時に呼ばれる
@@ -200,6 +221,13 @@ func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
 	}
 
 	m.mu.Lock()
+	// Disconnect は reconnectCancels 経由で reconnectCtx をキャンセルする（m.mu 下）。
+	if m.closed || reconnectCtx.Err() != nil {
+		m.mu.Unlock()
+		cancel()
+		_ = conn.Close()
+		return reconnectCancelled
+	}
 	m.conns[hostName] = hc
 	delete(m.reconnectCancels, hostName)
 	if i, ok := m.hostsMap[hostName]; ok {
@@ -220,5 +248,5 @@ func (m *sshManager) tryReconnect(hostName string, host core.SSHHost) bool {
 		}
 	}()
 
-	return true
+	return reconnectSucceeded
 }
