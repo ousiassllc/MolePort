@@ -1,7 +1,11 @@
 package atoms
 
-// FieldID はフォームの項目名から入力要素の id を作る。ラベル（for）とエラー表示（aria-describedby）が同じ値を参照する。
+// FieldID はフォームの項目名から入力要素の id を作る。ラベルの for がこの値を参照する。
 func FieldID(name string) string { return "field-" + name }
+
+// ErrorID はフォームの項目名から検証エラー表示（<p>）の id を作る。検証エラーのある入力要素は
+// aria-describedby でこの値を参照し、スクリーンリーダーが入力欄とエラー文を結び付けられるようにする。
+func ErrorID(name string) string { return FieldID(name) + "-error" }
 
 // TextInputProps は TextInput の引数。Type が空なら "text"。Attrs には hx-* などの追加属性を渡す。
 type TextInputProps struct {
@@ -35,6 +39,9 @@ templ TextInput(p TextInputProps) {
 		required?={ p.Required }
 		autofocus?={ p.Autofocus }
 		aria-invalid?={ p.Invalid }
+		if p.Invalid {
+			aria-describedby={ ErrorID(p.Name) }
+		}
 		{ p.Attrs... }
 	/>
 }

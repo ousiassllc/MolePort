@@ -17,7 +17,7 @@ templ FormField(p FormFieldProps) {
 		<label class="mp-field-label" for={ atoms.FieldID(p.Name) }>{ p.Label }</label>
 		@p.Input
 		if p.Error != "" {
-			<p class="mp-field-error" role="alert">{ p.Error }</p>
+			<p class="mp-field-error" id={ atoms.ErrorID(p.Name) } role="alert">{ p.Error }</p>
 		}
 	</div>
 }
