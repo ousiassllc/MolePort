@@ -36,6 +36,7 @@
 - Release pending IPC client calls immediately when the connection drops / IPC クライアントの接続断時に保留中の Call を即座に解放 (#110)
 - Restore sessions and auto-connect in the background, and force-close after 5 seconds on shutdown (NFR-16) / セッション復元・auto_connect をバックグラウンド化し、停止処理に 5 秒の強制切断タイムアウトを追加 (#128, #116)
 - Make `moleport update` wait for the daemon to stop before replacing the binary and restart only a daemon it stopped / `moleport update` がデーモン停止完了を待ってからバイナリを置換し、停止したデーモンのみ再起動 (#111)
+- Fix TUI key hints that described forward-list `Enter` / `d` as connect/disconnect: they now read "Toggle start/stop" and "Stop" (the actions never changed), and align the READMEs and command docs with the actual CLI output, flags and key bindings / 転送一覧の `Enter` / `d` のキーヒントが「接続トグル・切断」となっていた問題を「開始/停止トグル・停止」に修正（動作は従来どおり）。README・コマンド仕様を実際の CLI 出力・フラグ・キーバインドに合わせて修正 (#122, #123, #125)
 
 ### 🐛 Bug Fixes / バグ修正
 - Fix a connection established while `Disconnect` / `Close` was in progress being registered and leaked; reconnect no longer overrides a user disconnect / Dial 中の `Disconnect` / `Close` 後に接続が登録・残留する問題を修正（再接続もユーザーの切断を上書きしない） (#106)

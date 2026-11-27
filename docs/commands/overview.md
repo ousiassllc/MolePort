@@ -10,6 +10,25 @@ moleport <subcommand> [options] [arguments]
 
 サブコマンドを省略して `moleport` のみで実行すると、TUI ダッシュボードが起動する（`moleport tui` と同等）。
 
+### 出力言語
+
+以下の出力例は表示言語が日本語（`ja`）の場合の実際の出力である。英語（`en`）では同じ構造で文言のみ英語になる（文言は `internal/i18n/locales/{ja,en}.yaml` の `cli.*`）。エラーは stderr に `エラー: <メッセージ>`（`en` では `Error: <message>`）の形式で出力され、終了コードは 1 になる。デーモンが返したエラーは `rpc error: code=<コード>, message=<メッセージ>` の形式でそのまま表示される（エラーコードは [IPC API 仕様](../api/ipc.md) を参照）。
+
+### グローバルフラグ
+
+| フラグ | 説明 |
+|--------|------|
+| `--config-dir <path>` | 設定ディレクトリのパス。ソケット・PID ファイル・`config.yaml`・`state.yaml` はこのディレクトリに置かれる |
+
+設定ディレクトリは次の優先順位で解決する（`internal/cli/root.go` の `ResolveConfigDir`。`moleport-gui` も同じ）。
+
+1. `--config-dir <path>`
+2. 環境変数 `MOLEPORT_CONFIG_DIR`
+3. 環境変数 `XDG_CONFIG_HOME` が設定されている場合は `$XDG_CONFIG_HOME/moleport`
+4. `~/.config/moleport`（既定値）
+
+以降のドキュメントに現れる `~/.config/moleport/` は、上記の既定値で解決された場合のパスを指す。
+
 ## サブコマンド一覧
 
 | サブコマンド | 引数 | 説明 |
@@ -30,7 +49,7 @@ moleport <subcommand> [options] [arguments]
 | `reload` | — | SSH config を再読み込み |
 | `tui` | — | TUI ダッシュボードを起動 |
 | `update` | `[--check]` | 最新バージョンに自動アップデート |
-| `help` | `[<subcommand>]` | ヘルプを表示 |
+| `help` | — | ヘルプを表示（サブコマンド別ヘルプは未実装。引数は無視される） |
 | `version` | — | バージョン情報を表示 |
 
 ## サブコマンド詳細
@@ -109,13 +128,13 @@ moleport daemon status
 
 ```
 $ moleport daemon status
-MolePort Daemon:
-  Version:    0.1.0
+MolePort デーモン:
+  バージョン: 0.1.0
   PID:        12345
-  Uptime:     3h 30m
-  Clients:    1 connected
-  SSH:        2 connections
-  Forwards:   3 active
+  稼働時間:   3h 30m
+  クライアント: 1 接続中
+  SSH:        2 接続
+  フォワード:  3 アクティブ
 
 $ moleport daemon status
 デーモンは稼働していません
@@ -135,6 +154,7 @@ moleport daemon kill
 1. PID ファイルからデーモンの PID を読み取る
 2. SIGKILL でプロセスを強制終了する
 3. PID ファイルを削除する
+4. `state.yaml` を削除する（強制終了では状態保存が走らないため、残すと次回起動時に古いセッションが自動復元されてしまうのを防ぐ）
 
 **注意**:
 - IPC 通信は行わず、直接プロセスを kill する
@@ -197,14 +217,14 @@ Verification code: 123456
 ```
 $ moleport connect password-server
 Password: ^C
-エラー: 認証がキャンセルされました
+エラー: connect failed: rpc error: code=1009, message=failed to connect to password-server: ... credential cancelled
 ```
 
 **エラー例**:
 
 ```
 $ moleport connect unknown-host
-エラー: ホスト 'unknown-host' が見つかりません
+エラー: connect failed: rpc error: code=1001, message=host "unknown-host" not found
 ```
 
 接続済みのホストに対して再度実行してもエラーにならず、そのまま成功する（冪等）。
@@ -246,6 +266,7 @@ moleport add --host <host> --local-port <port> [options]
 | `--remote-host` | No | `localhost` | リモートホスト |
 | `--remote-port` | ※ | — | リモートポート (1–65535)。`local`/`remote` 転送で必須 |
 | `--name` | No | 自動生成（`forward-<N>`） | ルール名。省略時は追加時の出力でルール名を確認する |
+| `--remote-bind-addr` | No | `127.0.0.1` | リモート側のバインドアドレス（`remote` 転送でのみ有効。OpenSSH の `RemoteForward` の bind_address 相当）。省略時は `127.0.0.1` |
 | `--auto-connect` | No | `false` | 起動時に自動接続 |
 
 **出力例**:
@@ -282,10 +303,10 @@ moleport delete <name>
 
 ```
 $ moleport delete prod-web
-✓ ルール 'prod-web' を削除しました
+prod-web を削除しました
 
 $ moleport delete unknown
-エラー: ルール 'unknown' が見つかりません
+エラー: rpc error: code=1004, message=rule "unknown" not found
 ```
 
 ---
@@ -302,7 +323,7 @@ moleport start <name>
 
 ```
 $ moleport start prod-web
-✓ prod-web (L :8080 → localhost:80) を開始しました
+prod-web を開始しました
 ```
 
 ---
@@ -353,14 +374,14 @@ moleport list [--host <host>] [--json]
 
 ```
 $ moleport list
-SSH Hosts (3 hosts, 1 connected):
+SSH ホスト (3 件, 1 件接続中):
 
 ● prod-server (192.168.1.10:22, user)
-  L  :8080 -> localhost:80
-  L  :5432 -> localhost:5432
+  L  :8080  ->  localhost:80
+  L  :5432  ->  localhost:5432
 
 ◎ 2fa-server (10.0.0.20:22, admin)
-  L  :3000 -> localhost:3000
+  L  :3000  ->  localhost:3000
 
 ○ staging (10.0.0.5:22, deploy)
   D  :1080
@@ -370,8 +391,8 @@ SSH Hosts (3 hosts, 1 connected):
 
 $ moleport list --host prod-server
 ● prod-server (192.168.1.10:22, user)
-  L  :8080 -> localhost:80
-  L  :5432 -> localhost:5432
+  L  :8080  ->  localhost:80
+  L  :5432  ->  localhost:5432
 ```
 
 ---
@@ -394,11 +415,11 @@ moleport status [name] [--json]
 
 ```
 $ moleport status
-MolePort Status:
-  Daemon:    Running (PID: 12345, uptime: 3h 30m)
-  Hosts:     3 total, 1 connected, 1 pending auth
-  Forwards:  3 total, 2 active, 1 stopped
-  Traffic:   sent 1.3MB, recv 468.0KB
+MolePort ステータス:
+  デーモン:    稼働中 (PID: 12345, 稼働時間: 3h 30m)
+  ホスト:      3 件, 1 件接続中, 1 件認証待ち
+  フォワード:  3 件, 2 件アクティブ, 1 件停止
+  トラフィック: 送信 1.3MB, 受信 468.0KB
 
 ```
 
@@ -406,15 +427,15 @@ MolePort Status:
 
 ```
 $ moleport status prod-web
-Session: prod-web
-  Host:           prod-server
-  Type:           local
-  Local Port:     8080
-  Remote:         localhost:80
-  Status:         active
-  Connected At:   2026-02-11 10:30:00
-  Bytes Sent:     1.2MB
-  Bytes Received: 340.0KB
+セッション: prod-web
+  ホスト:          prod-server
+  タイプ:          local
+  ローカルポート:  8080
+  リモート:        localhost:80
+  ステータス:      active
+  接続日時:        2026-02-11 10:30:00
+  送信バイト:      1.2MB
+  受信バイト:      340.0KB
 ```
 
 ---
@@ -437,18 +458,18 @@ moleport config [--json]
 
 ```
 $ moleport config
-MolePort Config:
+MolePort 設定:
   SSH Config:     ~/.ssh/config
-  Reconnect:
-    Enabled:      true
-    Max Retries:  10
-    Initial Delay: 1s
-    Max Delay:    60s
-  Session:
-    Auto Restore: true
-  Log:
-    Level:        info
-    File:         ~/.config/moleport/moleport.log
+  再接続:
+    有効:          true
+    最大リトライ:  10
+    初期遅延:      1s
+    最大遅延:      60s
+  セッション:
+    自動復元:      true
+  ログ:
+    レベル:        info
+    ファイル:      ~/.config/moleport/moleport.log
 ```
 
 ---
@@ -494,10 +515,10 @@ moleport tui
 
 ### help
 
-ヘルプを表示する。
+ヘルプを表示する。サブコマンド別ヘルプ（`moleport help <subcommand>`）は提供しておらず、引数を渡しても無視して常に全体ヘルプを表示する。
 
 ```
-moleport help [<subcommand>]
+moleport help
 ```
 
 **出力例**:
@@ -550,7 +571,7 @@ moleport update [--check]
 | `--check` | アップデートの有無を確認するのみ（ダウンロード・置換は行わない） |
 
 **動作**:
-1. GitHub Releases API で最新バージョンを取得（デーモン稼働中はキャッシュを利用）
+1. GitHub Releases API で最新バージョンを取得（デーモンのキャッシュは使わず、毎回 CLI が直接 API を呼ぶ）
 2. 現在のバージョンと比較し、新しいバージョンがなければ終了
 3. `--check` 指定時はここで終了
 4. OS/アーキテクチャに対応するアセット（tar.gz）をダウンロード
@@ -619,11 +640,35 @@ $ moleport update
 moleport version
 ```
 
+**動作**:
+1. ローカルのバージョン情報を常に表示する
+2. デーモンが稼働している場合のみ、デーモンの `version.check` で最新バージョンを確認する（デーモンの自動起動は行わない）
+3. 更新がある場合のみ、ローカルバージョンの後に更新の案内を表示する。最新の場合は何も表示しない
+4. チェックに失敗した場合もローカルバージョンの表示は変わらず、エラーを stderr に出力する
+5. `update_check.enabled` が `false` の場合・`dev` ビルドの場合は最新バージョンが得られないため、案内は表示されない
+
 **出力例**:
 
 ```
 $ moleport version
 MolePort 0.1.0 (go1.23.0, linux/amd64)
+```
+
+更新がある場合（デーモン稼働中）:
+
+```
+$ moleport version
+MolePort 0.1.0 (go1.23.0, linux/amd64)
+アップデートがあります: v0.2.0 (現在: v0.1.0)
+リリース: https://github.com/ousiassllc/moleport/releases/tag/v0.2.0
+```
+
+チェックに失敗した場合（stderr）:
+
+```
+$ moleport version
+MolePort 0.1.0 (go1.23.0, linux/amd64)
+バージョンチェックに失敗しました: rpc error: code=-32603, message=...
 ```
 
 ## TUI の操作方式
@@ -685,14 +730,14 @@ SSH 接続時にクレデンシャルが必要な場合、TUI 上にパスワー
 │                                                                 │
 │  Enter passphrase for key '/home/user/.ssh/id_ed25519':         │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │ ●●●●●●●●                                               │    │
+│  │ ********                                                │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                 │
 │  [Enter] Submit  [Esc] Cancel                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-- `echo: false` の場合は入力を `●` でマスク表示
+- `echo: false` の場合は入力を `*` でマスク表示
 - `echo: true` の場合（OTP 等）は入力をそのまま表示
 - keyboard-interactive の複数チャレンジは順次ダイアログを表示
 
@@ -738,3 +783,4 @@ GUI 稼働中は内蔵デーモンが `moleport.sock` / `moleport.pid` を保持
 | 3.0 | 2026-03-01 | TUI 内コマンドをキーバインド+ウィザード方式に改訂、キーバインド表に q/t/l/v 追加、config/list/delete/disconnect/daemon status 出力例を実装に合わせて修正、デーモン未稼働時の自動起動に変更 | #40 ドキュメント乖離修正 |
 | 3.1 | 2026-03-08 | `update` サブコマンド仕様追加、ヘルプ出力例・デーモン自動起動除外リストに追記 | #58 セルフアップデート機能 |
 | 3.2 | 2026-10-15 | GUI 稼働中の動作セクションを追加（daemon start/stop/kill/status、update、tui の挙動） | #84 Wails 版 GUI アプリケーション |
+| 3.3 | 2026-11-28 | 出力例を ja ロケールの実出力に修正（start/delete/list/status/config/daemon status、エラーは `rpc error` 形式）、出力言語の注記を追加、add に `--remote-bind-addr` を追記、help はサブコマンド別ヘルプ未実装と明記、グローバルフラグ節に設定ディレクトリ解決順（`XDG_CONFIG_HOME` 含む）を追記、daemon kill が `state.yaml` を削除する旨を追記、update はデーモンのキャッシュを使わない旨に修正、version の動作（最新時は無表示・失敗時は stderr）を明記、TUI パスワードのマスク文字を `*` に統一 | #122, #123, #124, #132, #134 ドキュメント乖離修正 |
