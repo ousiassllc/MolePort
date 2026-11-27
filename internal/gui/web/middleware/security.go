@@ -6,8 +6,9 @@ import (
 )
 
 // ContentSecurityPolicy は全レスポンスに付与する CSP（NFR-35）。
-// インラインスクリプト・外部リソースの読み込みを禁止する。
-const ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'"
+// インラインスクリプト・外部リソースの読み込みを禁止する。base-uri / form-action / frame-ancestors / object-src は
+// default-src にフォールバックしないため明示する（HTMX は XHR で送信し、<base>・フレーム・<object> は使わない）。
+const ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
 const staticPrefix = "/static/"
 
