@@ -189,37 +189,6 @@ func (u *Updater) fetchRelease(ctx context.Context, tag string) (*githubRelease,
 	return &release, nil
 }
 
-// downloadFile は指定 URL からファイルをダウンロードする。
-func (u *Updater) downloadFile(ctx context.Context, url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("User-Agent", "MolePort/"+u.checker.currentVersion)
-
-	resp, err := u.downloadClient.Do(req) //nolint:gosec // URL comes from GitHub API response
-	if err != nil {
-		return nil, fmt.Errorf("download file: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download returned status %d", resp.StatusCode)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
-	if len(data) > maxDownloadSize {
-		return nil, fmt.Errorf("download exceeds maximum size (%d bytes)", maxDownloadSize)
-	}
-	return data, nil
-}
-
 // verifyChecksum は checksums.txt の内容とデータの SHA-256 ハッシュを照合する。
 // checksums.txt のフォーマット: "<sha256>  <filename>"
 func verifyChecksum(data, checksumData []byte, filename string) error {
