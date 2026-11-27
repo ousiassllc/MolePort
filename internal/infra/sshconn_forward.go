@@ -83,18 +83,48 @@ func (c *sshConnection) DynamicForward(ctx context.Context, localPort int) (net.
 	return listener, nil
 }
 
+// defaultAliveTimeout は IsAlive が keepalive の応答を待つ上限。
+const defaultAliveTimeout = 15 * time.Second
+
 // IsAlive は keepalive リクエストで接続の生存を確認する。
+// 応答が defaultAliveTimeout 以内に返らない場合は死んでいると判定する。
 func (c *sshConnection) IsAlive() bool {
+	return c.checkAlive(context.Background(), defaultAliveTimeout)
+}
+
+// checkAlive は keepalive リクエストを送り、timeout 以内に成功応答が返れば true を返す。
+// crypto/ssh の SendRequest にはタイムアウトがないため、別 goroutine で実行して待ち時間を制限する。
+// 応答がなく無音で切れた接続は、タイムアウト時に Close して送信 goroutine を解放する。
+// ctx がキャンセルされた場合は false を返すが、接続は閉じない（呼び出し元が Disconnect で閉じる）。
+func (c *sshConnection) checkAlive(ctx context.Context, timeout time.Duration) bool {
 	client := c.getClient()
 	if client == nil {
 		return false
 	}
 
-	_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
-	return err == nil
+	result := make(chan error, 1)
+	go func() {
+		_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
+		result <- err
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case err := <-result:
+		return err == nil
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		slog.Warn("keepalive response timed out, closing connection", "timeout", timeout)
+		_ = c.Close()
+		return false
+	}
 }
 
 // KeepAlive は定期的に keepalive リクエストを送信する。
+// 応答は interval 以内に返る必要があり、返らない場合は接続断とみなして戻る。
 func (c *sshConnection) KeepAlive(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -104,8 +134,10 @@ func (c *sshConnection) KeepAlive(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if !c.IsAlive() {
-				slog.Warn("keepalive failed, connection may be lost")
+			if !c.checkAlive(ctx, interval) {
+				if ctx.Err() == nil {
+					slog.Warn("keepalive failed, connection may be lost")
+				}
 				return
 			}
 		}
