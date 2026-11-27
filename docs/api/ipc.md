@@ -48,7 +48,7 @@ TUI が使用するパターン。`events.subscribe` 後、デーモンから通
 デーモン → クライアント:  {"jsonrpc":"2.0","id":1,"result":{"subscription_id":"sub-1"}}
 デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.ssh","params":{...}}      ← 通知（id なし）
 デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.forward","params":{...}}  ← 通知（id なし）
-デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.metrics","params":{...}}  ← 通知（id なし）
+デーモン → クライアント:  {"jsonrpc":"2.0","method":"event.metrics","params":{...}}  ← 通知（id なし。未実装のため実際には送られない）
 ```
 
 ## API メソッド
@@ -493,7 +493,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 
 ### session.list
 
-全アクティブセッションの状態とメトリクスを返す。
+登録済みの全ルールのセッションの状態とメトリクスを、ルールの追加順に返す。非アクティブ（開始処理中を含む）のルールは `status` が `stopped` のセッションとして含まれ、その `id` は空文字列、`connected_at` は含まれない。
 
 **リクエスト**:
 
@@ -1245,3 +1245,4 @@ SSH 接続状態の変化。
 | 2.2 | 2026-10-15 | GUI 内蔵デーモン稼働時の挙動セクションを追加（接続先共通、`daemon.shutdown`、`config` の `gui` 非公開、認証要求の扱い）。プロトコル自体の変更なし | #84 Wails 版 GUI アプリケーション |
 | 2.3 | 2026-11-28 | forward.list / forward.add / session.list / session.get に `remote_bind_addr`（F-51）を追記、forward.add のパラメータ表を追加、ソケットパスの設定ディレクトリ解決順を明記。プロトコル自体の変更なし | #124, #131 ドキュメント乖離修正 |
 | 2.4 | 2026-11-28 | `ssh.connect` を接続済みホストに呼んでも未開始の auto_connect ルールは開始されることを明記、`config.update` の反映タイミング（即時反映は `update_check.enabled` のみ、他は保存のみで再起動後に反映）を明記。プロトコル自体の変更なし | #144, #149 ドキュメント乖離修正 |
+| 2.5 | 2026-11-28 | `session.list` が登録済みの全ルール（停止中は `status=stopped`、`id` は空、`connected_at` なし）を返すことを明記、`event.metrics` が未実装で配信されないことを通知例に追記。プロトコル自体の変更なし | #156, #157 ドキュメント乖離修正 |

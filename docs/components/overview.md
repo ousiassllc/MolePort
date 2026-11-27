@@ -444,6 +444,7 @@ JSON-RPC メソッドを Core Layer のマネージャに委譲する。ドメ�
 | `handler_daemon.go` | `daemon.status`, `daemon.shutdown` |
 | `handler_version.go` | `version.check` |
 | `handler_events.go` | `events.subscribe/unsubscribe` |
+| `forwardint/` | テスト専用サブパッケージ（IPC ハンドラと実 ForwardManager の結合テスト） |
 
 #### 責務
 
@@ -562,7 +563,6 @@ Core Layer からのイベントを集約し、サブスクライブ中のクラ
 
 - サブスクリプションの管理（追加・削除）
 - Core Layer イベント（SSHEvent / ForwardEvent）の受信
-- メトリクス更新の定期送信
 - クライアントへの通知配信
 
 #### インターフェース
@@ -598,10 +598,9 @@ func (b *EventBroker) HandleForwardEvent(evt core.ForwardEvent)
 flowchart TD
     SSHMgr["SSHManager<br/>SSHEvent channel"] --> Broker["EventBroker"]
     FwdMgr["ForwardManager<br/>ForwardEvent channel"] --> Broker
-    Ticker["time.Ticker (1s)<br/>メトリクス収集"] --> Broker
 
     Broker --> Filter["イベントタイプでフィルタ"]
-    Filter --> Sub1["Subscription #1 (TUI)<br/>ssh, forward, metrics"]
+    Filter --> Sub1["Subscription #1 (TUI)<br/>ssh, forward"]
     Filter --> Sub2["Subscription #2 (TUI)<br/>ssh, forward"]
 ```
 
@@ -1281,17 +1280,17 @@ sequenceDiagram
     Daemon-->>IPC: {"version":"...", ...}
     TUI->>TUI: バージョン比較 → 一致 or ユーザー確認
 
-    TUI->>IPC: Subscribe(["ssh","forward","metrics"])
+    TUI->>IPC: Subscribe(["ssh","forward"])
     IPC->>Daemon: events.subscribe
     Daemon-->>IPC: subscription_id
 
     loop イベント受信ループ
-        Daemon-->>IPC: event.ssh / event.forward / event.metrics
+        Daemon-->>IPC: event.ssh / event.forward
         IPC-->>TUI: Events() channel
         TUI->>TUI: Msg に変換 → Update() → View()
     end
 
-    Note over TUI: ユーザーがコマンド入力
+    Note over TUI: ユーザーがキー操作
     TUI->>IPC: Call("forward.start", {name: "prod-web"})
     IPC->>Daemon: forward.start
     Daemon-->>IPC: result
@@ -1377,7 +1376,7 @@ func TitleStyle() lipgloss.Style {
 
 ### ThemePage (`pages/theme.go`)
 
-テーマ選択画面を表示する Page コンポーネント。初回起動時と `/theme` コマンドの両方で使用される。
+テーマ選択画面を表示する Page コンポーネント。初回起動時と `t` キーの両方で使用される。
 
 #### 責務
 
@@ -1412,7 +1411,7 @@ type ThemeCancelledMsg struct{}
 
 ### LangPage (`pages/lang.go`)
 
-言語選択画面を表示する Page コンポーネント。初回起動時と `/lang` コマンドの両方で使用される。
+言語選択画面を表示する Page コンポーネント。初回起動時と `l` キーの両方で使用される。
 
 #### 責務
 
@@ -1848,18 +1847,20 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 | 階層 | コンポーネント | 引数 |
 |------|---------------|------|
 | atoms | `StatusBadge` | `kind string, label string` |
-| atoms | `Button` | `ButtonProps{Label, Variant, Attrs templ.Attributes}`（`ButtonPrimary` / `ButtonSecondary` / `ButtonDanger`） |
+| atoms | `Button` | `ButtonProps{Label, Variant, Type, Attrs templ.Attributes}`（`ButtonPrimary` / `ButtonSecondary` / `ButtonDanger`。`Type` は空なら `button`、`"submit"` でフォーム送信。送信ボタンは `Type: "submit"` を渡す） |
 | molecules | `HostRow` | `HostView`（`Actions` に応じて接続 / 切断 / 転送追加を描画） |
 | molecules | `ForwardRow` | `ForwardView`（`Actions` に応じて開始 / 停止 / 削除を描画） |
 | molecules | `FormField` | `FormFieldProps{Label, Name, Error, Input templ.Component}` |
 | atoms | `PortLabel` / `DataSize` / `Duration` | 整形済み文字列（`DataSize` / `Duration` はラベル付き。`Duration` は空なら何も描画しない）。`atoms.ElementID(prefix, name)` が安定した `id` を作る（英数字以外は `_` + 16 進） |
-| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid`）/ `name, checked` |
+| atoms | `TextInput` / `Select` / `Checkbox` | `TextInputProps` / `SelectProps`（`Invalid` で `aria-invalid="true"` と `aria-describedby`（エラー `<p>` の id は `atoms.ErrorID(name)`）を出す）/ `name, checked` |
 | molecules | `ConfirmDialog` | `ConfirmDialogProps{ID, Title, Message, ConfirmLabel, CancelLabel, ConfirmVariant, ConfirmAttrs}` |
 | molecules | `CredentialPrompt` | `CredentialPromptProps{Label, Name, Echo, Autofocus}`（`Echo=false` は `type="password"`、値を描画しない） |
 | organisms | `HostPanel` / `ForwardPanel` | `[]HostView` / `[]ForwardView`, `ready bool`（`ready` でない間は一覧・ボタンを描画しない） |
 | organisms | `StatusBar` / `Header` / `Toasts`（`/fragments/toasts` の OOB 本文） | 対応する ViewModel |
+| organisms | `ToastMessages` | `oob bool`（`#toast-messages`。`app.ts` がサーバー無応答時の汎用エラートーストに使う文言の置き場。`BaseLayout` と設定保存の OOB が描画し、`oob` が真なら `hx-swap-oob` で差し替えて表示中のトーストを消さない） |
 | organisms | `ForwardForm` | `ForwardFormInput, FormErrors, hosts []string` |
 | organisms | `CredentialDialog` / `ForwardDeleteDialog` | `CredentialView` / ルール名 |
+| organisms | `CredentialRemaining` | `remaining int, oob bool`（`#credential-remaining`。待機中の他要求数。OOB でも描画し、入力途中の値を保つ） |
 | organisms | `SettingsForm` | `SettingsView, FormErrors` |
 | pages | `DashboardPage` | `DashboardProps{Layout, State, Header, Hosts, Forwards, Status}` |
 | layout | `BaseLayout` | `LayoutProps{Lang, Theme, Accent, Token}` + `children...` |

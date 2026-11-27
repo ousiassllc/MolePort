@@ -254,11 +254,11 @@ HALT の 3 パターンのうち、JSON API ルート（Huma）は初期リリ�
 
 | 階層 | コンポーネント |
 |------|---------------|
-| atoms | `StatusBadge`、`PortLabel`、`Spinner`、`KeyHint`、`DataSize`、`Duration`、`Button`、`TextInput`、`Select`、`Toast`、`Icon` |
+| atoms | `StatusBadge`、`PortLabel`、`DataSize`、`Duration`、`Button`、`TextInput`、`Select`、`Checkbox`、`Toast` |
 | molecules | `HostRow`、`ForwardRow`、`FormField`（ラベル + 入力 + エラー）、`ConfirmDialog`、`CredentialPrompt`、`ThemeSwatch` |
-| organisms | `Header`、`HostPanel`、`ForwardPanel`、`StatusBar`、`ToastStack`、`ForwardForm`、`SettingsForm`、`CredentialDialog` |
+| organisms | `Header`、`HostPanel`、`ForwardPanel`、`StatusBar`、`ToastStack`、`ToastMessages`、`ForwardForm`、`SettingsForm`、`CredentialDialog`、`CredentialRemaining` |
 | pages | `DashboardPage` |
-| layout | `BaseLayout`（`<head>`、meta トークン、CSP、`ModalRoot`、`ToastStack`） |
+| layout | `BaseLayout`（`<head>`、meta トークン、CSP、`ModalRoot`、`ToastStack`、`ToastMessages`） |
 
 Templ コンポーネントのインターフェース規約は HALT に従う（引数 3 個以下は直接パラメータ、それ以上は `Props` 構造体、バリエーションは型付き const、子要素は `children...`）。
 
