@@ -49,6 +49,7 @@ cli:
     status_clients: "  クライアント: {{.Count}} 接続中"
     status_ssh: "  SSH:        {{.Count}} 接続"
     status_forwards: "  フォワード:  {{.Count}} アクティブ"
+    status_warning: "  警告:       {{.Message}}"
   connect:
     success: "{{.Host}} に接続しました"
     host_required: "ホスト名を指定してください: moleport connect <host>"

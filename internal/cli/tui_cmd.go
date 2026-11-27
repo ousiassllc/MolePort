@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
@@ -17,11 +18,11 @@ import (
 type daemonManagerAdapter struct{}
 
 func (daemonManagerAdapter) StartDaemonProcess(configDir string) (int, error) {
-	return daemon.StartDaemonProcess(configDir)
+	return control.StartDaemonProcess(configDir)
 }
 
 func (daemonManagerAdapter) EnsureDaemonWithRetry(configDir string, maxWait time.Duration) (*client.IPCClient, error) {
-	return daemon.EnsureDaemonWithRetry(configDir, maxWait)
+	return control.EnsureDaemonWithRetry(configDir, maxWait)
 }
 
 // RunTUI は tui サブコマンドを実行する。
@@ -30,7 +31,7 @@ func RunTUI(configDir string, args []string) {
 	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
-		pid, err := daemon.StartDaemonProcess(configDir)
+		pid, err := control.StartDaemonProcess(configDir)
 		if err != nil {
 			ExitError("%s", i18n.T("cli.tui.daemon_start_failed", map[string]any{"Error": err}))
 		}
@@ -38,7 +39,7 @@ func RunTUI(configDir string, args []string) {
 	}
 
 	// リトライ付きで接続
-	client, err := daemon.EnsureDaemonWithRetry(configDir, 5*time.Second)
+	client, err := control.EnsureDaemonWithRetry(configDir, 5*time.Second)
 	if err != nil {
 		ExitError("%s", i18n.T("cli.tui.daemon_connect_failed", map[string]any{"Error": err}))
 	}

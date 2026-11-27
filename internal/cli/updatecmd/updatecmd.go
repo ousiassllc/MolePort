@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/version"
@@ -27,8 +28,8 @@ var (
 		running, _ := pidfile.IsRunning(daemon.PIDFilePath(configDir))
 		return running
 	}
-	takeoverDaemon     = daemon.Takeover
-	startDaemonProcess = daemon.StartDaemonProcess
+	takeoverDaemon     = control.Takeover
+	startDaemonProcess = control.StartDaemonProcess
 	applyUpdate        = func(ctx context.Context, vc *update.VersionChecker, beforeReplace func() error, progress func(string)) error {
 		u := update.NewUpdater(vc)
 		u.SetBeforeReplace(beforeReplace)
@@ -129,7 +130,7 @@ func RunUpdate(configDir string, args []string) {
 // stopDaemonForUpdate はアップデート前にデーモンを停止し、PID ロックの解放まで待つ。
 // 停止できなかった場合（応答なし・時間切れ）はエラーを返す。
 func stopDaemonForUpdate(configDir string) error {
-	_, err := takeoverDaemon(configDir, daemon.TakeoverTimeout)
+	_, err := takeoverDaemon(configDir, control.TakeoverTimeout)
 	return err
 }
 

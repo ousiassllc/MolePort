@@ -641,6 +641,8 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 }
 ```
 
+> **Note**: `update_check.enabled` の変更は稼働中のデーモンの定期チェックに即時反映される（`false` で停止、`true` で再開）。`update_check.interval` の変更は設定ファイルへ保存されるが、定期チェックには次回のデーモン起動時に反映される。
+
 **テーマ更新の例**:
 
 ```json
@@ -718,7 +720,7 @@ SSH config を再読み込みし、ホスト一覧を更新する。
 | `connected_clients` | int | 接続中のクライアント数 |
 | `active_ssh_connections` | int | アクティブな SSH 接続数 |
 | `active_forwards` | int | アクティブなポートフォワーディング数 |
-| `warnings` | string[] | 警告メッセージのリスト（省略可能） |
+| `warnings` | string[] | 警告メッセージのリスト（省略可能）。`config.yaml` の読み込み失敗、`update_check.interval` の補正、設定ディレクトリ・設定ファイル・SSH config のパーミッションが緩い場合（Unix のみ）、フォワードルール・SSH ホストの読み込み失敗などが載る |
 
 > **Note**: TUI は起動時に `version` フィールドを自身のバージョンと比較し、不一致の場合はデーモン再起動を提案する（UC-17 参照）。`version` が `"dev"` の場合はチェックをスキップする。
 

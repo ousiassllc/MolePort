@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/core/guiconfig"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/gui/service/bridge"
 	"github.com/ousiassllc/moleport/internal/gui/service/credential"
@@ -58,7 +59,7 @@ func Run(cfg Config) error {
 	a.notifier = NewVisibilityNotifier(a.emit)
 	broker := credential.NewBroker(a.notifier, windowShower(a.Show))
 	a.life = NewLifecycle(cfg.ConfigDir, cfg.Version, LifecycleDeps{
-		Takeover:  daemon.Takeover,
+		Takeover:  control.Takeover,
 		NewDaemon: func(dir, ver string) (DaemonHost, error) { return daemon.New(dir, ver) },
 		Notifier:  a.notifier,
 		Window:    a,

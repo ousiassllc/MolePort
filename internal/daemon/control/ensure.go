@@ -1,9 +1,10 @@
-package daemon
+package control
 
 import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/moleport/internal/daemon"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
@@ -17,7 +18,7 @@ var startDaemonFunc = StartDaemonProcess
 // EnsureDaemon はデーモンが起動中であることを確認し、接続済みの IPCClient を返す。
 // デーモンが起動していない場合は自動的にデーモンプロセスを起動してから接続する。
 func EnsureDaemon(configDir string) (*client.IPCClient, error) {
-	pidPath := PIDFilePath(configDir)
+	pidPath := daemon.PIDFilePath(configDir)
 	running, _ := pidfile.IsRunning(pidPath)
 	if !running {
 		if _, err := startDaemonFunc(configDir); err != nil {
@@ -25,7 +26,7 @@ func EnsureDaemon(configDir string) (*client.IPCClient, error) {
 		}
 	}
 
-	c := client.NewIPCClient(SocketPath(configDir))
+	c := client.NewIPCClient(daemon.SocketPath(configDir))
 	if err := c.Connect(); err != nil {
 		return nil, fmt.Errorf("failed to connect to daemon: %w", err)
 	}

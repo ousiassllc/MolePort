@@ -27,6 +27,8 @@ type NotificationSender interface {
 // VersionChecker はバージョンチェック機能を提供するインターフェース。
 type VersionChecker interface {
 	LatestVersion(ctx context.Context) (*core.VersionCheckResult, error)
+	// SetEnabled は定期チェックの有効/無効を実行中に切り替える（config.update の反映用）。
+	SetEnabled(enabled bool)
 }
 
 // Handler は JSON-RPC メソッドをコアマネージャーにルーティングする。
@@ -54,11 +56,16 @@ func NewHandler(
 	daemon DaemonInfo,
 	versionChecker VersionChecker,
 ) *Handler {
+	// 型付き nil のインターフェースを渡さないよう、nil は明示的に分ける。
+	var updates cfghandler.UpdateCheckApplier
+	if versionChecker != nil {
+		updates = versionChecker
+	}
 	return &Handler{
 		sshMgr:         sshMgr,
 		fwdMgr:         fwdMgr,
 		cfgMgr:         cfgMgr,
-		configH:        cfghandler.New(cfgMgr),
+		configH:        cfghandler.New(cfgMgr, updates),
 		broker:         broker,
 		daemon:         daemon,
 		versionChecker: versionChecker,

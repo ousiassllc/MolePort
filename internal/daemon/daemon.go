@@ -17,48 +17,13 @@ import (
 	"github.com/ousiassllc/moleport/internal/core/update"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/infra"
+	"github.com/ousiassllc/moleport/internal/infra/permcheck"
 	"github.com/ousiassllc/moleport/internal/infra/sshconfig"
 	"github.com/ousiassllc/moleport/internal/infra/yamlstore"
 	"github.com/ousiassllc/moleport/internal/ipc"
 	ipchandler "github.com/ousiassllc/moleport/internal/ipc/handler"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
 )
-
-// defaultShutdownTimeout は切断処理（NFR-16）の上限時間。
-const defaultShutdownTimeout = 5 * time.Second
-
-// LogConfig はデーモンのログ設定を保持する。
-type LogConfig struct {
-	Path  string
-	Level string
-}
-
-// ResolveLogConfig は設定ファイルからログファイルのパスとレベルを解決する。
-// 設定の読み込みに失敗した場合はデフォルトの設定を使用する。
-func ResolveLogConfig(configDir string) LogConfig {
-	store := yamlstore.NewYAMLStore()
-	cfgMgr := core.NewConfigManager(store, configDir)
-	cfg, err := cfgMgr.LoadConfig()
-	if err != nil {
-		c := core.DefaultConfig()
-		cfg = &c
-	}
-	logPath := cfg.Log.File
-	if expanded, err := infra.ExpandTilde(logPath); err == nil {
-		logPath = expanded
-	}
-	return LogConfig{Path: logPath, Level: cfg.Log.Level}
-}
-
-// SocketPath はデーモンの Unix ソケットパスを返す。
-func SocketPath(configDir string) string {
-	return filepath.Join(configDir, "moleport.sock")
-}
-
-// PIDFilePath はデーモンの PID ファイルパスを返す。
-func PIDFilePath(configDir string) string {
-	return filepath.Join(configDir, "moleport.pid")
-}
 
 // Daemon はデーモンプロセスの全コンポーネントを保持し、ライフサイクルを管理する。
 type Daemon struct {
@@ -97,8 +62,12 @@ func New(configDir string, version string) (*Daemon, error) {
 
 	store := yamlstore.NewYAMLStore()
 	cfgMgr := core.NewConfigManager(store, configDir)
+	var warnings []string
 	cfg, err := cfgMgr.LoadConfig()
 	if err != nil {
+		// 読み込めなかった config.yaml は最初の書き込み前に config.yaml.bak へ退避される（yamlstore）。
+		slog.Error("failed to load config; using defaults", "path", filepath.Join(configDir, "config.yaml"), "error", err)
+		warnings = append(warnings, fmt.Sprintf("failed to load config.yaml (using defaults; the original file is kept as config.yaml.bak when settings are saved): %v", err))
 		c := core.DefaultConfig()
 		cfg = &c
 	}
@@ -123,7 +92,6 @@ func New(configDir string, version string) (*Daemon, error) {
 	fwdMgr := forward.NewForwardManager(ctx, sshMgr)
 
 	// 保存済みのフォワードルールを読み込む
-	var warnings []string
 	for _, rule := range cfg.Forwards {
 		if _, err := fwdMgr.AddRule(rule); err != nil {
 			slog.Warn("failed to load forward rule", "rule", rule.Name, "error", err)
@@ -131,8 +99,17 @@ func New(configDir string, version string) (*Daemon, error) {
 		}
 	}
 
+	// config.yaml を直接編集した無効な間隔（0 以下・1h 未満）は補正して警告する（NFR-31）。
+	checkInterval, adjusted := update.NormalizeInterval(cfg.UpdateCheck.Interval.Duration)
+	if adjusted {
+		slog.Warn("update_check.interval is invalid; adjusted", "configured", cfg.UpdateCheck.Interval.String(), "using", checkInterval.String())
+		warnings = append(warnings, fmt.Sprintf("update_check.interval %s is invalid (minimum %s); using %s", cfg.UpdateCheck.Interval.Duration, update.MinInterval, checkInterval))
+	}
+	// 設定ディレクトリ・設定ファイル・SSH config のパーミッションが緩い場合は警告する（NFR-09 / NFR-10）
+	warnings = append(warnings, permcheck.Warnings(configDir, sshConfigPath)...)
+
 	pidFile := pidfile.NewPIDFile(PIDFilePath(configDir))
-	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, cfg.UpdateCheck.Interval.Duration)
+	versionChecker := update.New(version, cfg.UpdateCheck.Enabled, checkInterval)
 
 	// Daemon を先に生成し、IPC コンポーネントに渡す
 	d := &Daemon{
@@ -257,37 +234,6 @@ func (d *Daemon) Stop() error {
 
 	slog.Info("daemon stopped")
 	return nil
-}
-
-// closeComponents はフォワード停止・SSH クローズ・バックグラウンド goroutine の終了待ちを行う。
-// NFR-16: 切断処理は shutdownTimeout 以内に完了させ、超過した場合は警告ログを出して
-// 後続のソケット・PID ファイルの解放に進む（強制切断）。
-func (d *Daemon) closeComponents() {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		if err := d.fwdMgr.StopAllForwards(); err != nil {
-			slog.Warn("failed to stop all forwards", "error", err)
-		}
-		d.fwdMgr.Close()
-		d.sshMgr.Close()
-
-		// イベントルーティング・復元ゴルーチンの終了を待つ
-		d.wg.Wait()
-	}()
-
-	timeout := d.shutdownTimeout
-	if timeout <= 0 {
-		timeout = defaultShutdownTimeout
-	}
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case <-done:
-	case <-timer.C:
-		slog.Warn("shutdown timed out; forcing close", "timeout", timeout)
-	}
 }
 
 // Wait はシグナル (SIGTERM/SIGINT) を待ち、受信したら Stop() を呼ぶ。

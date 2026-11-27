@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/core"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 	"github.com/ousiassllc/moleport/internal/i18n"
 )
@@ -25,7 +26,7 @@ type DaemonHost interface {
 
 // LifecycleDeps は Lifecycle の外部依存。Wails・実デーモンを差し替え可能にする。
 type LifecycleDeps struct {
-	// Takeover は稼働中の headless デーモンを引き継ぐ（daemon.Takeover）。
+	// Takeover は稼働中の headless デーモンを引き継ぐ（control.Takeover）。
 	Takeover func(configDir string, timeout time.Duration) (prevPID int, err error)
 	// NewDaemon は内蔵デーモンを生成する（daemon.New のラッパー）。
 	NewDaemon func(configDir, version string) (DaemonHost, error)
@@ -110,7 +111,7 @@ func (l *Lifecycle) Quitting() bool { return l.quitting.Load() }
 // WebView の読み込みを妨げないよう呼び出し側はゴルーチンで呼ぶ。
 // ctx は Wails の OnStartup の ctx（アプリ終了で cancel され、デーモンも停止する）。
 func (l *Lifecycle) Start(ctx context.Context) error {
-	prevPID, err := l.deps.Takeover(l.configDir, daemon.TakeoverTimeout)
+	prevPID, err := l.deps.Takeover(l.configDir, control.TakeoverTimeout)
 	if err != nil {
 		return l.fail(fmt.Errorf("takeover: %w", err))
 	}
@@ -281,9 +282,9 @@ func (l *Lifecycle) ActiveForwards() int {
 // StartupErrorKey は起動失敗の原因に対応する i18n キー（エラーダイアログの本文）を返す。
 func StartupErrorKey(err error) string {
 	switch {
-	case errors.Is(err, daemon.ErrTakeoverUnresponsive):
+	case errors.Is(err, control.ErrTakeoverUnresponsive):
 		return "gui.dialog.takeover_unresponsive"
-	case errors.Is(err, daemon.ErrTakeoverTimeout):
+	case errors.Is(err, control.ErrTakeoverTimeout):
 		return "gui.dialog.takeover_timeout"
 	default:
 		return "gui.dialog.startup_failed"

@@ -24,22 +24,15 @@ var (
 	ErrAlreadyLatest = errors.New("already running the latest version")
 )
 
-const (
-	// maxDownloadSize はダウンロードファイルの最大サイズ (256 MiB)。
-	maxDownloadSize = 256 << 20
-
-	// maxReleaseResponseSize はリリース API レスポンスの最大サイズ (1 MiB)。
-	maxReleaseResponseSize = 1 << 20
-)
-
 // Updater はセルフアップデートを実行する。
 type Updater struct {
-	checker    *VersionChecker
-	httpClient *http.Client
-	repoOwner  string
-	repoName   string
-	apiBase    string
-	execPath   string // テスト用。空の場合は os.Executable() を使用
+	checker        *VersionChecker
+	httpClient     *http.Client // リリース情報の取得用（VersionChecker と共有、短い Timeout）
+	downloadClient *http.Client // アセットのダウンロード用（newDownloadClient 参照）
+	repoOwner      string
+	repoName       string
+	apiBase        string
+	execPath       string // テスト用。空の場合は os.Executable() を使用
 
 	beforeReplace func() error
 }
@@ -47,11 +40,12 @@ type Updater struct {
 // NewUpdater は VersionChecker から Updater を生成する。
 func NewUpdater(checker *VersionChecker) *Updater {
 	return &Updater{
-		checker:    checker,
-		httpClient: checker.httpClient,
-		repoOwner:  checker.repoOwner,
-		repoName:   checker.repoName,
-		apiBase:    checker.apiBase,
+		checker:        checker,
+		httpClient:     checker.httpClient,
+		downloadClient: newDownloadClient(),
+		repoOwner:      checker.repoOwner,
+		repoName:       checker.repoName,
+		apiBase:        checker.apiBase,
 	}
 }
 
@@ -197,13 +191,16 @@ func (u *Updater) fetchRelease(ctx context.Context, tag string) (*githubRelease,
 
 // downloadFile は指定 URL からファイルをダウンロードする。
 func (u *Updater) downloadFile(ctx context.Context, url string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
+	defer cancel()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "MolePort/"+u.checker.currentVersion)
 
-	resp, err := u.httpClient.Do(req) //nolint:gosec // URL comes from GitHub API response
+	resp, err := u.downloadClient.Do(req) //nolint:gosec // URL comes from GitHub API response
 	if err != nil {
 		return nil, fmt.Errorf("download file: %w", err)
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/client"
 )
@@ -44,7 +44,7 @@ func ResolveConfigDir(flagValue string) string {
 var ConnectDaemon = defaultConnectDaemon
 
 func defaultConnectDaemon(configDir string) *client.IPCClient {
-	c, err := daemon.EnsureDaemon(configDir)
+	c, err := control.EnsureDaemon(configDir)
 	if err != nil {
 		ExitError("%s", i18n.T("cli.error.daemon_not_running"))
 	}

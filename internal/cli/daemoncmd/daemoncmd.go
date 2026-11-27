@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -45,7 +46,7 @@ func runDaemonStart(configDir string) {
 		return
 	}
 
-	pid, err := daemon.StartDaemonProcess(configDir)
+	pid, err := control.StartDaemonProcess(configDir)
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.start_failed", map[string]any{"Error": err}))
 	}
@@ -67,7 +68,7 @@ func runDaemonStop(configDir string, args []string) {
 		return
 	}
 
-	client, err := daemon.EnsureDaemon(configDir)
+	client, err := control.EnsureDaemon(configDir)
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
@@ -117,7 +118,7 @@ func runDaemonStatus(configDir string) {
 		return
 	}
 
-	client, err := daemon.EnsureDaemon(configDir)
+	client, err := control.EnsureDaemon(configDir)
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
@@ -138,6 +139,9 @@ func runDaemonStatus(configDir string) {
 	fmt.Println(i18n.T("cli.daemon.status_clients", map[string]any{"Count": status.ConnectedClients}))
 	fmt.Println(i18n.T("cli.daemon.status_ssh", map[string]any{"Count": status.ActiveSSHConnections}))
 	fmt.Println(i18n.T("cli.daemon.status_forwards", map[string]any{"Count": status.ActiveForwards}))
+	for _, w := range status.Warnings {
+		fmt.Println(i18n.T("cli.daemon.status_warning", map[string]any{"Message": w}))
+	}
 }
 
 // RunDaemonMode はデーモンモードで起動する。

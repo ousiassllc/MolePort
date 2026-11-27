@@ -517,12 +517,15 @@ moleport/
 │   ├── daemon/                        # デーモンプロセス
 │   │   ├── daemon.go                  # Daemon（起動・停止・Services/Done/Info）
 │   │   ├── daemon_state.go            # 状態保存・復元
-│   │   ├── ensure.go                  # デーモン起動確認・IPC 接続ヘルパー
-│   │   ├── takeover.go                # headless デーモンの引き継ぎ（GUI 用）
-│   │   ├── fork_unix.go               # フォーク処理（self-fork）。Unix のみ
-│   │   ├── fork_windows.go            # フォーク非対応スタブ
+│   │   ├── daemon_paths.go            # SocketPath / PIDFilePath / ResolveLogConfig
+│   │   ├── daemon_shutdown.go         # 切断処理（closeComponents、NFR-16 のタイムアウト）
 │   │   ├── daemon_host.go             # 内蔵ホスト向け API（Services / Info）
-│   │   ├── fork.go                    # --daemon-mode 判定（共通）
+│   │   ├── control/                   # デーモンの外部制御（サブパッケージ。Linterly の 2000 行/ディレクトリ制限のため分離）
+│   │   │   ├── ensure.go              # デーモン起動確認・IPC 接続ヘルパー
+│   │   │   ├── takeover.go            # headless デーモンの引き継ぎ（GUI 用）
+│   │   │   ├── fork_unix.go           # フォーク処理（self-fork）。Unix のみ
+│   │   │   ├── fork_windows.go        # フォーク非対応スタブ
+│   │   │   └── fork.go                # --daemon-mode 判定（共通）
 │   │   └── pidfile/                   # PID ファイル管理（サブパッケージ。Linterly の 2000 行/ディレクトリ制限のため分離）
 │   │       ├── pidfile.go             # PIDFile / IsRunning / IsLocked / KillProcess（共通）
 │   │       ├── pidfile_unix.go        # flock / kill(2)
@@ -934,7 +937,7 @@ sequenceDiagram
             TUI->>IPC: Call("daemon.shutdown", {"purge": false})
             Daemon-->>IPC: {"ok": true}
             Daemon->>Daemon: グレースフルシャットダウン
-            TUI->>TUI: daemon.StartDaemonProcess()
+            TUI->>TUI: control.StartDaemonProcess()
             TUI->>IPC: 新デーモンに再接続
             IPC->>NewDaemon: Unix Socket 接続
             TUI->>TUI: 通常フロー

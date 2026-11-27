@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core"
-	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/gui/service"
 )
 
@@ -50,7 +50,7 @@ func TestLifecycle_TakeoverToastMentionsPIDAndAutoRestore(t *testing.T) {
 
 func TestLifecycle_RunShowsErrorDialogAndQuits(t *testing.T) {
 	h := newHarness(t, newFakeDaemon())
-	h.takeErr = daemon.ErrTakeoverTimeout
+	h.takeErr = control.ErrTakeoverTimeout
 
 	h.life.Run(context.Background())
 

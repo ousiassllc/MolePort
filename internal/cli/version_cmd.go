@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/i18n"
 	"github.com/ousiassllc/moleport/internal/ipc/protocol"
@@ -23,7 +24,7 @@ func RunVersion(configDir string, args []string) {
 		return
 	}
 
-	client, err := daemon.EnsureDaemon(configDir)
+	client, err := control.EnsureDaemon(configDir)
 	if err != nil {
 		return
 	}

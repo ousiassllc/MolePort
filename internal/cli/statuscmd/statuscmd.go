@@ -6,6 +6,7 @@ import (
 
 	"github.com/ousiassllc/moleport/internal/cli"
 	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 	"github.com/ousiassllc/moleport/internal/daemon/pidfile"
 	"github.com/ousiassllc/moleport/internal/format"
 	"github.com/ousiassllc/moleport/internal/i18n"
@@ -80,7 +81,7 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 		return
 	}
 
-	client, err := daemon.EnsureDaemon(configDir)
+	client, err := control.EnsureDaemon(configDir)
 	if err != nil {
 		cli.ExitError("%s", i18n.T("cli.daemon.connect_failed", map[string]any{"Error": err}))
 	}
@@ -153,4 +154,7 @@ func runStatusSummary(configDir string, jsonOutput bool) {
 	}
 	fmt.Println(i18n.T("cli.status.forwards_summary", map[string]any{"Total": len(sessions.Sessions), "Active": activeSessions, "Stopped": stoppedSessions}))
 	fmt.Println(i18n.T("cli.status.traffic_summary", map[string]any{"Sent": format.Bytes(totalSent), "Received": format.Bytes(totalRecv)}))
+	for _, w := range daemonStatus.Warnings {
+		fmt.Println(i18n.T("cli.daemon.status_warning", map[string]any{"Message": w}))
+	}
 }

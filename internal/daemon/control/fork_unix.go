@@ -1,6 +1,6 @@
 //go:build !windows
 
-package daemon
+package control
 
 import (
 	"fmt"
@@ -8,6 +8,8 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/ousiassllc/moleport/internal/daemon"
 )
 
 const (
@@ -48,7 +50,7 @@ func StartDaemonProcess(configDir string) (int, error) {
 	_ = proc.Release()
 
 	// デーモンの起動完了を待機（ソケット接続を試行）
-	socketPath := SocketPath(configDir)
+	socketPath := daemon.SocketPath(configDir)
 	deadline := time.Now().Add(forkStartupTimeout)
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("unix", socketPath, forkDialTimeout)

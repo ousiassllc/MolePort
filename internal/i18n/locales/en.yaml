@@ -49,6 +49,7 @@ cli:
     status_clients: "  Clients:    {{.Count}} connected"
     status_ssh: "  SSH:        {{.Count}} connections"
     status_forwards: "  Forwards:   {{.Count}} active"
+    status_warning: "  Warning:    {{.Message}}"
   connect:
     success: "Connected to {{.Host}}"
     host_required: "Host name required: moleport connect <host>"

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/moleport/internal/core/update"
-	"github.com/ousiassllc/moleport/internal/daemon"
+	"github.com/ousiassllc/moleport/internal/daemon/control"
 )
 
 func TestRunUpdate_CheckOnly_NoReleaseURL(t *testing.T) {
@@ -244,7 +244,7 @@ func TestRunUpdate_DaemonStoppedBeforeReplaceAndRestarted(t *testing.T) {
 
 // 停止の完了を確認できない場合は更新を中断し、再起動（2 つ目のデーモン起動）をしない。
 func TestRunUpdate_AbortsWhenDaemonDoesNotStop(t *testing.T) {
-	stubs := stubUpdateFlow(t, daemon.ErrTakeoverTimeout, func(beforeReplace func() error) error { return beforeReplace() })
+	stubs := stubUpdateFlow(t, control.ErrTakeoverTimeout, func(beforeReplace func() error) error { return beforeReplace() })
 
 	code, stderr := captureExit(t, func() { RunUpdate(t.TempDir(), nil) })
 

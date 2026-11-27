@@ -617,7 +617,7 @@ flowchart TD
 
 ```go
 func main() {
-    if daemon.IsDaemonMode() {
+    if control.IsDaemonMode() {
         // デーモンプロセスとして起動
         runDaemon()
         return
@@ -1258,7 +1258,7 @@ func (m *MainModel) checkDaemonVersion() tea.Cmd {
 }
 ```
 
-不一致時は `ConfirmDialog` を表示し、ユーザーの選択に応じてデーモンの再起動（`daemon.shutdown` → `daemon.StartDaemonProcess` → 再接続）またはステータスバー警告表示を行う。
+不一致時は `ConfirmDialog` を表示し、ユーザーの選択に応じてデーモンの再起動（`daemon.shutdown` → `control.StartDaemonProcess` → 再接続）またはステータスバー警告表示を行う。
 
 #### TUI ⟷ デーモン通信フロー
 
@@ -1651,7 +1651,7 @@ GUI プロセスの起動・引き継ぎ・終了を統括する。Wails・実�
 #### 責務
 
 - 設定ディレクトリの解決（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `~/.config/moleport`）と i18n 言語の解決
-- `daemon.Takeover` による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
+- `control.Takeover`（`internal/daemon/control`）による headless デーモンの引き継ぎ、`daemon.New` / `Start` による内蔵デーモン起動
 - `Daemon.Done()` の監視（`daemon.shutdown` 起因の終了を Wails の終了フローへ接続）
 - 状態（`starting` / `ready` / `failed`）の保持と、`ready` 遷移時の全トピック通知
 - `RequestQuit(confirm bool)` による終了処理（確認ダイアログ → `Daemon.Stop()` → トレイ破棄 → `runtime.Quit`）。`quitting` フラグで `OnBeforeClose` を素通しにする
@@ -1870,7 +1870,7 @@ Atomic Design（[gui.md](../architecture/gui.md#atomic-design)）。コンポー
 
 | コンポーネント | 変更内容 |
 |---------------|---------|
-| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `pidfile.IsLocked` 追加（PID ファイル管理は `daemon/pidfile` サブパッケージ） |
+| `daemon.Daemon` | `Services()` / `Done()` / `Info()` 追加。`Takeover` / `pidfile.IsLocked` 追加（PID ファイル管理は `daemon/pidfile`、`Takeover` / `EnsureDaemon` / fork は `daemon/control` サブパッケージ） |
 | `daemon` / `infra` / `proxycommand` | Unix 専用 API を `_unix.go` / `_windows.go` に分離（[gui.md](../architecture/gui.md#windows-対応のための分離gui-のみ-windows-対応)） |
 | `ipc/handler`（`saveForwardRulesToConfig`） | `core.PersistForwardRules(cfg ConfigManager, fwd ForwardManager) error` に移して共有する。IPC ハンドラの挙動は変更しない。`forwardAdd` / `forwardDelete` のハンドラが行う業務処理は「パラメータ検証 → `AddRule` / `DeleteRule`（検証の本体は Core 側）→ ルール永続化」に限られるため、共通化する対象は永続化のみとし、新たな usecase 層は設けない。責務分担は「業務ロジック・検証は Core、プロトコル変換（JSON-RPC エラー）は `ipc/handler`、フォーム変換（文字列 → `ForwardRule`、`FormErrors`）と HTML 変換は GUI Service / Web」とする。フォームの文字列検証（ポート範囲、種別）は `core.ParseForwardType` / `core.ValidatePort` を共用して差を生まないようにする |
 | `internal/cli.Version` | `internal/version.Version` に移し、CLI・GUI の両方が参照する。ldflags の `-X` 対象パスを `internal/version.Version` に更新（Makefile / `.goreleaser.yaml` / GUI ビルド） |

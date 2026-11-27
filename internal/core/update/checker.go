@@ -17,6 +17,28 @@ import (
 	"github.com/ousiassllc/moleport/internal/core"
 )
 
+const (
+	// MinInterval は定期チェック間隔の下限（NFR-31、GitHub API のレート制限対策）。
+	MinInterval = time.Hour
+
+	// DefaultInterval は間隔が 0 以下など無効な場合に使う既定の定期チェック間隔。
+	DefaultInterval = 24 * time.Hour
+)
+
+// NormalizeInterval は定期チェック間隔を有効な範囲に補正する。
+// 0 以下は DefaultInterval、MinInterval 未満は MinInterval にする。
+// 補正した場合は changed が true になる。
+func NormalizeInterval(d time.Duration) (normalized time.Duration, changed bool) {
+	switch {
+	case d <= 0:
+		return DefaultInterval, true
+	case d < MinInterval:
+		return MinInterval, true
+	default:
+		return d, false
+	}
+}
+
 // githubReleaseAsset は GitHub リリースのアセット情報を表す。
 type githubReleaseAsset struct {
 	Name               string `json:"name"`
@@ -180,7 +202,9 @@ func (vc *VersionChecker) loop(ctx context.Context, initialDelay time.Duration) 
 		slog.Warn("version check failed", "error", err)
 	}
 
-	ticker := time.NewTicker(vc.interval)
+	// config.yaml の直接編集などで無効な値が渡されても time.NewTicker が panic しないよう補正する。
+	interval, _ := NormalizeInterval(vc.interval)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {

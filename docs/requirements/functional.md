@@ -47,10 +47,11 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
   2. PID ファイルからデーモンの PID を読み取る
   3. SIGKILL でプロセスを強制終了する
   4. PID ファイルを削除する
-  5. 「デーモンを強制終了しました (PID: xxxx)」と表示
+  5. `state.yaml` を削除する（強制終了では状態保存が走らないため、残すと次回起動時に古いセッションが自動復元されてしまう）
+  6. 「デーモンを強制終了しました (PID: xxxx)」と表示
 - **代替フロー**:
   - デーモンが稼働していない場合: 「デーモンは稼働していません」と表示
-- **注意**: グレースフルな切断や状態保存は行われない
+- **注意**: グレースフルな切断や状態保存は行われない（`state.yaml` は上記のとおり削除される）
 
 ### UC-3: SSH ホスト一覧の表示
 
@@ -160,7 +161,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
   - 表示言語（`language`: `ja` / `en`）
   - アップデートチェックの有効/無効（`update_check.enabled`: デフォルト `true`）
   - アップデートチェック間隔（`update_check.interval`: デフォルト `"24h"`）
-- **保存先**: `~/.config/moleport/config.yaml`
+- **保存先**: `~/.config/moleport/config.yaml`（`~/.config/moleport` は既定の設定ディレクトリ。`--config-dir` / `MOLEPORT_CONFIG_DIR` / `XDG_CONFIG_HOME` で変更できる。UC-25 参照）
 
 ### UC-11: 転送ルールの削除
 
@@ -312,17 +313,17 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 ### UC-21: 最新バージョンチェック（CLI）
 
 - **アクター**: ユーザー
-- **概要**: `moleport version` 実行時に、現在のバージョン情報に加えて最新バージョンの確認結果を表示する
+- **概要**: `moleport version` 実行時に、現在のバージョン情報を表示し、デーモンが稼働していれば更新の有無も案内する
 - **CLI**: `moleport version`
 - **前提条件**: `update_check.enabled` が `true`（デフォルト）
 - **基本フロー**:
-  1. ローカルのバージョン情報を表示する（MolePort vX.X.X (goX.X.X, OS/ARCH)）
-  2. デーモンへの接続を試みる
-  3. 接続成功した場合、`version.check` IPC メソッドを呼び出す
+  1. ローカルのバージョン情報を表示する（MolePort X.X.X (goX.X.X, OS/ARCH)）
+  2. デーモンが稼働しているか PID ファイルで確認する（自動起動はしない）
+  3. 稼働中の場合、`version.check` IPC メソッドを呼び出す
   4. 最新バージョンの確認結果を表示する:
-     - 最新の場合: 「✓ 最新バージョンです」
-     - 更新がある場合: 「⬆ v0.2.0 が利用可能です → https://github.com/ousiassllc/moleport/releases/tag/v0.2.0」
-     - チェック失敗の場合: 何も表示しない（ローカルバージョンのみ表示）
+     - 更新がある場合: 「アップデートがあります: v0.2.0 (現在: v0.1.0)」と、リリース URL がある場合は「リリース: https://github.com/ousiassllc/moleport/releases/tag/v0.2.0」を表示する
+     - 最新の場合: 何も表示しない（ローカルバージョンのみ表示）
+     - チェック失敗の場合: ローカルバージョンの表示に続けて「バージョンチェックに失敗しました: <エラー>」を stderr に出力する
 - **代替フロー**:
   - デーモンが稼働していない場合: ローカルバージョン情報のみを表示し、最新バージョンチェックはスキップする
   - バージョンが `"dev"` の場合: チェックをスキップする
@@ -375,7 +376,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 - **CLI**: `moleport update [--check]`
 - **前提条件**: バージョンが `"dev"` でないこと
 - **基本フロー**:
-  1. GitHub Releases API で最新バージョンを取得する
+  1. GitHub Releases API で最新バージョンを取得する（デーモンのキャッシュは使わず、CLI が毎回 API を直接呼ぶ）
   2. 現在のバージョンと比較し、新しいバージョンがなければ「最新です」と表示して終了
   3. `--check` 指定時はバージョン情報を表示して終了
   4. OS/アーキテクチャに対応するアセット（tar.gz）をダウンロードする
@@ -410,7 +411,7 @@ MolePort は、SSH ポートフォワーディングを管理する Go 製ツー
 - **概要**: `moleport-gui` を起動し、内蔵デーモンとウィンドウ・トレイを立ち上げる
 - **前提条件**: 他の `moleport-gui` が稼働していない（UC-38）
 - **基本フロー**:
-  1. GUI プロセスが起動し、設定ディレクトリを解決する（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `~/.config/moleport`）
+  1. GUI プロセスが起動し、設定ディレクトリを解決する（`--config-dir` > `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport`）
   2. 稼働中の headless デーモンの有無を確認する（あれば UC-26）
   3. 内蔵デーモンを起動する（PID ファイル取得、config.yaml 読み込み、IPC ソケット Listen、state.yaml 復元、auto_connect 開始）。UC-1 と同じ初期化手順を、プロセスを fork せず GUI プロセス内で実行する
   4. トレイアイコンを登録し、メインウィンドウを表示する
@@ -675,7 +676,7 @@ moleport <subcommand> [options] [arguments]
 
 | フラグ | 説明 |
 |--------|------|
-| `--config-dir <path>` | 設定ディレクトリのパス（デフォルト: `~/.config/moleport`） |
+| `--config-dir <path>` | 設定ディレクトリのパス。未指定時は環境変数 `MOLEPORT_CONFIG_DIR` > `$XDG_CONFIG_HOME/moleport` > `~/.config/moleport`（既定値）の順に解決する |
 
 ### サブコマンド一覧
 
@@ -697,7 +698,7 @@ moleport <subcommand> [options] [arguments]
 | `reload` | — | SSH config を再読み込み |
 | `tui` | — | TUI ダッシュボードを起動 |
 | `update` | `[--check]` | 最新バージョンに自動アップデート |
-| `help` | `[<subcommand>]` | ヘルプを表示 |
+| `help` | — | ヘルプを表示（サブコマンド別ヘルプは未実装。引数は無視され全体ヘルプを表示する） |
 | `version` | — | バージョン情報を表示（デーモン稼働中は最新バージョンも確認） |
 
 ## TUI 画面構成
@@ -911,7 +912,7 @@ moleport daemon stop
  └── 全 SSH 接続をグレースフルに切断
 
 moleport daemon kill（応答しない場合の緊急手段）
- └── PID ファイルから SIGKILL → PID ファイル削除
+ └── PID ファイルから SIGKILL → PID ファイル・state.yaml 削除
 ```
 
 ## GUI 画面構成
@@ -979,3 +980,4 @@ moleport daemon kill（応答しない場合の緊急手段）
 | 8.0 | 2026-03-14 | F-51〜F-56 追加: SSH 互換性改善。F-51（RemoteForward バインドアドレス指定）、F-52（IdentityFile 複数対応）、F-53（ProxyJump 代替案内）、F-54〜F-56（将来対応: IdentitiesOnly/IdentityAgent/Match）。F-01/F-03 説明更新、UC-5 に `--remote-bind-addr` フラグ追加、add サブコマンド説明更新 | #74 SSH 互換性改善 |
 | 9.0 | 2026-10-15 | UC-25〜UC-38、F-57〜F-72、GUI 画面構成を追加: Wails 版デスクトップ GUI（内蔵デーモン、headless 引き継ぎ、トレイ常駐、クレデンシャルダイアログ、設定、Windows 対応、配布）。概要にバイナリ `moleport-gui` を追記 | #84 Wails 版 GUI アプリケーション |
 | 9.1 | 2026-10-15 | F-72: Windows の配布を zip から NSIS インストーラー（ユーザー単位）に変更 | Windows 配布形態の変更 #92 |
+| 9.2 | 2026-11-28 | UC-2a に `state.yaml` 削除を追記、UC-21 の表示仕様を実装に合わせて修正（最新時は無表示、失敗時は stderr、デーモン自動起動なし）、UC-25 とグローバルフラグの設定ディレクトリ解決順に `XDG_CONFIG_HOME` を追記、`help` のサブコマンド別ヘルプは未実装と明記、UC-24 の最新バージョン取得はデーモンのキャッシュ非利用と明記 | #122, #123, #124, #132, #134 ドキュメント乖離修正 |
