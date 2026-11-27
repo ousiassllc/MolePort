@@ -16,6 +16,14 @@
 - Ship the Windows GUI as a per-user NSIS installer (`cmd/moleport-gui/build/windows/installer/project.nsi`, based on the Wails v2.16.0 template): no administrator rights, installs to `%LOCALAPPDATA%\Programs\MolePort`, HKCU uninstall entry, current-user shortcuts, in-place upgrade over the same install location, prompt to quit a running `moleport-gui.exe`, uninstall removes only installed files (settings under `.config\moleport` are kept). `release.yml` installs NSIS and uploads `moleport-gui_<version>_windows_amd64_installer.exe` (included in `checksums_gui.txt`); the `ci.yml` Windows GUI job also builds the installer and checks it exists. Still unsigned (SmartScreen: More info → Run anyway). Installing/upgrading on a real Windows machine is pending verification / Windows の GUI をユーザー単位の NSIS インストーラーで配布: 管理者権限不要、`%LOCALAPPDATA%\Programs\MolePort` にインストール、HKCU のアンインストール情報、現在のユーザー用ショートカット、同一インストール先への上書き更新、起動中の `moleport-gui.exe` の終了確認、アンインストールはインストールしたファイルのみ削除（`.config\moleport` の設定は残す）。`release.yml` が NSIS を導入して `moleport-gui_<version>_windows_amd64_installer.exe` を添付（`checksums_gui.txt` に含まれる）、`ci.yml` の Windows GUI ジョブでもインストーラー生成を検証。コード署名なし（SmartScreen は「詳細情報」→「実行」）。実機の Windows でのインストール・更新は実機検証待ち (#92)
 - Document PoC procedures (R-1 to R-8) and fallback policies; real-device results are pending / PoC の検証手順（R-1〜R-8）と縮退方針を仕様書に記載（実機検証結果は待ち） (#87)
 
+### 🐛 Bug Fixes / バグ修正
+- Fix a connection established while `Disconnect` / `Close` was in progress being registered and leaked; reconnect no longer overrides a user disconnect / Dial 中の `Disconnect` / `Close` 後に接続が登録・残留する問題を修正（再接続もユーザーの切断を上書きしない） (#106)
+- Time out SSH keepalive responses (within `keepalive_interval`) so silently dropped connections are detected and reconnected promptly / SSH keepalive の応答にタイムアウトを設け、無音で切れた接続を速やかに検知して再接続 (#108)
+- Treat `reconnect.max_retries: 0` as unlimited as documented / `reconnect.max_retries: 0` を仕様どおり無制限として扱う (#113)
+- Stop reconnect retries on authentication failure and set the host to `PendingAuth` / 再接続中の認証失敗でリトライを止めて `PendingAuth` にする (#114)
+- Apply jitter to the first reconnect delay and never exceed `max_delay` / 再接続の初回遅延にもジッターを付け、待機時間が `max_delay` を超えないようにする (#133)
+- Defer key file loading and passphrase prompts until the key is actually needed (ssh-agent and earlier keys are tried first) / 鍵ファイルの読み込みとパスフレーズ要求を実際に必要になるまで遅延（エージェント・先行する鍵を先に試行） (#109)
+
 ## [v1.0.0] - 2026-03-15
 
 ### ⚠️ Breaking Changes / 破壊的変更
